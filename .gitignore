@@ -1,0 +1,12 @@
+# Build artifacts
+pluto
+*.o
+*.a
+
+# Editor / IDE
+.claude/
+*.swp
+*~
+
+# Pre-existing data not part of this project
+dataset.jsonl
