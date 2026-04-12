@@ -1,8 +1,10 @@
 #include "repl.h"
 
 #include "agent/Loop.h"
+#include "mcp/SseSubscriber.h"
 
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -57,6 +59,8 @@ int run_repl(Provider& provider, Config& cfg, ToolRegistry& tools, bool yolo) {
 	long long session_output_tokens = 0;
 	int turns = 0;
 
+	std::unique_ptr<SseSubscriber> subscriber;
+
 	UiCallbacks ui;
 	ui.on_text = [](const std::string& text) {
 		std::printf("%s", kGreen);
@@ -100,11 +104,16 @@ int run_repl(Provider& provider, Config& cfg, ToolRegistry& tools, bool yolo) {
 
 		if (line == "/quit" || line == "/exit") break;
 		if (line == "/help") {
-			std::printf("  /quit            exit\n");
-			std::printf("  /reset           clear conversation history\n");
-			std::printf("  /tools           list registered tools\n");
-			std::printf("  /model ID        switch model for subsequent turns\n");
-			std::printf("  /cost            show session token totals\n");
+			std::printf("  /quit                exit\n");
+			std::printf("  /reset               clear conversation history\n");
+			std::printf("  /tools               list registered tools\n");
+			std::printf("  /model ID            switch model for subsequent turns\n");
+			std::printf("  /cost                show session token totals\n");
+			std::printf("  /watch [URL]         subscribe to an SSE stream\n");
+			std::printf("                       (default http://localhost:2607/sse)\n");
+			std::printf("  /unwatch             stop the SSE subscription\n");
+			std::printf("  /events              show pending SSE events without\n");
+			std::printf("                       sending a new turn\n");
 			continue;
 		}
 		if (line == "/reset") {
@@ -129,19 +138,98 @@ int run_repl(Provider& provider, Config& cfg, ToolRegistry& tools, bool yolo) {
 				std::printf("  current: %s\n", cfg.model.c_str());
 			} else {
 				cfg.model = line.substr(7);
-				// trim leading space
 				while (!cfg.model.empty() && cfg.model.front() == ' ')
 					cfg.model.erase(0, 1);
 				std::printf("  model: %s\n", cfg.model.c_str());
 			}
 			continue;
 		}
+		if (line.rfind("/watch", 0) == 0) {
+			if (subscriber && subscriber->running()) {
+				std::printf("  already watching %s\n", subscriber->url().c_str());
+				continue;
+			}
+			std::string url = "http://localhost:2607/sse";
+			if (line.size() > 7) {
+				std::string arg = line.substr(7);
+				while (!arg.empty() && arg.front() == ' ') arg.erase(0, 1);
+				if (!arg.empty()) url = arg;
+			}
+			subscriber = std::make_unique<SseSubscriber>(url);
+			std::string err;
+			if (!subscriber->start(err)) {
+				std::printf("%s  /watch failed: %s%s\n", kRed, err.c_str(), kReset);
+				subscriber.reset();
+			} else {
+				std::printf("%s  watching %s%s\n", kDim, url.c_str(), kReset);
+			}
+			continue;
+		}
+		if (line == "/unwatch") {
+			if (!subscriber) {
+				std::printf("  not watching\n");
+			} else {
+				subscriber->stop();
+				subscriber.reset();
+				std::printf("%s  unwatched%s\n", kDim, kReset);
+			}
+			continue;
+		}
+		if (line == "/events") {
+			if (!subscriber) {
+				std::printf("  not watching (use /watch first)\n");
+				continue;
+			}
+			auto evs = subscriber->drain();
+			if (evs.empty()) {
+				std::printf("%s  (no pending events)%s\n", kDim, kReset);
+			} else {
+				for (const auto& e : evs) {
+					std::printf("%s  [%s] %s%s\n",
+						kDim, e.name.c_str(), e.data.c_str(), kReset);
+				}
+			}
+			continue;
+		}
+
+		// Drain any pending SSE events and prepend them to the user turn as a
+		// system-reminder so Claude sees what happened since last turn.
+		std::string prelude;
+		if (subscriber && subscriber->running()) {
+			auto evs = subscriber->drain();
+			if (!evs.empty()) {
+				prelude = "<system-reminder>\n";
+				prelude += "Since your last turn, ";
+				prelude += std::to_string(evs.size());
+				prelude += " SSE event(s) arrived on ";
+				prelude += subscriber->url();
+				prelude += ":\n";
+				size_t shown = 0;
+				for (const auto& e : evs) {
+					if (shown++ >= 50) {
+						prelude += "... (" + std::to_string(evs.size() - 50) +
+							" more suppressed)\n";
+						break;
+					}
+					prelude += "  [";
+					prelude += e.name;
+					prelude += "] ";
+					prelude += e.data;
+					prelude += "\n";
+				}
+				prelude += "</system-reminder>\n\n";
+
+				// Also show them to the user so the injection isn't invisible.
+				std::printf("%s  (%zu SSE event(s) injected into context)%s\n",
+					kDim, evs.size(), kReset);
+			}
+		}
 
 		Message user;
 		user.role = "user";
 		ContentBlock tb;
 		tb.type = ContentBlock::TEXT;
-		tb.text = line;
+		tb.text = prelude + line;
 		user.content.push_back(std::move(tb));
 		messages.push_back(std::move(user));
 

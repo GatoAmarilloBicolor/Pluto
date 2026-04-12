@@ -19,6 +19,7 @@ SRCS = src/main.cpp \
        src/mcp/Transport.cpp \
        src/mcp/HttpTransport.cpp \
        src/mcp/StdioTransport.cpp \
+       src/mcp/SseSubscriber.cpp \
        src/mcp/Cli.cpp \
        src/provider/Anthropic.cpp \
        src/provider/OpenAICompat.cpp
