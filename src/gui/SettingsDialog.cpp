@@ -20,13 +20,8 @@
 #include <curl/curl.h>
 
 #include <cstdlib>
-#include <fstream>
-#include <algorithm>
-#include <sstream>
 #include <string>
 #include <vector>
-
-#include <dirent.h>
 
 #include "../json.h"
 #include "../oauth.h"
@@ -109,97 +104,12 @@ const ProviderProfile kProfiles[] = {
 constexpr int kProfileCount = sizeof(kProfiles) / sizeof(kProfiles[0]);
 
 // ----------------------------------------------------------------
-// User-defined provider profiles from ~/config/settings/pluto/providers/
+// User-defined provider profiles — now loaded via config.h functions.
+// load_user_providers() wraps LoadProviderConfs() for local use.
 // ----------------------------------------------------------------
 
-// Use the header-defined types for user-provider profiles.
-
-std::string conf_trim(const std::string& s) {
-	size_t a = 0, b = s.size();
-	while (a < b && (s[a] == ' ' || s[a] == '\t')) ++a;
-	while (b > a && (s[b - 1] == ' ' || s[b - 1] == '\t' || s[b - 1] == '\r')) --b;
-	return s.substr(a, b - a);
-}
-
-// Parse a single .conf file into a UserProvider.
-// Format:
-//   label = My Provider
-//   base_url = https://api.example.com
-//   api_key_env = MY_API_KEY
-//   model = model-id, Display Name, max_tokens, context_window
-//   model = model-id-2, Another Model, 8192, 128000
-bool parse_provider_conf(const std::string& path, UserProvider& out) {
-	std::ifstream f(path);
-	if (!f) return false;
-	std::string line;
-	while (std::getline(f, line)) {
-		std::string s = conf_trim(line);
-		if (s.empty() || s[0] == '#') continue;
-		size_t eq = s.find('=');
-		if (eq == std::string::npos) continue;
-		std::string k = conf_trim(s.substr(0, eq));
-		std::string v = conf_trim(s.substr(eq + 1));
-		if (k == "label")       out.label = v;
-		else if (k == "base_url")    out.base_url = v;
-		else if (k == "api_key_env") out.api_key_env = v;
-		else if (k == "model") {
-			// model = id, label, max_tokens, context_window
-			UserModel m;
-			std::istringstream ss(v);
-			std::string tok;
-			int field = 0;
-			while (std::getline(ss, tok, ',')) {
-				tok = conf_trim(tok);
-				switch (field++) {
-					case 0: m.id = tok; break;
-					case 1: m.label = tok; break;
-					case 2: m.max_tokens = std::atoi(tok.c_str()); break;
-					case 3: m.context_window = std::atoi(tok.c_str()); break;
-				}
-			}
-			if (m.label.empty()) m.label = m.id;
-			if (!m.id.empty()) out.models.push_back(std::move(m));
-		}
-	}
-	return !out.label.empty();
-}
-
-std::string user_providers_dir() {
-	return SettingsDir() + "/providers";
-}
-
-// Load .conf files from a directory, sorted alphabetically by filename.
-void load_confs_from(const std::string& dir, std::vector<UserProvider>& out) {
-	DIR* d = opendir(dir.c_str());
-	if (!d) return;
-	// Collect filenames first for sorted load order (01-openai before 02-ollama).
-	std::vector<std::string> files;
-	struct dirent* e;
-	while ((e = readdir(d)) != nullptr) {
-		std::string name = e->d_name;
-		if (name.size() < 6) continue;
-		if (name.substr(name.size() - 5) != ".conf") continue;
-		files.push_back(name);
-	}
-	closedir(d);
-	std::sort(files.begin(), files.end());
-	for (const auto& name : files) {
-		UserProvider p;
-		if (parse_provider_conf(dir + "/" + name, p))
-			out.push_back(std::move(p));
-	}
-}
-
 std::vector<UserProvider> load_user_providers() {
-	std::vector<UserProvider> out;
-	// 1. Built-in providers shipped with the package.
-	//    Search: ./data/providers/, /boot/system/data/pluto/providers/
-	load_confs_from("data/providers", out);
-	if (out.empty())
-		load_confs_from("/boot/system/data/pluto/providers", out);
-	// 2. User-defined providers (override or extend).
-	load_confs_from(user_providers_dir(), out);
-	return out;
+	return pluto::LoadProviderConfs();
 }
 
 // ----------------------------------------------------------------

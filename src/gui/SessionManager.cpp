@@ -113,10 +113,8 @@ bool MainWindow::_RestoreWorkspace() {
 			return false;
 
 		// Restore tabs.
-		bool first = true;
 		for (const auto& tab : tabs->as_arr()) {
-			ConversationView* conv = first ? _ActiveConv() : _CreateTab();
-			first = false;
+			ConversationView* conv = _CreateTab();
 			if (!conv) continue;
 			std::string sp = tab.str("session");
 			if (!sp.empty()) conv->LoadSession(sp);

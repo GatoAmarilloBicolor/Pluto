@@ -780,11 +780,12 @@ void OpenAICompatProvider::stream(const CompletionRequest& req,
 			}
 		} catch (const std::exception&) {}
 
-		// If the server says the model doesn't support tools, retry
-		// without them so the user can still chat.
+		// If we get HTTP 400 and the request had tools, retry without
+		// them — the model likely doesn't support tool use. This is
+		// safe because 400 means the request was malformed, and
+		// stripping tools is the most likely fix.
 		if (http_code == 400 && !tools_stripped
-		    && !req.tools.empty()
-		    && detail.find("does not support tools") != std::string::npos) {
+		    && !req.tools.empty()) {
 			CompletionRequest stripped = req;
 			stripped.tools.clear();
 			try {

@@ -23,21 +23,9 @@ namespace gui {
 
 inline constexpr uint32 kMsgSettingsAccepted = 'plSa';
 
-// User-defined provider profile loaded from .conf files in
-// ~/config/settings/pluto/providers/
-struct UserModel {
-	std::string label;
-	std::string id;
-	int         max_tokens     = 4096;
-	int         context_window = 128000;
-};
-
-struct UserProvider {
-	std::string label;
-	std::string base_url;
-	std::string api_key_env;
-	std::vector<UserModel> models;
-};
+// Aliases for backward compatibility — types now live in config.h.
+using UserModel    = pluto::ProviderConfModel;
+using UserProvider = pluto::ProviderConf;
 
 class SettingsDialog : public BWindow {
 public:

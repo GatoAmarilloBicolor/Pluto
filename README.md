@@ -24,9 +24,11 @@ multi-tab conversations and markdown rendering, and a Tracker add-on
 
 ---
 
-> **Screenshot placeholder** — add a screenshot of the GUI here:
->
-> `![Pluto GUI](docs/screenshot.png)`
+![Pluto GUI — tool use in action](docs/gui-tool-use.png)
+*The AI reads project files, runs commands, and shows tool output in the detail panel.*
+
+![Pluto GUI — image vision](docs/gui-vision.png)
+*Drag & drop an image and the model analyzes it with full markdown rendering.*
 
 ---
 
@@ -102,6 +104,12 @@ These here be the treasures ye won't find on any other OS. Arr!
   on_boot, on_file_change, every Nm/Nh), `launch_daemon` integration.
   Set it and forget it while ye sleep in the hammock
 - **Schedules** — periodic or event-based agent execution via `launch_daemon`
+
+![Schedules dialog](docs/gui-schedules.png)
+*Create recurring tasks with the Schedules dialog — powered by Haiku's launch_daemon.*
+
+![Agent Store](docs/gui-agent-store.png)
+*Browse, install, and inspect agents from the Agent Store.*
 - **Skills** — always-on or trigger-based SKILL.md injection
 - **Custom commands** — `~/config/settings/pluto/commands/*.md` with
   `{{args}}` substitution. Yer own secret signals
@@ -267,6 +275,12 @@ original.
   Tracker's Find dialog too!
 
 ### Preferences — Adjustin' the Sails
+
+![Provider list](docs/gui-providers.png)
+*15+ providers ready to sail — from Anthropic to local Ollama.*
+
+![Model selection](docs/gui-model-select.png)
+*Pick a model from the preset list or fetch available models from the server.*
 
 **Cmd+,** opens Preferences. Pick yer provider from the dropdown:
 Anthropic (API key or OAuth), OpenAI, Gemini, Ollama, OpenRouter, and 13+
@@ -444,7 +458,7 @@ docs/                       maps and manuals
 - `docs/architecture.md` — the ship's blueprints
 - `docs/mcp-tutorial.md` — build yer own MCP vessel in 10 minutes
 - `docs/bquery-cookbook.md` — 15+ BQuery treasure maps
-- `docs/pluto-vs-opencode.md` — why this ship beats the competition
+- `docs/pluto-press-kit.md` — press kit for the curious journalist
 - `docs/pluto.1` — man page (`man pluto` after install)
 
 ---

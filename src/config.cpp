@@ -10,6 +10,7 @@
 #include <Directory.h>
 #include <FindDirectory.h>
 #include <Path.h>
+#include <image.h>
 
 #include <dirent.h>
 #include <fcntl.h>
@@ -106,17 +107,113 @@ bool IsFirstRun() {
 	return ::stat(path.c_str(), &st) != 0;
 }
 
+// ----------------------------------------------------------------
+// .conf provider profile loading (shared by CLI wizard and GUI)
+// ----------------------------------------------------------------
+
+bool ParseProviderConf(const std::string& path, ProviderConf& out) {
+	std::ifstream f(path);
+	if (!f) return false;
+	std::string line;
+	while (std::getline(f, line)) {
+		std::string s = trim(line);
+		if (s.empty() || s[0] == '#') continue;
+		size_t eq = s.find('=');
+		if (eq == std::string::npos) continue;
+		std::string k = trim(s.substr(0, eq));
+		std::string v = trim(s.substr(eq + 1));
+		if (k == "label")            out.label = v;
+		else if (k == "base_url")    out.base_url = v;
+		else if (k == "api_key_env") out.api_key_env = v;
+		else if (k == "model") {
+			ProviderConfModel m;
+			std::istringstream ss(v);
+			std::string tok;
+			int field = 0;
+			while (std::getline(ss, tok, ',')) {
+				tok = trim(tok);
+				switch (field++) {
+					case 0: m.id = tok; break;
+					case 1: m.label = tok; break;
+					case 2: m.max_tokens = std::atoi(tok.c_str()); break;
+					case 3: m.context_window = std::atoi(tok.c_str()); break;
+				}
+			}
+			if (m.label.empty()) m.label = m.id;
+			if (!m.id.empty()) out.models.push_back(std::move(m));
+		}
+	}
+	return !out.label.empty();
+}
+
+namespace {
+
+void load_confs_from(const std::string& dir, std::vector<ProviderConf>& out) {
+	DIR* d = opendir(dir.c_str());
+	if (!d) return;
+	std::vector<std::string> files;
+	struct dirent* e;
+	while ((e = readdir(d)) != nullptr) {
+		std::string name = e->d_name;
+		if (name.size() < 6) continue;
+		if (name.substr(name.size() - 5) != ".conf") continue;
+		files.push_back(name);
+	}
+	closedir(d);
+	std::sort(files.begin(), files.end());
+	for (const auto& name : files) {
+		ProviderConf p;
+		if (ParseProviderConf(dir + "/" + name, p))
+			out.push_back(std::move(p));
+	}
+}
+
+}  // namespace
+
+std::vector<ProviderConf> LoadProviderConfs() {
+	std::vector<ProviderConf> out;
+	// 1. Built-in providers shipped with the package.
+	//    Try relative path first (works when run from source tree),
+	//    then resolve relative to the executable (works when installed).
+	load_confs_from("data/providers", out);
+	if (out.empty()) {
+		// Resolve exe directory via Haiku's image_info.
+		image_info info;
+		int32 cookie = 0;
+		if (get_next_image_info(B_CURRENT_TEAM, &cookie, &info) == B_OK) {
+			BPath exePath(info.name);
+			exePath.GetParent(&exePath);
+			std::string exeDir = exePath.Path();
+			load_confs_from(exeDir + "/data/providers", out);
+		}
+	}
+	if (out.empty())
+		load_confs_from("/boot/system/data/pluto/providers", out);
+	// 2. User-defined providers (override or extend).
+	load_confs_from(SettingsDir() + "/providers", out);
+	return out;
+}
+
 bool RunFirstRunWizard(Config& cfg) {
 	std::printf("\n");
 	std::printf("  \x1b[1mWelcome to Pluto!\x1b[0m\n\n");
 	std::printf("  Choose your LLM provider:\n\n");
+
+	// Anthropic is always option 1 (native provider, not from .conf).
 	std::printf("    1. Anthropic (Claude)         — API key or Claude Max/Pro\n");
-	std::printf("    2. Google (Gemini)            — free API key\n");
-	std::printf("    3. OpenAI (GPT)               — API key\n");
-	std::printf("    4. Local (Ollama/LM Studio)   — no key needed\n");
-	std::printf("    5. OpenRouter                 — API key, many models\n");
-	std::printf("    6. xAI (Grok)                 — API key\n");
-	std::printf("    7. Cerebras                   — fast inference, free tier\n");
+
+	// Load all .conf providers dynamically.
+	auto confs = LoadProviderConfs();
+	for (size_t i = 0; i < confs.size(); ++i) {
+		const auto& p = confs[i];
+		std::string hint;
+		if (p.api_key_env.empty())
+			hint = "no key needed";
+		else
+			hint = "API key (" + p.api_key_env + ")";
+		std::printf("   %2zu. %-28s — %s\n", i + 2, p.label.c_str(), hint.c_str());
+	}
+
 	std::printf("\n  > ");
 	std::fflush(stdout);
 
@@ -124,84 +221,41 @@ bool RunFirstRunWizard(Config& cfg) {
 	if (!std::fgets(buf, sizeof(buf), stdin))
 		return false;
 
-	int choice = 0;
-	for (char* p = buf; *p; ++p) {
-		if (*p >= '1' && *p <= '7') { choice = *p - '0'; break; }
-	}
+	int choice = std::atoi(buf);
 
-	switch (choice) {
-		case 1:
-			cfg.provider = "anthropic";
-			cfg.model = "claude-sonnet-4-5";
-			cfg.api_key_env = "ANTHROPIC_API_KEY";
-			cfg.base_url.clear();
-			std::printf("\n  Provider: Anthropic\n");
-			std::printf("  Model:    claude-sonnet-4-5\n");
-			std::printf("\n  To authenticate:\n");
-			std::printf("    Option A: pluto login  (Claude Max/Pro subscription)\n");
-			std::printf("    Option B: export ANTHROPIC_API_KEY=sk-ant-...\n");
-			break;
-		case 2:
-			cfg.provider = "openai-compat";
-			cfg.model = "gemini-2.5-flash";
-			cfg.api_key_env = "GEMINI_API_KEY";
-			cfg.base_url = "https://generativelanguage.googleapis.com/v1beta/openai";
-			std::printf("\n  Provider: Google Gemini\n");
-			std::printf("  Model:    gemini-2.5-flash\n");
-			std::printf("\n  Get a free key: https://aistudio.google.com/apikey\n");
-			std::printf("  Then: export GEMINI_API_KEY=<your-key>\n");
-			break;
-		case 3:
-			cfg.provider = "openai-compat";
-			cfg.model = "gpt-4.1";
-			cfg.api_key_env = "OPENAI_API_KEY";
-			cfg.base_url = "https://api.openai.com";
-			std::printf("\n  Provider: OpenAI\n");
-			std::printf("  Model:    gpt-4.1\n");
-			std::printf("\n  export OPENAI_API_KEY=sk-...\n");
-			break;
-		case 4:
-			cfg.provider = "openai-compat";
-			cfg.model = "llama3";
-			cfg.api_key_env.clear();
-			cfg.base_url = "http://localhost:11434";
-			std::printf("\n  Provider: Local (Ollama)\n");
-			std::printf("  Model:    llama3\n");
-			std::printf("  Base URL: http://localhost:11434\n");
-			std::printf("\n  Make sure Ollama is running: ollama serve\n");
-			break;
-		case 5:
-			cfg.provider = "openai-compat";
-			cfg.model = "anthropic/claude-sonnet-4";
-			cfg.api_key_env = "OPENROUTER_API_KEY";
-			cfg.base_url = "https://openrouter.ai/api";
-			std::printf("\n  Provider: OpenRouter\n");
-			std::printf("  Model:    anthropic/claude-sonnet-4\n");
-			std::printf("\n  Get a key: https://openrouter.ai/keys\n");
-			std::printf("  Then: export OPENROUTER_API_KEY=sk-or-...\n");
-			break;
-		case 6:
-			cfg.provider = "openai-compat";
-			cfg.model = "grok-3";
-			cfg.api_key_env = "XAI_API_KEY";
-			cfg.base_url = "https://api.x.ai";
-			std::printf("\n  Provider: xAI (Grok)\n");
-			std::printf("  Model:    grok-3\n");
-			std::printf("\n  export XAI_API_KEY=xai-...\n");
-			break;
-		case 7:
-			cfg.provider = "openai-compat";
-			cfg.model = "llama-3.3-70b";
-			cfg.api_key_env = "CEREBRAS_API_KEY";
-			cfg.base_url = "https://api.cerebras.ai/v1";
-			std::printf("\n  Provider: Cerebras\n");
-			std::printf("  Model:    llama-3.3-70b\n");
-			std::printf("\n  Get a key: https://cloud.cerebras.ai\n");
-			std::printf("  Then: export CEREBRAS_API_KEY=csk-...\n");
-			break;
-		default:
-			std::printf("\n  Invalid choice. Using default (Anthropic).\n");
-			return false;
+	if (choice == 1) {
+		// Anthropic (native provider).
+		cfg.provider = "anthropic";
+		cfg.model = "claude-sonnet-4-5";
+		cfg.api_key_env = "ANTHROPIC_API_KEY";
+		cfg.base_url.clear();
+		std::printf("\n  Provider: Anthropic\n");
+		std::printf("  Model:    claude-sonnet-4-5\n");
+		std::printf("\n  To authenticate:\n");
+		std::printf("    Option A: pluto login  (Claude Max/Pro subscription)\n");
+		std::printf("    Option B: export ANTHROPIC_API_KEY=sk-ant-...\n");
+	} else if (choice >= 2 && choice <= (int)(confs.size() + 1)) {
+		const auto& p = confs[choice - 2];
+		cfg.provider = "openai-compat";
+		cfg.base_url = p.base_url;
+		cfg.api_key_env = p.api_key_env;
+		// Use the first model as default.
+		if (!p.models.empty()) {
+			cfg.model = p.models[0].id;
+			cfg.max_tokens = p.models[0].max_tokens;
+			cfg.context_window = p.models[0].context_window;
+		}
+		std::printf("\n  Provider: %s\n", p.label.c_str());
+		std::printf("  Model:    %s\n", cfg.model.c_str());
+		if (!p.base_url.empty())
+			std::printf("  Base URL: %s\n", p.base_url.c_str());
+		if (!p.api_key_env.empty())
+			std::printf("\n  Set your key: export %s=<your-key>\n", p.api_key_env.c_str());
+		else
+			std::printf("\n  No API key required.\n");
+	} else {
+		std::printf("\n  Invalid choice. Using default (Anthropic).\n");
+		return false;
 	}
 
 	// Save config immediately.
@@ -478,6 +532,21 @@ void append_doc(Config& cfg, const std::string& path, const char* tag) {
 }  // namespace
 
 void ApplyProjectMemory(Config& cfg) {
+	// Prepend a base system prompt if the user hasn't set a custom one.
+	// This tells the model about its capabilities and workspace.
+	if (cfg.system_prompt.empty()) {
+		char cwd[PATH_MAX] = {};
+		::getcwd(cwd, sizeof(cwd));
+		cfg.system_prompt =
+			"You are Pluto, a Haiku-native AI coding assistant. "
+			"You have access to tools that let you read, write, edit, "
+			"and search files in the user's workspace, run shell commands, "
+			"and query the file system. Use these tools proactively to "
+			"answer questions about the project — do not ask the user to "
+			"provide files you can read yourself.\n\n"
+			"Current workspace: " + std::string(cwd);
+	}
+
 	append_doc(cfg, home_dir() + "/config/settings/pluto/pluto.md",
 		"user_memory");
 	append_doc(cfg, "./pluto.md", "project_memory");

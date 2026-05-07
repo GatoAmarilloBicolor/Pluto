@@ -279,16 +279,6 @@ void RunTurn(Provider& provider,
 			tools_disabled_model.clear();
 		}
 		bool skip_tools = tools_disabled;
-		if (!skip_tools) {
-			const std::string& m = cfg.model;
-			// Free-tier OpenRouter models and small models typically
-			// don't support tool use.
-			if (m.find(":free") != std::string::npos)
-				skip_tools = true;
-			else if (m.find("gemma") != std::string::npos
-			      && m.find("google/") != std::string::npos)
-				skip_tools = true;
-		}
 		req.tools = skip_tools ? std::vector<ToolDef>{} : tool_defs;
 		req.max_tokens = cfg.max_tokens;
 

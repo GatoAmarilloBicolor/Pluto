@@ -568,7 +568,6 @@ void ConversationView::OnCursorTick() {
 			"\xE2\xA0\xBC", "\xE2\xA0\xB4", "\xE2\xA0\xA6", "\xE2\xA0\xA7",
 			"\xE2\xA0\x87", "\xE2\xA0\x8F"
 		};  // ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏
-		_HideCursor();
 
 		BFont font = *be_plain_font;
 		font.SetFace(B_ITALIC_FACE);
@@ -579,24 +578,40 @@ void ConversationView::OnCursorTick() {
 
 		BString text;
 		text.SetToFormat("%s thinking\xE2\x80\xA6", kFrames[fSpinnerFrame % 10]);
-		Paragraph spinPara;
-		spinPara.Append(TextSpan(text, style));
 
-		if (!fCurrentPara.IsEmpty() && fTextDoc.IsSet()) {
-			fTextDoc->Append(fCurrentPara);
-			ParagraphStyle pstyle;
-			pstyle.SetSpacingTop(0);
-			pstyle.SetSpacingBottom(0);
-			fCurrentPara = Paragraph(pstyle);
+		if (fCursorShown && fTextDoc.IsSet()) {
+			// Update spinner text in-place: replace the last paragraph's
+			// content without removing/re-adding it to avoid layout flicker.
+			int32 count = fTextDoc->CountParagraphs();
+			if (count > 0) {
+				int32 offset = 0;
+				for (int32 i = 0; i < count - 1; ++i)
+					offset += fTextDoc->ParagraphAtIndex(i).Length();
+				int32 lastLen = fTextDoc->ParagraphAtIndex(count - 1).Length();
+				if (lastLen > 0)
+					fTextDoc->Replace(offset, lastLen, BString(text), style);
+				fDocView->Relayout();
+			}
+		} else {
+			// First tick: flush pending content and append spinner paragraph.
+			if (!fCurrentPara.IsEmpty() && fTextDoc.IsSet()) {
+				fTextDoc->Append(fCurrentPara);
+				ParagraphStyle pstyle;
+				pstyle.SetSpacingTop(0);
+				pstyle.SetSpacingBottom(0);
+				fCurrentPara = Paragraph(pstyle);
+			}
+			Paragraph spinPara;
+			spinPara.Append(TextSpan(text, style));
+			fTextDoc->Append(spinPara);
+			fDocView->SetTextDocument(fTextDoc);
+			fDocView->Relayout();
+			if (fOutputScroll) {
+				BScrollBar* sb = fOutputScroll->ScrollBar(B_VERTICAL);
+				if (sb) { float mn, mx; sb->GetRange(&mn, &mx); sb->SetValue(mx); }
+			}
+			fCursorShown = true;
 		}
-		fTextDoc->Append(spinPara);
-		fDocView->SetTextDocument(fTextDoc);
-		fDocView->Relayout();
-		if (fOutputScroll) {
-			BScrollBar* sb = fOutputScroll->ScrollBar(B_VERTICAL);
-			if (sb) { float mn, mx; sb->GetRange(&mn, &mx); sb->SetValue(mx); }
-		}
-		fCursorShown = true;
 		fSpinnerFrame++;
 		return;
 	}

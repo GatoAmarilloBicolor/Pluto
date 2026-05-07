@@ -25,9 +25,11 @@ sui file selezionati.
 
 ---
 
-> **Segnaposto screenshot** — aggiungi qui uno screenshot della GUI:
->
-> `![Pluto GUI](docs/screenshot.png)`
+![Pluto GUI — tool use in azione](docs/gui-tool-use.png)
+*L'AI legge i file del progetto, esegue comandi e mostra l'output nel pannello dettagli.*
+
+![Pluto GUI — visione immagini](docs/gui-vision.png)
+*Trascina un'immagine e il modello la analizza con rendering markdown completo.*
 
 ---
 
@@ -112,6 +114,12 @@ Questi sono i tesori che non troverai su nessun altro sistema operativo. Arr!
   Impostalo e dimenticalo mentre dormi sull'amaca
 - **Pianificazioni** — esecuzione agenti periodica o a eventi via
   `launch_daemon`
+
+![Finestra Pianificazioni](docs/gui-schedules.png)
+*Crea task ricorrenti con la finestra Pianificazioni — alimentata dal launch_daemon di Haiku.*
+
+![Agent Store](docs/gui-agent-store.png)
+*Sfoglia, installa e ispeziona agenti dall'Agent Store.*
 - **Skill** — iniezione SKILL.md sempre attiva o basata su trigger
 - **Comandi personalizzati** — `~/config/settings/pluto/commands/*.md` con
   sostituzione `{{args}}`. I tuoi segnali segreti
@@ -283,6 +291,12 @@ l'originale.
   ricercabili anche dalla finestra Trova di Tracker!
 
 ### Preferenze — Regolare le Vele
+
+![Lista provider](docs/gui-providers.png)
+*15+ provider pronti a salpare — da Anthropic a Ollama locale.*
+
+![Selezione modello](docs/gui-model-select.png)
+*Scegli un modello dalla lista preset o scarica i modelli disponibili dal server.*
 
 **Cmd+,** apre le Preferenze. Scegli il provider dal menu a tendina:
 Anthropic (API key o OAuth), OpenAI, Gemini, Ollama, OpenRouter e 13+
@@ -466,7 +480,7 @@ docs/                       mappe e manuali
 - `docs/architecture.md` — i progetti della nave
 - `docs/mcp-tutorial.md` — costruisci il tuo vascello MCP in 10 minuti
 - `docs/bquery-cookbook.md` — 15+ mappe del tesoro BQuery
-- `docs/pluto-vs-opencode.md` — perché questa nave batte la concorrenza
+- `docs/pluto-press-kit.md` — press kit per il giornalista curioso
 - `docs/pluto.1` — pagina man (`man pluto` dopo l'installazione)
 
 ---

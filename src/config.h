@@ -67,6 +67,31 @@ struct Config {
 	// see src/mcp/Config.h.
 };
 
+// A model entry from a .conf provider profile.
+struct ProviderConfModel {
+	std::string label;
+	std::string id;
+	int         max_tokens     = 4096;
+	int         context_window = 128000;
+};
+
+// A provider profile loaded from data/providers/*.conf or
+// ~/config/settings/pluto/providers/*.conf.
+struct ProviderConf {
+	std::string label;
+	std::string base_url;
+	std::string api_key_env;
+	std::vector<ProviderConfModel> models;
+};
+
+// Parse a single .conf file into a ProviderConf. Returns false on failure.
+bool ParseProviderConf(const std::string& path, ProviderConf& out);
+
+// Load all .conf provider profiles from bundled + user directories.
+// Searches: ./data/providers/, /boot/system/data/pluto/providers/,
+// then ~/config/settings/pluto/providers/.
+std::vector<ProviderConf> LoadProviderConfs();
+
 // Authentication credentials — either API key or OAuth token.
 struct Credentials {
 	enum Type { API_KEY, OAUTH } type = API_KEY;

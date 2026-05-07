@@ -2500,7 +2500,7 @@ void MainWindow::MessageReceived(BMessage* msg) {
 			// Update the global config (persisted + used for new tabs).
 			if (provider && *provider) fConfig->provider = provider;
 			if (base_url) fConfig->base_url = base_url;
-			if (api_key_env && *api_key_env) fConfig->api_key_env = api_key_env;
+			if (api_key_env) fConfig->api_key_env = api_key_env;
 			if (model && *model) fConfig->model = model;
 			fConfig->user_system_prompt = sys ? sys : "";
 			fConfig->system_prompt = fConfig->user_system_prompt;
@@ -2519,7 +2519,7 @@ void MainWindow::MessageReceived(BMessage* msg) {
 				Config& tc = c->MutableConfig();
 				if (provider && *provider) tc.provider = provider;
 				if (base_url) tc.base_url = base_url;
-				if (api_key_env && *api_key_env) tc.api_key_env = api_key_env;
+				if (api_key_env) tc.api_key_env = api_key_env;
 				if (model && *model) tc.model = model;
 				tc.user_system_prompt = sys ? sys : "";
 				tc.system_prompt = tc.user_system_prompt;
