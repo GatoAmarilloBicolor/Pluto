@@ -417,7 +417,7 @@ Feature che Claude Code ha e che ci servono per non sembrare un giocattolo.
       nella AgentStoreDialog che filtra la lista in tempo reale.
       Test: 1 test case con 5 check in test_agent_store.cpp
 - [x] **Registry di default** — `kDefaultRegistryUrl` in `agent_store.cpp`
-      punta a `https://github.com/atomozero/pluto-agents`.
+      punta a `https://codeberg.org/atomozero/pluto-agents`.
       `install_agent_from_registry()` clona il repo, cerca in `agents/<name>/`
       o `<name>/`, installa e salva source URL per update.
       CLI: `pluto agent install <name>` — se non e' URL ne' path locale,

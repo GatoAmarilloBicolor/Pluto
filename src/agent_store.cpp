@@ -1059,7 +1059,7 @@ int RunAgentStoreCli(int argc, char** argv) {
 }
 
 const char* kDefaultRegistryUrl =
-	"https://github.com/atomozero/pluto-agents";
+	"https://codeberg.org/atomozero/pluto-agents";
 
 bool InstallAgentFromRegistry(const std::string& name, std::string& error) {
 	// Clone the registry (shallow), find the agent directory, install it.

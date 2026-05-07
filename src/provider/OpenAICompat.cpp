@@ -678,7 +678,7 @@ void OpenAICompatProvider::stream(const CompletionRequest& req,
 		headers = curl_slist_append(headers, "Accept: text/event-stream");
 		// OpenRouter requires HTTP-Referer and X-Title for billing/ranking.
 		// These are harmless on other providers (ignored if not recognized).
-		headers = curl_slist_append(headers, "HTTP-Referer: https://github.com/atomozero/pluto");
+		headers = curl_slist_append(headers, "HTTP-Referer: https://codeberg.org/atomozero/Pluto");
 		headers = curl_slist_append(headers, "X-Title: Pluto");
 
 		curl_easy_setopt(curl, CURLOPT_URL, url.c_str());

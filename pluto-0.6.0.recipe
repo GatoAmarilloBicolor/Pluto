@@ -5,11 +5,11 @@ REPL, a streaming GUI with split chat/detail view, MCP client support, \
 built-in tools, and Haiku-native tools that expose BFS attributes and \
 BQuery to the model. Sessions are stored as JSONL files with BFS attributes \
 so they are searchable from Tracker's Find dialog."
-HOMEPAGE="https://github.com/atomozero/pluto"
+HOMEPAGE="https://codeberg.org/atomozero/Pluto"
 COPYRIGHT="2026 atomozero"
 LICENSE="MIT"
 REVISION="1"
-SOURCE_URI="https://github.com/atomozero/pluto/archive/refs/tags/v$portVersion.tar.gz"
+SOURCE_URI="https://codeberg.org/atomozero/Pluto/archive/v$portVersion.tar.gz"
 #CHECKSUM_SHA256=""  # fill after uploading the release tarball
 
 ARCHITECTURES="x86_64"

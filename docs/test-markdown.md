@@ -27,12 +27,12 @@ Link inline con testo uguale all'URL: [https://example.com](https://example.com)
 
 Ecco un **testo grassetto** con *corsivo* e `codice inline`.
 
-Un link dentro una frase: usa [pluto](https://github.com/atomozero/pluto) per chattare con Claude.
+Un link dentro una frase: usa [pluto](https://codeberg.org/atomozero/Pluto) per chattare con Claude.
 
 Lista con link:
 - [Haiku OS](https://www.haiku-os.org) — il sistema operativo
 - [HaikuPorts](https://github.com/haikuports) — i pacchetti
-- [pluto](https://github.com/atomozero/pluto) — questo progetto
+- [pluto](https://codeberg.org/atomozero/Pluto) — questo progetto
 
 ## Task list
 

@@ -25,6 +25,7 @@ pluto-[0-9]*/
 *~
 *.bak
 *.tmp
+*.lock
 
 # Local MCP config (machine-specific)
 .mcp.json
