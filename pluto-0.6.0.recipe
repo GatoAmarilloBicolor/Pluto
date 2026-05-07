@@ -1,35 +1,38 @@
-SUMMARY="Haiku-native Claude client (CLI + GUI)"
-DESCRIPTION="Pluto is a native Haiku client for the Anthropic Claude API, \
-written in C++17 against libcurl and the Be API. It provides an interactive \
-REPL, a streaming GUI with split chat/detail view, MCP client support, \
-built-in tools, and Haiku-native tools that expose BFS attributes and \
-BQuery to the model. Sessions are stored as JSONL files with BFS attributes \
-so they are searchable from Tracker's Find dialog."
+SUMMARY="Haiku-native AI client (CLI + GUI)"
+DESCRIPTION="Pluto is a native Haiku client for LLM APIs (Anthropic, OpenAI, \
+Ollama, and many more), written in C++17 against libcurl and the Be API. It \
+provides an interactive REPL, a streaming GUI with multi-tab conversations and \
+markdown rendering, MCP client support, built-in tools, and Haiku-native tools \
+that expose BFS attributes and BQuery to the model. Sessions are stored as \
+JSONL files with BFS attributes so they are searchable from Tracker's Find \
+dialog."
 HOMEPAGE="https://codeberg.org/atomozero/Pluto"
 COPYRIGHT="2026 atomozero"
 LICENSE="MIT"
 REVISION="1"
 SOURCE_URI="https://codeberg.org/atomozero/Pluto/archive/v$portVersion.tar.gz"
 #CHECKSUM_SHA256=""  # fill after uploading the release tarball
+SOURCE_DIR="pluto"
 
 ARCHITECTURES="x86_64"
 
 PROVIDES="
 	pluto = $portVersion
-	app:pluto = $portVersion
-	app:pluto_gui = $portVersion
-	cmd:pluto = $portVersion
+	app:Pluto = $portVersion
+	cmd:Pluto_cli = $portVersion
 	"
 REQUIRES="
 	haiku
 	lib:libcurl
 	lib:libcrypto
+	lib:libedit
 	lib:libssl
 	"
 BUILD_REQUIRES="
 	haiku_devel
 	devel:libcurl
 	devel:libcrypto
+	devel:libedit
 	devel:libssl
 	"
 BUILD_PREREQUIRES="
@@ -40,30 +43,33 @@ BUILD_PREREQUIRES="
 
 BUILD()
 {
-	make $jobArgs
-	make Pluto-gui $jobArgs
-	make 'Ask Pluto'
+	make $jobArgs Pluto_cli
+	make $jobArgs Pluto
+	make build-addon
 }
 
 INSTALL()
 {
 	# CLI binary
 	mkdir -p $binDir
-	cp pluto $binDir/pluto
+	cp Pluto_cli $binDir/Pluto_cli
 
 	# GUI binary
 	mkdir -p $appsDir
-	cp Pluto-gui "$appsDir/Pluto-gui"
-	addAppDeskbarSymlink "$appsDir/Pluto-gui" "Pluto"
+	cp Pluto "$appsDir/Pluto"
+	addAppDeskbarSymlink "$appsDir/Pluto" "Pluto"
 
 	# Tracker add-on
-	addonDir=$dataDir/add-ons/Tracker
-	mkdir -p "$addonDir"
-	cp 'Ask Pluto' "$addonDir/Ask Pluto"
+	mkdir -p "$addOnsDir/Tracker"
+	cp 'Ask pluto' "$addOnsDir/Tracker/Ask pluto"
 
 	# Man page
 	mkdir -p $manDir/man1
 	cp docs/pluto.1 $manDir/man1/pluto.1
+
+	# Data files (BeAPI index, provider configs)
+	mkdir -p $dataDir/pluto
+	cp -r data/* $dataDir/pluto/
 
 	# Documentation
 	mkdir -p $docDir
@@ -74,9 +80,11 @@ INSTALL()
 	cp docs/mcp-tutorial.md $docDir/
 	cp docs/bquery-cookbook.md $docDir/
 
-	# Example routines
-	mkdir -p $docDir/examples/routines
-	cp examples/routines/*.md $docDir/examples/routines/
+	# Example agents and routines
+	mkdir -p $docDir/examples
+	cp -r examples/agents $docDir/examples/
+	cp -r examples/routines $docDir/examples/
+	cp -r examples/providers $docDir/examples/
 }
 
 TEST()
