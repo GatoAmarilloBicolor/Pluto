@@ -24,6 +24,24 @@ multi-tab conversations and markdown rendering, and a Tracker add-on
 
 ---
 
+> **Screenshot placeholder** — add a screenshot of the GUI here:
+>
+> `![Pluto GUI](docs/screenshot.png)`
+
+---
+
+## The Fleet (Three Binaries, One Hull)
+
+Pluto ships as three binaries, each forged for a different kind of voyage:
+
+| Binary | What it be | How to summon |
+|--------|-----------|---------------|
+| **`Pluto_cli`** | Streaming REPL for the terminal. Lightweight, scriptable, pipes like a true Unix sailor | `pluto` from Terminal |
+| **`Pluto`** | Native Haiku GUI with multi-tab conversations, markdown rendering, and drag & drop | Double-click in Tracker or `Pluto` from Terminal |
+| **`Ask pluto`** | Tracker add-on — right-click files, send 'em to the AI | Right-click → "Ask pluto" in Tracker |
+
+---
+
 ## The Treasure Map (Features)
 
 ### The Ship's Core
@@ -212,6 +230,106 @@ pluto --one-shot "explain @src/main.cpp"
 
 ---
 
+## The Captain's Quarters (Using the GUI)
+
+Launch `Pluto` from Tracker or Terminal. On first run she'll probe for a
+local Ollama on `localhost:11434` — if found, ye can start chattin' with no
+key at all. Otherwise she'll open Preferences so ye can pick yer provider
+and stow yer API key.
+
+### Navigatin' the Deck
+
+Type yer message in the input bar at the bottom and press **Enter** to fire.
+**Shift+Enter** adds a new line without sendin'. Press **Escape** to cancel
+a request mid-stream — abandon ship!
+
+The conversation appears in a split view: the main chat on the left, and a
+**detail panel** on the right for tool output, project scans, and rendered
+markdown. Click the status bar at the bottom to quick-switch models.
+
+### Tabs — Launch Another Longboat
+
+**Cmd+T** hoists a new tab. Each tab be an independent conversation with its
+own model, session, and history. Right-click a tab for options: close,
+close others, rename. **Cmd+Left/Right** switches between tabs.
+
+**Fork to new tab** (Session menu) duplicates yer current conversation into
+a fresh tab — perfect for explorin' a different course without losin' the
+original.
+
+### Sessions — The Captain's Log
+
+- **Cmd+S** — save the current session to the hold
+- **Cmd+R** — resume where ye left off
+- **Cmd+B** — open the **Session Browser**: a searchable list of all saved
+  sessions with dates, models, and token counts. Double-click to restore one.
+  Sessions be stored as JSONL with BFS attributes — searchable from
+  Tracker's Find dialog too!
+
+### Preferences — Adjustin' the Sails
+
+**Cmd+,** opens Preferences. Pick yer provider from the dropdown:
+Anthropic (API key or OAuth), OpenAI, Gemini, Ollama, OpenRouter, and 13+
+more. Set yer model, max tokens, context window, color scheme (Auto follows
+the system theme), and system prompt. Hit **Fetch Models** to pull the list
+from a remote server.
+
+### Drag & Drop — Loadin' the Cargo
+
+Drop files anywhere on the window:
+- **Images** (PNG, JPG) → attached as vision input for the model
+- **PDFs** → attached as document context
+- **Code and text files** → attached as text context
+- **Bitmap clips** from ShowImage, Screenshot, or the clipboard → translated
+  to PNG and attached
+
+If a dropped file be outside the workspace, Pluto asks permission before
+touchin' it. No scallywag code runs without yer say-so.
+
+### Slash Commands in the GUI
+
+Type `/` in the input bar and an autocomplete popup appears. Navigate with
+**Up/Down**, accept with **Tab** or **Enter**. Key commands:
+
+```
+/model [ID]      switch yer navigation charts
+/tools           inspect the armory
+/cost            count the doubloons spent
+/init            AI-powered project scan (generates pluto.md)
+/wiki [url]      ingest knowledge into the wiki
+/plan            toggle plan mode (read-only, no file writes)
+/routine <name>  run an automated routine
+/reset           clear the deck
+/help            summon the command list
+```
+
+Custom commands from `~/config/settings/pluto/commands/<name>.md` show up
+too — yer own secret signals.
+
+### The Menus
+
+| Menu | Highlights |
+|------|-----------|
+| **File** | New conversation, New/Close tab, Preferences, Routines, Agents, Login/Logout, Export |
+| **View** | Session browser, Find (Cmd+F), Zoom, Tab navigation |
+| **Session** | Save, Resume, Recent sessions, Fork to new tab, Reset |
+| **MCP** | Connected MCP servers, Discover servers, Peer instances |
+| **Help** | User guide, Install Deskbar icon, Install Tracker add-on, Stats, About |
+
+### Tracker Add-On — Ask Pluto
+
+Right-click files or folders in Tracker, select **"Ask pluto"**. The
+selected files arrive as attachments in a new conversation. If ye select a
+single directory, it becomes the workspace. Install it from Help →
+"Install Tracker add-on", or `make install-addon`.
+
+### Deskbar Replicant
+
+Install from Help → "Install Deskbar icon" for a persistent flag in the
+Deskbar shelf — always ready for duty, like a loyal parrot on yer shoulder.
+
+---
+
 ## The Crew Commands (REPL)
 
 ```
@@ -280,15 +398,21 @@ any files. No scallywag code runs without yer say-so.
 
 | Shortcut | Action |
 |----------|--------|
+| Enter | Fire (send message) |
+| Shift+Enter | New line in the scroll |
+| Escape | Cancel request / dismiss autocomplete |
+| Up/Down | Prompt history (or autocomplete navigation) |
+| Cmd+N | New conversation — clear the deck |
 | Cmd+T | New tab — launch another longboat |
 | Cmd+W | Close tab — sink that vessel |
 | Cmd+S | Save session — stash the loot |
 | Cmd+R | Resume — back to the last port |
 | Cmd+B | Session browser — the captain's log |
 | Cmd+F | Find — search the waters |
+| Cmd+, | Preferences — adjust the sails |
 | Cmd+= / - / 0 | Zoom — spyglass adjustments |
-| Enter | Fire (send message) |
-| Shift+Enter | New line in the scroll |
+| Cmd+Left / Right | Previous / next tab |
+| Cmd+Q | Quit — return to port |
 
 ---
 
