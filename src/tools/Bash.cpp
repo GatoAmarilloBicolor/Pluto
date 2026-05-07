@@ -1,9 +1,16 @@
 #include "Builtin.h"
 #include "Tool.h"
 #include "../json.h"
+#include "../workspace.h"
+
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include <array>
+#include <cerrno>
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 namespace pluto {
@@ -16,12 +23,11 @@ public:
 	std::string description() const override {
 		return "Execute a shell command and return stdout and stderr merged. "
 		       "Use for running programs, inspecting system state, and build/"
-		       "test commands. Avoid interactive or long-running commands.";
+		       "test commands. Avoid interactive or long-running commands. "
+		       "Optional timeout_secs (default 120, max 600).";
 	}
 	std::string input_schema_json() const override {
-		return R"({"type":"object",)"
-		       R"("properties":{"command":{"type":"string","description":"Shell command"}},)"
-		       R"("required":["command"]})";
+		return R"JSON({"type":"object","properties":{"command":{"type":"string","description":"Shell command"},"timeout_secs":{"type":"integer","description":"Timeout in seconds, default 120, max 600"}},"required":["command"]})JSON";
 	}
 	std::string preview(const std::string& input_json) const override {
 		try {
@@ -34,15 +40,57 @@ public:
 	ToolResult execute(const std::string& input_json) override {
 		ToolResult r;
 		std::string cmd;
+		int timeout_secs = 120;
 		try {
 			auto v = json::Value::parse(input_json);
 			cmd = v.str("command");
+			if (const auto* t = v.find("timeout_secs"); t && t->is_num())
+				timeout_secs = static_cast<int>(t->as_num());
 		} catch (const std::exception& e) {
 			r.is_error = true; r.output = e.what(); return r;
 		}
 		if (cmd.empty()) { r.is_error = true; r.output = "command required"; return r; }
+		// Check that cwd is within workspace.
+		{
+			std::string ws = WorkspaceRoot();
+			if (!ws.empty()) {
+				char cwd_buf[4096];
+				std::string cwd_str;
+				if (::getcwd(cwd_buf, sizeof(cwd_buf)))
+					cwd_str = cwd_buf;
+				else
+					cwd_str = ws;
+				if (!WorkspaceAllows(cwd_str)) {
+					LogAccess(cwd_str, "bash", false);
+					r.is_error = true;
+					r.output = std::string("cwd ") + cwd_str
+					         + " is outside workspace " + ws
+					         + " — use `pluto trust add <dir>` to allow";
+					return r;
+				}
+				LogAccess(cwd_str, "bash", true);
+			}
+		}
+		if (timeout_secs < 1)   timeout_secs = 1;
+		if (timeout_secs > 600) timeout_secs = 600;
 
-		std::string full = cmd + " 2>&1";
+		// Sandbox: always execute from the workspace root so relative
+		// paths resolve inside the trusted directory.
+		std::string prefix;
+		{
+			std::string ws = WorkspaceRoot();
+			if (!ws.empty())
+				prefix = "cd " + shq(ws) + " && ";
+		}
+
+		// Use timeout(1) if available, otherwise run without it.
+		bool has_timeout = (::access("/bin/timeout", X_OK) == 0);
+		std::string full;
+		if (has_timeout)
+			full = prefix + "timeout " + std::to_string(timeout_secs)
+			     + " sh -c " + shq(cmd) + " 2>&1";
+		else
+			full = prefix + "sh -c " + shq(cmd) + " 2>&1";
 		FILE* p = popen(full.c_str(), "r");
 		if (!p) { r.is_error = true; r.output = "popen failed"; return r; }
 		std::array<char, 4096> buf;
@@ -51,9 +99,20 @@ public:
 			r.output.append(buf.data(), n);
 		}
 		int rc = pclose(p);
-		if (rc != 0) {
-			r.output += "\n[exit " + std::to_string(rc) + "]";
+		if (rc == -1) {
+			// pclose itself failed (e.g. waitpid interrupted).
+			r.is_error = true;
+			r.output += "\n[pclose failed: " + std::string(std::strerror(errno)) + "]";
+		} else if (WIFEXITED(rc) && WEXITSTATUS(rc) == 124) {
+			// timeout(1) returns 124 on timeout.
+			r.is_error = true;
+			r.output += "\n[timed out after " + std::to_string(timeout_secs) + "s]";
+		} else if (rc != 0) {
+			int code = WIFEXITED(rc) ? WEXITSTATUS(rc) : rc;
+			r.output += "\n[exit " + std::to_string(code) + "]";
 		}
+		if (!has_timeout && timeout_secs < 120)
+			r.output += "\n[note: timeout not enforced — /bin/timeout not found]";
 		const size_t kMax = 64 * 1024;
 		if (r.output.size() > kMax) {
 			r.output.resize(kMax);
@@ -61,11 +120,22 @@ public:
 		}
 		return r;
 	}
+
+private:
+	static std::string shq(const std::string& s) {
+		std::string out = "'";
+		for (char c : s) {
+			if (c == '\'') out += "'\\''";
+			else out += c;
+		}
+		out += "'";
+		return out;
+	}
 };
 
 }  // namespace
 
-std::unique_ptr<Tool> make_bash_tool() {
+std::unique_ptr<Tool> MakeBashTool() {
 	return std::make_unique<BashTool>();
 }
 

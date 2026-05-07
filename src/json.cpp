@@ -79,11 +79,12 @@ void serialize_value(std::string& out, const Value& v) {
 
 class Parser {
 public:
-	Parser(const std::string& s) : fSrc(s), fPos(0) {}
+	Parser(const std::string& s) : fSrc(s), fPos(0), fDepth(0) {}
 
 	Value parse_value() {
 		skip_ws();
 		if (fPos >= fSrc.size()) fail("unexpected end of input");
+		if (fDepth > 256) fail("nesting too deep");
 		char c = fSrc[fPos];
 		if (c == '{') return parse_object();
 		if (c == '[') return parse_array();
@@ -102,6 +103,7 @@ public:
 private:
 	const std::string& fSrc;
 	size_t fPos;
+	int fDepth;
 
 	[[noreturn]] void fail(const char* msg) {
 		throw std::runtime_error(std::string("json parse: ") + msg +
@@ -122,10 +124,11 @@ private:
 	}
 
 	Value parse_object() {
+		++fDepth;
 		expect('{');
 		Object o;
 		skip_ws();
-		if (fPos < fSrc.size() && fSrc[fPos] == '}') { ++fPos; return Value(std::move(o)); }
+		if (fPos < fSrc.size() && fSrc[fPos] == '}') { ++fPos; --fDepth; return Value(std::move(o)); }
 		for (;;) {
 			skip_ws();
 			std::string key = parse_string();
@@ -136,23 +139,24 @@ private:
 			skip_ws();
 			if (fPos >= fSrc.size()) fail("unterminated object");
 			if (fSrc[fPos] == ',') { ++fPos; continue; }
-			if (fSrc[fPos] == '}') { ++fPos; return Value(std::move(o)); }
+			if (fSrc[fPos] == '}') { ++fPos; --fDepth; return Value(std::move(o)); }
 			fail("expected , or }");
 		}
 	}
 
 	Value parse_array() {
+		++fDepth;
 		expect('[');
 		Array a;
 		skip_ws();
-		if (fPos < fSrc.size() && fSrc[fPos] == ']') { ++fPos; return Value(std::move(a)); }
+		if (fPos < fSrc.size() && fSrc[fPos] == ']') { ++fPos; --fDepth; return Value(std::move(a)); }
 		for (;;) {
 			Value v = parse_value();
 			a.push_back(std::move(v));
 			skip_ws();
 			if (fPos >= fSrc.size()) fail("unterminated array");
 			if (fSrc[fPos] == ',') { ++fPos; continue; }
-			if (fSrc[fPos] == ']') { ++fPos; return Value(std::move(a)); }
+			if (fSrc[fPos] == ']') { ++fPos; --fDepth; return Value(std::move(a)); }
 			fail("expected , or ]");
 		}
 	}
@@ -176,23 +180,50 @@ private:
 				case 'r':  out += '\r'; break;
 				case 't':  out += '\t'; break;
 				case 'u': {
-					if (fPos + 4 > fSrc.size()) fail("truncated \\u");
-					unsigned code = 0;
-					for (int i = 0; i < 4; ++i) {
-						char h = fSrc[fPos++];
-						code <<= 4;
-						if (h >= '0' && h <= '9')      code |= (h - '0');
-						else if (h >= 'a' && h <= 'f') code |= (h - 'a' + 10);
-						else if (h >= 'A' && h <= 'F') code |= (h - 'A' + 10);
-						else fail("bad \\u hex");
+					auto read_hex4 = [&]() -> unsigned {
+						if (fPos + 4 > fSrc.size()) fail("truncated \\u");
+						unsigned code = 0;
+						for (int i = 0; i < 4; ++i) {
+							char h = fSrc[fPos++];
+							code <<= 4;
+							if (h >= '0' && h <= '9')      code |= (h - '0');
+							else if (h >= 'a' && h <= 'f') code |= (h - 'a' + 10);
+							else if (h >= 'A' && h <= 'F') code |= (h - 'A' + 10);
+							else fail("bad \\u hex");
+						}
+						return code;
+					};
+					unsigned code = read_hex4();
+					// Handle UTF-16 surrogate pairs (U+10000..U+10FFFF).
+					if (code >= 0xD800 && code <= 0xDBFF) {
+						if (fPos + 2 <= fSrc.size()
+						    && fSrc[fPos] == '\\' && fSrc[fPos + 1] == 'u') {
+							fPos += 2;
+							unsigned low = read_hex4();
+							if (low >= 0xDC00 && low <= 0xDFFF) {
+								code = 0x10000
+								     + ((code - 0xD800) << 10)
+								     + (low - 0xDC00);
+							} else {
+								fail("bad surrogate pair");
+							}
+						} else {
+							fail("lone high surrogate");
+						}
 					}
+					// Encode as UTF-8.
 					if (code < 0x80) {
 						out += static_cast<char>(code);
 					} else if (code < 0x800) {
 						out += static_cast<char>(0xC0 | (code >> 6));
 						out += static_cast<char>(0x80 | (code & 0x3F));
-					} else {
+					} else if (code < 0x10000) {
 						out += static_cast<char>(0xE0 | (code >> 12));
+						out += static_cast<char>(0x80 | ((code >> 6) & 0x3F));
+						out += static_cast<char>(0x80 | (code & 0x3F));
+					} else {
+						out += static_cast<char>(0xF0 | (code >> 18));
+						out += static_cast<char>(0x80 | ((code >> 12) & 0x3F));
 						out += static_cast<char>(0x80 | ((code >> 6) & 0x3F));
 						out += static_cast<char>(0x80 | (code & 0x3F));
 					}
@@ -207,6 +238,9 @@ private:
 	Value parse_number() {
 		size_t start = fPos;
 		if (fSrc[fPos] == '-') ++fPos;
+		// JSON requires at least one digit after an optional minus sign.
+		if (fPos >= fSrc.size() || fSrc[fPos] < '0' || fSrc[fPos] > '9')
+			fail("invalid number: expected digit after '-'");
 		while (fPos < fSrc.size() && fSrc[fPos] >= '0' && fSrc[fPos] <= '9') ++fPos;
 		if (fPos < fSrc.size() && fSrc[fPos] == '.') {
 			++fPos;

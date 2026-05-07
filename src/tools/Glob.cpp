@@ -2,6 +2,8 @@
 #include "Tool.h"
 #include "../json.h"
 
+#include <sys/wait.h>
+
 #include <array>
 #include <cstdio>
 #include <string>
@@ -49,6 +51,11 @@ public:
 			r.is_error = true; r.output = e.what(); return r;
 		}
 		if (pattern.empty()) { r.is_error = true; r.output = "pattern required"; return r; }
+		if (pattern.size() > 200) {
+			r.is_error = true;
+			r.output = "pattern too long (max 200 chars)";
+			return r;
+		}
 
 		std::string cmd = "find " + shq(path) + " -type f -name " + shq(pattern) + " 2>&1";
 		FILE* p = popen(cmd.c_str(), "r");
@@ -58,14 +65,18 @@ public:
 		while ((n = std::fread(buf.data(), 1, buf.size(), p)) > 0) {
 			r.output.append(buf.data(), n);
 		}
-		pclose(p);
-		if (r.output.empty()) r.output = "(no matches)";
+		int rc = pclose(p);
+		if (r.output.empty()) {
+			r.output = "(no matches)";
+		} else if (rc != 0 && WIFEXITED(rc) && WEXITSTATUS(rc) != 0) {
+			r.output += "\n[exit " + std::to_string(WEXITSTATUS(rc)) + "]";
+		}
 		return r;
 	}
 };
 
 }  // namespace
 
-std::unique_ptr<Tool> make_glob_tool() { return std::make_unique<GlobTool>(); }
+std::unique_ptr<Tool> MakeGlobTool() { return std::make_unique<GlobTool>(); }
 
 }  // namespace pluto

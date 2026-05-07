@@ -2,6 +2,7 @@
 
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -32,6 +33,7 @@ public:
 	std::vector<const Tool*> list() const;
 
 private:
+	mutable std::mutex fMutex;
 	std::map<std::string, std::unique_ptr<Tool>> fTools;
 };
 

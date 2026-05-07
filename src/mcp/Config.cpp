@@ -1,4 +1,7 @@
 #include "Config.h"
+#include "../version.h"
+
+#include <curl/curl.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -8,22 +11,29 @@
 #include <unistd.h>
 #include <utility>
 
+#include "../filelock.h"
 #include "../json.h"
+#include "../util.h"
+#include "../workspace.h"
 
 namespace pluto {
 
 namespace {
 
 std::string home_dir() {
-	const char* h = std::getenv("HOME");
-	return h ? std::string(h) : std::string("/boot/home");
+	return HomeDir();
 }
 
 std::string settings_dir() {
-	return home_dir() + "/config/settings";
+	return HomeDir() + "/config/settings";
 }
 
 std::string cwd() {
+	// Prefer WorkspaceRoot() over getcwd() so that GUI processes
+	// launched from Deskbar (where cwd != workspace) still find
+	// project-scoped .mcp.json and mcp-local.json entries.
+	std::string ws = WorkspaceRoot();
+	if (!ws.empty()) return ws;
 	char buf[4096];
 	return getcwd(buf, sizeof(buf)) ? std::string(buf) : std::string();
 }
@@ -68,10 +78,23 @@ json::Value load_json_file(const std::string& path) {
 }
 
 bool write_json_file(const std::string& path, const json::Value& v, std::string& err) {
-	std::ofstream f(path);
-	if (!f) { err = "cannot open " + path + " for writing"; return false; }
-	f << v.serialize();
-	if (!f) { err = "write failed"; return false; }
+	// Atomic write: temp file + rename to avoid corruption on crash.
+	std::string tmp = path + ".tmp." + std::to_string(getpid());
+	{
+		std::ofstream f(tmp, std::ios::trunc);
+		if (!f) { err = "cannot open " + tmp + " for writing"; return false; }
+		f << v.serialize();
+		if (!f.good()) {
+			std::remove(tmp.c_str());
+			err = "write failed";
+			return false;
+		}
+	}
+	if (::rename(tmp.c_str(), path.c_str()) != 0) {
+		std::remove(tmp.c_str());
+		err = "rename failed";
+		return false;
+	}
 	return true;
 }
 
@@ -124,7 +147,7 @@ std::vector<McpServerSpec> load_flat_file(const std::string& path, McpServerSpec
 
 std::vector<McpServerSpec> load_local_file() {
 	std::vector<McpServerSpec> out;
-	std::string path = local_mcp_path();
+	std::string path = LocalMcpPath();
 	std::ifstream probe(path);
 	if (!probe) return out;
 	probe.close();
@@ -167,15 +190,15 @@ json::Value spec_to_value(const McpServerSpec& spec) {
 
 }  // namespace
 
-std::string project_mcp_path() { return cwd() + "/.mcp.json"; }
-std::string user_mcp_path()    { return settings_dir() + "/pluto/mcp.json"; }
-std::string local_mcp_path()   { return settings_dir() + "/pluto/mcp-local.json"; }
-std::string approvals_path()   { return settings_dir() + "/pluto/mcp-approvals.json"; }
+std::string ProjectMcpPath() { return cwd() + "/.mcp.json"; }
+std::string UserMcpPath()    { return settings_dir() + "/pluto/mcp.json"; }
+std::string LocalMcpPath()   { return settings_dir() + "/pluto/mcp-local.json"; }
+std::string ApprovalsPath()   { return settings_dir() + "/pluto/mcp-approvals.json"; }
 
-std::vector<McpServerSpec> load_mcp_specs() {
+std::vector<McpServerSpec> LoadMcpSpecs() {
 	auto local   = load_local_file();
-	auto project = load_flat_file(project_mcp_path(), McpServerSpec::PROJECT);
-	auto user    = load_flat_file(user_mcp_path(),    McpServerSpec::USER);
+	auto project = load_flat_file(ProjectMcpPath(), McpServerSpec::PROJECT);
+	auto user    = load_flat_file(UserMcpPath(),    McpServerSpec::USER);
 
 	std::vector<McpServerSpec> out;
 	std::set<std::string> seen;
@@ -197,12 +220,12 @@ std::vector<McpServerSpec> load_mcp_specs() {
 	return out;
 }
 
-bool save_mcp_spec(const McpServerSpec& spec, McpServerSpec::Scope scope, std::string& err) {
+bool SaveMcpSpec(const McpServerSpec& spec, McpServerSpec::Scope scope, std::string& err) {
 	std::string path;
 	switch (scope) {
-		case McpServerSpec::PROJECT: path = project_mcp_path(); break;
-		case McpServerSpec::USER:    path = user_mcp_path();    break;
-		case McpServerSpec::LOCAL:   path = local_mcp_path();   break;
+		case McpServerSpec::PROJECT: path = ProjectMcpPath(); break;
+		case McpServerSpec::USER:    path = UserMcpPath();    break;
+		case McpServerSpec::LOCAL:   path = LocalMcpPath();   break;
 	}
 
 	json::Value root = load_json_file(path);
@@ -232,12 +255,12 @@ bool save_mcp_spec(const McpServerSpec& spec, McpServerSpec::Scope scope, std::s
 	return write_json_file(path, root, err);
 }
 
-bool remove_mcp_spec(const std::string& name, McpServerSpec::Scope scope, std::string& err) {
+bool RemoveMcpSpec(const std::string& name, McpServerSpec::Scope scope, std::string& err) {
 	std::string path;
 	switch (scope) {
-		case McpServerSpec::PROJECT: path = project_mcp_path(); break;
-		case McpServerSpec::USER:    path = user_mcp_path();    break;
-		case McpServerSpec::LOCAL:   path = local_mcp_path();   break;
+		case McpServerSpec::PROJECT: path = ProjectMcpPath(); break;
+		case McpServerSpec::USER:    path = UserMcpPath();    break;
+		case McpServerSpec::LOCAL:   path = LocalMcpPath();   break;
 	}
 	std::ifstream probe(path);
 	if (!probe) { err = "no config at " + path; return false; }
@@ -273,8 +296,8 @@ bool remove_mcp_spec(const std::string& name, McpServerSpec::Scope scope, std::s
 	return write_json_file(path, root, err);
 }
 
-bool is_project_approved(const std::string& server_name) {
-	json::Value v = load_json_file(approvals_path());
+bool IsProjectApproved(const std::string& server_name) {
+	json::Value v = load_json_file(ApprovalsPath());
 	if (!v.is_obj()) return false;
 	const json::Value* list = v.find(cwd());
 	if (!list || !list->is_arr()) return false;
@@ -284,8 +307,10 @@ bool is_project_approved(const std::string& server_name) {
 	return false;
 }
 
-void set_project_approved(const std::string& server_name) {
-	json::Value v = load_json_file(approvals_path());
+void SetProjectApproved(const std::string& server_name) {
+	std::string lock_path = ApprovalsPath() + ".lock";
+	ScopedFileLock flock(lock_path);
+	json::Value v = load_json_file(ApprovalsPath());
 	if (!v.is_obj()) v = json::Value(json::Object{});
 	std::string c = cwd();
 	const json::Value* existing = v.find(c);
@@ -296,16 +321,93 @@ void set_project_approved(const std::string& server_name) {
 	list.push(json::Value(server_name));
 	v.set(c, list);
 	std::string err;
-	write_json_file(approvals_path(), v, err);
+	write_json_file(ApprovalsPath(), v, err);
 }
 
-void reset_project_approvals() {
-	json::Value v = load_json_file(approvals_path());
+void ResetProjectApprovals() {
+	std::string lock_path = ApprovalsPath() + ".lock";
+	ScopedFileLock flock(lock_path);
+	json::Value v = load_json_file(ApprovalsPath());
 	if (!v.is_obj()) return;
 	auto& obj = v.as_obj();
 	obj.erase(cwd());
 	std::string err;
-	write_json_file(approvals_path(), v, err);
+	write_json_file(ApprovalsPath(), v, err);
+}
+
+// ----------------------------------------------------------------
+// Auto-discovery: probe well-known localhost ports for MCP servers.
+// A HEAD request with a 1.5s timeout is sent to each endpoint. Any
+// 200-level response counts as "alive". The list of probes is
+// intentionally short — we're checking for known Haiku-ecosystem
+// servers and common development ports.
+// ----------------------------------------------------------------
+
+// Extract "host:port" from a URL for dedup purposes.
+std::string url_host_port(const std::string& url) {
+	// Skip scheme ("http://", "https://")
+	size_t s = url.find("://");
+	if (s == std::string::npos) s = 0; else s += 3;
+	size_t e = url.find('/', s);
+	return url.substr(s, e == std::string::npos ? std::string::npos : e - s);
+}
+
+std::vector<DiscoveredServer> DiscoverMcpServers() {
+	struct Probe {
+		const char* name;
+		const char* url;
+		const char* type;
+	};
+	// Probe both /sse and /mcp paths per port — servers may expose either.
+	static const Probe kProbes[] = {
+		{ "pippo",    "http://localhost:2607/sse",  "sse"  },
+		{ "pippo",    "http://localhost:2607/mcp",  "http" },
+		{ "mcp-3000", "http://localhost:3000/sse",  "sse"  },
+		{ "mcp-8080", "http://localhost:8080/sse",  "sse"  },
+		{ "mcp-8000", "http://localhost:8000/sse",  "sse"  },
+		{ "mcp-4000", "http://localhost:4000/sse",  "sse"  },
+	};
+
+	// Build a set of already-configured host:port pairs so we skip servers
+	// that are already in .mcp.json / mcp.json / mcp-local.json regardless
+	// of which path they're configured at.
+	std::set<std::string> known_hosts;
+	for (const auto& s : LoadMcpSpecs()) {
+		if (!s.url.empty())
+			known_hosts.insert(url_host_port(s.url));
+	}
+
+	std::vector<DiscoveredServer> out;
+	std::set<std::string> found_hosts;  // avoid duplicate results per port
+
+	// Reuse a single CURL handle across all probes.
+	CURL* curl = curl_easy_init();
+	if (!curl) return out;
+
+	for (const auto& p : kProbes) {
+		std::string hp = url_host_port(p.url);
+		if (known_hosts.count(hp)) continue;    // already configured
+		if (found_hosts.count(hp)) continue;     // already found via other path
+
+		curl_easy_setopt(curl, CURLOPT_URL, p.url);
+		curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
+		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 2L);
+		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 1L);
+		curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
+		CURLcode rc = curl_easy_perform(curl);
+		long code = 0;
+		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+		curl_easy_reset(curl);  // reset for next probe, keep connection pool
+
+		if (rc == CURLE_OK && code >= 200 && code < 300) {
+			std::fprintf(stderr, "[discover] found %s at %s\n",
+				p.name, p.url);
+			out.push_back(DiscoveredServer{p.name, p.url, p.type});
+			found_hosts.insert(hp);
+		}
+	}
+	curl_easy_cleanup(curl);
+	return out;
 }
 
 }  // namespace pluto

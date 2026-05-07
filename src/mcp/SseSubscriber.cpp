@@ -1,4 +1,5 @@
 #include "SseSubscriber.h"
+#include "../version.h"
 
 #include <curl/curl.h>
 
@@ -48,8 +49,10 @@ void SseSubscriber::stop() {
 
 std::vector<SseSubscriber::Event> SseSubscriber::drain() {
 	std::lock_guard<std::mutex> lock(fMutex);
-	std::vector<Event> out;
-	out.swap(fQueue);
+	std::vector<Event> out(
+		std::make_move_iterator(fQueue.begin()),
+		std::make_move_iterator(fQueue.end()));
+	fQueue.clear();
 	return out;
 }
 
@@ -57,7 +60,7 @@ void SseSubscriber::push(Event ev) {
 	std::lock_guard<std::mutex> lock(fMutex);
 	// Drop oldest events past a generous cap to bound memory growth if
 	// drain() is never called.
-	if (fQueue.size() >= 1000) fQueue.erase(fQueue.begin());
+	if (fQueue.size() >= 1000) fQueue.pop_front();
 	fQueue.push_back(std::move(ev));
 }
 
@@ -121,7 +124,7 @@ void SseSubscriber::run() {
 	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 0L);        // no overall deadline
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
-	curl_easy_setopt(curl, CURLOPT_USERAGENT, "pluto/0.4.0 (Haiku)");
+	curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
 	curl_easy_setopt(curl, CURLOPT_CAINFO, "/system/data/ssl/CARootCertificates.pem");
 
 	CURLcode rc = curl_easy_perform(curl);

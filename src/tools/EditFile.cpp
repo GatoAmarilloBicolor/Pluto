@@ -1,6 +1,8 @@
 #include "Builtin.h"
 #include "Tool.h"
+#include "../filelock.h"
 #include "../json.h"
+#include "../workspace.h"
 
 #include <cerrno>
 #include <cstring>
@@ -60,6 +62,18 @@ public:
 		if (path.empty() || old_s.empty()) {
 			r.is_error = true; r.output = "path and old_string required"; return r;
 		}
+		if (!WorkspaceAllows(path)) {
+			LogAccess(path, "edit_file", false);
+			r.is_error = true;
+			r.output = path + " is outside workspace " + WorkspaceRoot()
+			         + " — use `pluto trust add <dir>` to allow";
+			return r;
+		}
+		LogAccess(path, "edit_file", true);
+
+		// Lock the file for the entire read-verify-write cycle to
+		// prevent TOCTOU races with concurrent edits.
+		ScopedFileLock flock(path + ".lock");
 
 		std::ifstream in(path, std::ios::binary);
 		if (!in) {
@@ -101,7 +115,7 @@ public:
 
 }  // namespace
 
-std::unique_ptr<Tool> make_edit_file_tool() {
+std::unique_ptr<Tool> MakeEditFileTool() {
 	return std::make_unique<EditFileTool>();
 }
 

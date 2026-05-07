@@ -1,0 +1,356 @@
+// pluto schedule — manage scheduled agent tasks via launch_daemon.
+//
+// Schedules are stored as simple key=value config files in
+// ~/config/settings/pluto/schedules/<name>.conf.
+//
+// For event-based schedules (boot/login), a launch_daemon job file is
+// generated in ~/config/settings/launch/ so the daemon picks it up
+// automatically on next boot/login.
+//
+// For periodic schedules (interval_mins > 0), a wrapper shell script
+// is generated that loops with sleep, and the launch_daemon job runs
+// that script once at login.
+
+#include "schedule.h"
+#include "util.h"
+
+#include <dirent.h>
+#include <sys/stat.h>
+
+#include <algorithm>
+#include <cerrno>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <string>
+
+namespace pluto {
+
+namespace {
+
+std::string home_dir() {
+	return HomeDir();
+}
+
+// Shell-quote a string: wraps in single quotes, escaping embedded quotes.
+std::string shq(const std::string& s) {
+	std::string out = "'";
+	for (char c : s) {
+		if (c == '\'') out += "'\\''";
+		else out += c;
+	}
+	out += "'";
+	return out;
+}
+
+void ensure_dir(const std::string& dir) {
+	std::string acc;
+	for (size_t i = 0; i < dir.size(); ++i) {
+		acc += dir[i];
+		if (dir[i] == '/' && i > 0) ::mkdir(acc.c_str(), 0755);
+	}
+	::mkdir(dir.c_str(), 0755);
+}
+
+std::string launch_dir() {
+	return home_dir() + "/config/settings/launch";
+}
+
+std::string scripts_dir() {
+	return SchedulesDir() + "/scripts";
+}
+
+std::string job_name(const std::string& sched_name) {
+	return "x-vnd.pluto-schedule-" + sched_name;
+}
+
+std::string pluto_bin() {
+	// Prefer the binary in the same directory as the running process,
+	// fall back to PATH.
+	return "pluto";
+}
+
+// Trim leading/trailing whitespace.
+std::string trim(const std::string& s) {
+	size_t a = s.find_first_not_of(" \t\r\n");
+	if (a == std::string::npos) return {};
+	size_t b = s.find_last_not_of(" \t\r\n");
+	return s.substr(a, b - a + 1);
+}
+
+}  // namespace
+
+std::string SchedulesDir() {
+	return home_dir() + "/config/settings/pluto/schedules";
+}
+
+std::vector<Schedule> ListSchedules() {
+	std::vector<Schedule> out;
+	std::string dir = SchedulesDir();
+	DIR* d = opendir(dir.c_str());
+	if (!d) return out;
+	struct dirent* e;
+	while ((e = readdir(d)) != nullptr) {
+		std::string name = e->d_name;
+		if (name.size() < 6) continue;
+		if (name.substr(name.size() - 5) != ".conf") continue;
+		Schedule s;
+		s.name = name.substr(0, name.size() - 5);
+		if (LoadSchedule(s.name, s))
+			out.push_back(std::move(s));
+	}
+	closedir(d);
+	std::sort(out.begin(), out.end(),
+		[](const Schedule& a, const Schedule& b) { return a.name < b.name; });
+	return out;
+}
+
+bool LoadSchedule(const std::string& name, Schedule& out) {
+	std::string path = SchedulesDir() + "/" + name + ".conf";
+	std::ifstream f(path);
+	if (!f) return false;
+	out.name = name;
+	std::string line;
+	while (std::getline(f, line)) {
+		size_t eq = line.find('=');
+		if (eq == std::string::npos) continue;
+		std::string key = trim(line.substr(0, eq));
+		std::string val = trim(line.substr(eq + 1));
+		if (key == "prompt_file")    out.prompt_file = val;
+		else if (key == "event")     out.event = val;
+		else if (key == "interval")  out.interval_mins = std::atoi(val.c_str());
+		else if (key == "model")     out.model = val;
+		else if (key == "enabled")   out.enabled = (val == "true" || val == "1");
+	}
+	return true;
+}
+
+bool SaveSchedule(const Schedule& sched, std::string& error) {
+	ensure_dir(SchedulesDir());
+	std::string path = SchedulesDir() + "/" + sched.name + ".conf";
+	std::ofstream f(path);
+	if (!f) {
+		error = "cannot write: " + path;
+		return false;
+	}
+	f << "prompt_file = " << sched.prompt_file << "\n";
+	if (!sched.event.empty())
+		f << "event = " << sched.event << "\n";
+	if (sched.interval_mins > 0)
+		f << "interval = " << sched.interval_mins << "\n";
+	if (!sched.model.empty())
+		f << "model = " << sched.model << "\n";
+	f << "enabled = " << (sched.enabled ? "true" : "false") << "\n";
+	return true;
+}
+
+bool RemoveSchedule(const std::string& name, std::string& error) {
+	std::string conf = SchedulesDir() + "/" + name + ".conf";
+	if (std::remove(conf.c_str()) != 0) {
+		error = "cannot remove: " + conf;
+		return false;
+	}
+	// Also remove script and job if they exist.
+	std::string script = scripts_dir() + "/" + name + ".sh";
+	std::remove(script.c_str());
+	std::string err2;
+	UninstallLaunchJob(name, err2);
+	return true;
+}
+
+bool InstallLaunchJob(const Schedule& sched, std::string& error) {
+	ensure_dir(launch_dir());
+
+	std::string run_cmd;
+
+	if (sched.interval_mins > 0) {
+		// Generate a looping wrapper script.
+		ensure_dir(scripts_dir());
+		std::string script_path = scripts_dir() + "/" + sched.name + ".sh";
+		std::ofstream sf(script_path);
+		if (!sf) {
+			error = "cannot write script: " + script_path;
+			return false;
+		}
+		sf << "#!/bin/sh\n";
+		sf << "# Auto-generated by pluto schedule. Do not edit.\n";
+		sf << "while true; do\n";
+		sf << "  " << shq(pluto_bin()) << " agent run "
+		   << shq(sched.prompt_file);
+		if (!sched.model.empty())
+			sf << " --model " << shq(sched.model);
+		sf << " 2>>/tmp/pluto-schedule-" << shq(sched.name) << ".log\n";
+		sf << "  sleep " << (sched.interval_mins * 60) << "\n";
+		sf << "done\n";
+		sf.close();
+		chmod(script_path.c_str(), 0755);
+		run_cmd = script_path;
+	} else {
+		// One-shot on event.
+		run_cmd = shq(pluto_bin());
+		run_cmd += " agent run " + shq(sched.prompt_file);
+		if (!sched.model.empty())
+			run_cmd += " --model " + shq(sched.model);
+	}
+
+	// Write launch_daemon job file.
+	std::string job_path = launch_dir() + "/pluto-" + sched.name;
+	std::ofstream jf(job_path);
+	if (!jf) {
+		error = "cannot write job: " + job_path;
+		return false;
+	}
+
+	std::string jn = job_name(sched.name);
+	std::string event = sched.event.empty() ? "initial_volumes_mounted"
+	                                         : sched.event;
+
+	jf << "job " << jn << " {\n";
+	jf << "\tlaunch " << run_cmd << "\n";
+	// Haiku's launch_daemon uses initial_volumes_mounted as the main
+	// startup event. There is no separate "login" event — Haiku is
+	// inherently single-user, so boot ≈ login.
+	if (event == "boot" || event == "login"
+	    || event == "initial_volumes_mounted")
+		jf << "\ton initial_volumes_mounted\n";
+	if (!sched.enabled)
+		jf << "\tdisabled\n";
+	jf << "}\n";
+
+	return true;
+}
+
+bool UninstallLaunchJob(const std::string& name, std::string& error) {
+	std::string path = launch_dir() + "/pluto-" + name;
+	if (std::remove(path.c_str()) != 0 && errno != ENOENT) {
+		error = "cannot remove: " + path;
+		return false;
+	}
+	return true;
+}
+
+int RunScheduleCli(int argc, char** argv) {
+	if (argc < 1) {
+		std::fprintf(stderr,
+			"usage: pluto schedule list\n"
+			"       pluto schedule add <name> --file <prompt.md> [--event boot|login] "
+			"[--interval <mins>] [--model <id>]\n"
+			"       pluto schedule remove <name>\n"
+			"       pluto schedule enable <name>\n"
+			"       pluto schedule disable <name>\n"
+			"       pluto schedule run <name>\n");
+		return 2;
+	}
+
+	std::string sub = argv[0];
+
+	if (sub == "list") {
+		auto scheds = ListSchedules();
+		if (scheds.empty()) {
+			std::printf("(no schedules)\n");
+			return 0;
+		}
+		for (const auto& s : scheds) {
+			const char* status = s.enabled ? "active" : "paused";
+			std::printf("  %-20s  %-8s", s.name.c_str(), status);
+			if (s.interval_mins > 0)
+				std::printf("  every %dm", s.interval_mins);
+			else if (!s.event.empty())
+				std::printf("  on %s", s.event.c_str());
+			std::printf("  %s\n", s.prompt_file.c_str());
+		}
+		return 0;
+	}
+
+	if (sub == "add") {
+		if (argc < 2) {
+			std::fprintf(stderr, "usage: pluto schedule add <name> --file <prompt.md>\n");
+			return 2;
+		}
+		Schedule sched;
+		sched.name = argv[1];
+		for (int i = 2; i < argc; ++i) {
+			std::string a = argv[i];
+			if (a == "--file" && i + 1 < argc)
+				sched.prompt_file = argv[++i];
+			else if (a == "--event" && i + 1 < argc)
+				sched.event = argv[++i];
+			else if (a == "--interval" && i + 1 < argc)
+				sched.interval_mins = std::atoi(argv[++i]);
+			else if (a == "--model" && i + 1 < argc)
+				sched.model = argv[++i];
+		}
+		if (sched.prompt_file.empty()) {
+			std::fprintf(stderr, "error: --file is required\n");
+			return 2;
+		}
+		std::string error;
+		if (!SaveSchedule(sched, error)) {
+			std::fprintf(stderr, "error: %s\n", error.c_str());
+			return 1;
+		}
+		if (!InstallLaunchJob(sched, error)) {
+			std::fprintf(stderr, "warning: %s\n", error.c_str());
+		}
+		std::printf("schedule '%s' created\n", sched.name.c_str());
+		if (!sched.event.empty() || sched.interval_mins > 0)
+			std::printf("  launch_daemon job installed — takes effect on next boot\n");
+		return 0;
+	}
+
+	if (sub == "remove") {
+		if (argc < 2) {
+			std::fprintf(stderr, "usage: pluto schedule remove <name>\n");
+			return 2;
+		}
+		std::string error;
+		if (!RemoveSchedule(argv[1], error)) {
+			std::fprintf(stderr, "error: %s\n", error.c_str());
+			return 1;
+		}
+		std::printf("schedule '%s' removed\n", argv[1]);
+		return 0;
+	}
+
+	if (sub == "enable" || sub == "disable") {
+		if (argc < 2) {
+			std::fprintf(stderr, "usage: pluto schedule %s <name>\n", sub.c_str());
+			return 2;
+		}
+		Schedule sched;
+		if (!LoadSchedule(argv[1], sched)) {
+			std::fprintf(stderr, "schedule not found: %s\n", argv[1]);
+			return 1;
+		}
+		sched.enabled = (sub == "enable");
+		std::string error;
+		if (!SaveSchedule(sched, error) || !InstallLaunchJob(sched, error)) {
+			std::fprintf(stderr, "error: %s\n", error.c_str());
+			return 1;
+		}
+		std::printf("schedule '%s' %sd\n", argv[1], sub.c_str());
+		return 0;
+	}
+
+	if (sub == "run") {
+		if (argc < 2) {
+			std::fprintf(stderr, "usage: pluto schedule run <name>\n");
+			return 2;
+		}
+		Schedule sched;
+		if (!LoadSchedule(argv[1], sched)) {
+			std::fprintf(stderr, "schedule not found: %s\n", argv[1]);
+			return 1;
+		}
+		std::string cmd = "pluto agent run " + shq(sched.prompt_file);
+		if (!sched.model.empty()) cmd += " --model " + shq(sched.model);
+		std::printf("running: %s\n", cmd.c_str());
+		return std::system(cmd.c_str());
+	}
+
+	std::fprintf(stderr, "unknown subcommand: %s\n", sub.c_str());
+	return 2;
+}
+
+}  // namespace pluto

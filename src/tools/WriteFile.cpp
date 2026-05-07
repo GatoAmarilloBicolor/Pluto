@@ -1,6 +1,7 @@
 #include "Builtin.h"
 #include "Tool.h"
 #include "../json.h"
+#include "../workspace.h"
 
 #include <cerrno>
 #include <cstring>
@@ -15,8 +16,11 @@ class WriteFileTool : public Tool {
 public:
 	std::string name() const override { return "write_file"; }
 	std::string description() const override {
-		return "Write content to a file, creating or overwriting it. For "
-		       "modifying existing files, prefer edit_file.";
+		return "Write content to a file, creating or overwriting it. "
+		       "The path must be inside the workspace directory. "
+		       "Use a relative path (e.g. docs/report.md) or an absolute "
+		       "path under the workspace root. For modifying existing files, "
+		       "prefer edit_file.";
 	}
 	std::string input_schema_json() const override {
 		return R"({"type":"object",)"
@@ -43,10 +47,21 @@ public:
 			r.is_error = true; r.output = e.what(); return r;
 		}
 		if (path.empty()) { r.is_error = true; r.output = "path required"; return r; }
+		if (!WorkspaceAllows(path)) {
+			LogAccess(path, "write_file", false);
+			r.is_error = true;
+			r.output = path + " is outside workspace " + WorkspaceRoot()
+			         + " — use `pluto trust add <dir>` to allow";
+			return r;
+		}
+		LogAccess(path, "write_file", true);
 		std::ofstream f(path, std::ios::binary | std::ios::trunc);
 		if (!f) {
 			r.is_error = true;
-			r.output = "open: " + std::string(std::strerror(errno));
+			std::string msg = std::strerror(errno);
+			if (errno == ENOENT)
+				msg += " (parent directory may not exist)";
+			r.output = "open: " + msg;
 			return r;
 		}
 		f.write(content.data(), content.size());
@@ -58,7 +73,7 @@ public:
 
 }  // namespace
 
-std::unique_ptr<Tool> make_write_file_tool() {
+std::unique_ptr<Tool> MakeWriteFileTool() {
 	return std::make_unique<WriteFileTool>();
 }
 

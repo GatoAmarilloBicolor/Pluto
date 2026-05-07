@@ -30,12 +30,12 @@ bool parse_scope(const std::string& s, McpServerSpec::Scope& out) {
 }
 
 int cmd_list() {
-	auto specs = load_mcp_specs();
+	auto specs = LoadMcpSpecs();
 	if (specs.empty()) {
 		std::printf("No MCP servers configured.\n");
-		std::printf("  project: %s\n", project_mcp_path().c_str());
-		std::printf("  user:    %s\n", user_mcp_path().c_str());
-		std::printf("  local:   %s\n", local_mcp_path().c_str());
+		std::printf("  project: %s\n", ProjectMcpPath().c_str());
+		std::printf("  user:    %s\n", UserMcpPath().c_str());
+		std::printf("  local:   %s\n", LocalMcpPath().c_str());
 		return 0;
 	}
 	for (const auto& s : specs) {
@@ -51,7 +51,7 @@ int cmd_list() {
 }
 
 int cmd_get(const std::string& name) {
-	auto specs = load_mcp_specs();
+	auto specs = LoadMcpSpecs();
 	for (const auto& s : specs) {
 		if (s.name != name) continue;
 		std::printf("name:   %s\n", s.name.c_str());
@@ -88,7 +88,7 @@ int cmd_remove(int argc, char** argv) {
 	}
 	if (name.empty()) { std::fprintf(stderr, "remove: name required\n"); return 2; }
 	std::string err;
-	if (!remove_mcp_spec(name, scope, err)) {
+	if (!RemoveMcpSpec(name, scope, err)) {
 		std::fprintf(stderr, "remove failed: %s\n", err.c_str());
 		return 1;
 	}
@@ -184,23 +184,40 @@ int cmd_add(int argc, char** argv) {
 	}
 
 	std::string err;
-	if (!save_mcp_spec(spec, scope, err)) {
+	if (!SaveMcpSpec(spec, scope, err)) {
 		std::fprintf(stderr, "save failed: %s\n", err.c_str());
 		return 1;
 	}
 	std::printf("added '%s' to %s scope (%s)\n",
 		name.c_str(), scope_name(scope),
-		scope == McpServerSpec::PROJECT ? project_mcp_path().c_str()
-			: scope == McpServerSpec::USER ? user_mcp_path().c_str()
-			: local_mcp_path().c_str());
+		scope == McpServerSpec::PROJECT ? ProjectMcpPath().c_str()
+			: scope == McpServerSpec::USER ? UserMcpPath().c_str()
+			: LocalMcpPath().c_str());
 	return 0;
 }
 
 int cmd_reset() {
-	reset_project_approvals();
+	ResetProjectApprovals();
 	char cwd[4096];
 	const char* c = getcwd(cwd, sizeof(cwd));
 	std::printf("project approvals cleared for %s\n", c ? c : "?");
+	return 0;
+}
+
+int cmd_discover() {
+	std::printf("Scanning localhost for MCP servers…\n");
+	auto found = DiscoverMcpServers();
+	if (found.empty()) {
+		std::printf("  (no new MCP servers found)\n");
+		return 0;
+	}
+	std::printf("Found %zu server(s):\n", found.size());
+	for (const auto& s : found) {
+		std::printf("  %-16s  %s  (%s)\n",
+			s.name.c_str(), s.url.c_str(), s.type.c_str());
+	}
+	std::printf("\nTo add one, run:\n");
+	std::printf("  pluto mcp add <name> --url <url> --type sse --scope user\n");
 	return 0;
 }
 
@@ -211,12 +228,13 @@ void usage() {
 		"  get NAME                 Show details of one server\n"
 		"  add [options] NAME ...   Add a server (see 'pluto mcp add --help')\n"
 		"  remove [--scope S] NAME  Remove a server from the given scope (default local)\n"
+		"  discover                 Scan localhost ports for MCP servers\n"
 		"  reset-project-choices    Clear project-scope approvals for the cwd\n");
 }
 
 }  // namespace
 
-int run_mcp_cli(int argc, char** argv) {
+int RunMcpCli(int argc, char** argv) {
 	if (argc < 1) { usage(); return 2; }
 	std::string sub = argv[0];
 	if (sub == "-h" || sub == "--help") { usage(); return 0; }
@@ -227,6 +245,7 @@ int run_mcp_cli(int argc, char** argv) {
 	}
 	if (sub == "add")    return cmd_add(argc - 1, argv + 1);
 	if (sub == "remove") return cmd_remove(argc - 1, argv + 1);
+	if (sub == "discover") return cmd_discover();
 	if (sub == "reset-project-choices") return cmd_reset();
 	std::fprintf(stderr, "unknown subcommand: %s\n", sub.c_str());
 	usage();

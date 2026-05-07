@@ -1,0 +1,33 @@
+Pluto Benchmark Suite
+=====================
+
+== JSON ==
+== RAG ==
+  [info] RAG loaded 390 entries
+== Workspace ==
+== Sessions ==
+== Markdown ==
+== Memory ==
+
+BENCHMARK                                    ITERS   TOTAL(ms)    PER-OP(us)
+----------------------------------------  --------  ----------  ------------
+json parse small (62B)                       10000        59.7          5.97
+json parse medium (2KB)                       5000       327.4         65.48
+json parse large (50KB)                        500       829.7       1659.33
+json serialize (1KB)                         10000       132.8         13.28
+rag search (390 entries)                     10000    137417.3      13741.73
+rag extract_classes                          50000       297.9          5.96
+workspace_allows (inside)                   100000      1501.5         15.02
+workspace_allows (outside)                  100000      4441.9         44.42
+session save (20 turns)                        100       421.9       4218.59
+session load (20 turns)                        100       134.2       1341.67
+markdown terminal render                     10000      3230.2        323.02
+markdown bulk feed (per-line)                50000       213.5          4.27
+std::string alloc 1KB                       100000        21.4          0.21
+std::string alloc 64KB                       10000        38.8          3.88
+
+== Memory Footprint ==
+
+== Binary Sizes ==
+  Pluto_cli:  1353 KB
+  Pluto-gui:  2454 KB

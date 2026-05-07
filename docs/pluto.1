@@ -1,0 +1,417 @@
+.\" Manpage for pluto.
+.\" Process with: groff -man -Tutf8 pluto.1
+.TH PLUTO 1 "2026-04-15" "pluto 0.3" "User Commands"
+
+.SH NAME
+pluto \- Haiku-native Claude client (CLI and GUI)
+
+.SH SYNOPSIS
+.B pluto
+[\fIOPTIONS\fR] [\fB\-\-one-shot\fR \fIPROMPT\fR]
+.br
+.B pluto agent
+\fISUBCOMMAND\fR [\fIARGS\fR]
+.br
+.B pluto routine
+\fISUBCOMMAND\fR [\fIARGS\fR]
+.br
+.B pluto schedule
+\fISUBCOMMAND\fR [\fIARGS\fR]
+.br
+.B pluto trust
+\fISUBCOMMAND\fR [\fIARGS\fR]
+.br
+.B pluto mcp
+\fISUBCOMMAND\fR [\fIARGS\fR]
+.br
+.B pluto login | logout | stats
+.br
+.B Pluto-gui
+
+.SH DESCRIPTION
+.B pluto
+is a native Haiku client for the Anthropic Claude API, written in C++17
+against libcurl and the Be API. It provides an interactive REPL, a
+one-shot mode for scripting, a Model Context Protocol (MCP) client with
+HTTP/SSE/stdio transports, eight built-in tools (read_file, write_file,
+edit_file, bash, grep, glob, desktop_script, clipboard), six native
+Haiku tools that operate on BFS extended attributes and BQuery
+(read_attr, write_attr, list_attrs, remove_attr, query_fs, live_query),
+and a node_monitor tool for watching filesystem changes.
+.PP
+.B pluto
+also includes an agent store, routine engine, schedule manager,
+workspace trust system, skill/command extensibility, OAuth 2.0
+authentication, and local telemetry.
+.PP
+.B Pluto-gui
+is a separate binary built from the same core, providing a native
+.B BWindow
+interface with split chat/detail view, collapsible tool blocks,
+markdown rendering, syntax highlighting, inline diff viewer, image
+previews, streaming cursor, context-window gauge, BFS-backed session
+storage, Deskbar replicant, and notifications on turn completion.
+
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Print usage and exit.
+.TP
+.BI \-\-provider " NAME"
+Provider name: \fBanthropic\fR (default) or \fBopenai-compat\fR
+(Ollama, OpenRouter, LM Studio, or any OpenAI-compatible server).
+.TP
+.BI \-\-model " ID"
+Model identifier (e.g. \fBclaude-opus-4-6\fR, \fBllama3.1\fR).
+.TP
+.BI \-\-base\-url " URL"
+Override the API base URL. Required for \fBopenai-compat\fR provider
+(e.g. \fBhttp://localhost:11434\fR for Ollama).
+.TP
+.B \-\-yolo
+Auto-approve every tool call. Use with care.
+.TP
+.B \-\-no\-cache
+Disable ephemeral
+.B cache_control
+on system prompt and tool definitions.
+.TP
+.B \-\-dry\-run
+Print the request that would be sent without calling the API.
+.TP
+.BI \-\-one\-shot " TEXT"
+Send a single prompt, print the response, and exit. No REPL.
+.TP
+.BI \-p " TEXT" "\fR, \fB" \-\-prompt " TEXT"
+Headless mode: send a single prompt with auto-approved tool calls,
+print output to stdout, and exit. Suitable for scripting and CI.
+.TP
+.BI \-f " FMT" "\fR, \fB" \-\-format " FMT"
+Output format for headless mode: \fBtext\fR (default, streaming) or
+\fBjson\fR (structured object with text, tokens, tool_calls).
+.TP
+.BR \-q ", " \-\-quiet
+Suppress status messages on stderr (headless mode).
+
+.SH REPL COMMANDS
+Inside the interactive prompt:
+.TP
+.B /help
+List commands.
+.TP
+.B /quit
+Exit.
+.TP
+.B /reset
+Clear conversation history.
+.TP
+.B /plan
+Toggle plan mode (read-only analysis). Write tools are disabled and the
+model is instructed to describe changes without making them.
+.TP
+.B /tools
+List registered tools.
+.TP
+.BI /init " [--force]"
+Create a
+.I pluto.md
+project memory file in the workspace root. Auto-detects language, build
+system, and git remote. Use
+.B \-\-force
+to overwrite an existing file.
+.TP
+.BI /model " ID"
+Switch model for subsequent turns.
+.TP
+.B /cost
+Show session token totals.
+.TP
+.BI /save " [title]"
+Save current session to BFS store.
+.TP
+.BI /load " <query|idx>"
+Load a session by title substring or `/list` index.
+.TP
+.B /list
+List saved sessions, sorted by most recent.
+.TP
+.B /resume
+Load the most recently updated session.
+.TP
+.B /delete
+Delete the current session file.
+.TP
+.BI /title " <new>"
+Set the session title used on next /save.
+.TP
+.BI /tag " [name]"
+Show tags or add one to the current session.
+.TP
+.BI /untag " <name>"
+Remove a tag from the current session.
+.TP
+.BI /watch " [URL]"
+Subscribe to an SSE stream and inject events into context. Default
+.B http://localhost:2607/sse.
+.TP
+.B /unwatch
+Stop the SSE subscription.
+.TP
+.B /events
+Show pending SSE events without sending a new turn.
+.TP
+.B /routines
+List available routines with schedule and status.
+.TP
+.BI /routine " NAME"
+Expand a routine's template and send it as a prompt in the current chat.
+.TP
+.B /commands
+List custom slash commands from
+.IR ~/config/settings/pluto/commands/ .
+
+.SH INPUT FEATURES
+.TP
+.BI @ file.txt
+Include the contents of a file in the message. Multiple
+.B @
+mentions are expanded before sending.
+.TP
+.BI @ image.png
+Attach an image (PNG, JPEG, GIF, WebP, up to 20 MB) as a vision
+content block. Supports base64 encoding for both Anthropic and
+OpenAI-compatible providers.
+
+.SH AGENT SUB-COMMAND
+.TP
+.B pluto agent list
+List installed agents with version and description.
+.TP
+.BI "pluto agent install " "<path|url> [--trust]"
+Install an agent from a local directory or Git URL. Shows the agent
+prompt for review before installing; use \fB--trust\fR to skip review.
+.TP
+.BI "pluto agent remove " NAME
+Remove an installed agent and unregister its skills, routines, and commands.
+.TP
+.BI "pluto agent update " "<name> | --all"
+Update an agent from its original Git source. Compares versions and
+reinstalls if a newer version is available. Use \fB--all\fR to check
+all agents with a source URL.
+.TP
+.BI "pluto agent info " NAME
+Show agent metadata and prompt body.
+.TP
+.BI "pluto agent search " QUERY
+Search installed and example agents by name, description, author, or
+tools (case-insensitive substring match).
+.TP
+.BI "pluto agent run " FILE.md
+Run a prompt file as a one-shot agent with auto-approved tool calls.
+
+.SH ROUTINE SUB-COMMAND
+.TP
+.B pluto routine list
+List routines with status, schedule, and model.
+.TP
+.BI "pluto routine run " NAME
+Execute a routine (expands templates, runs via agent mode).
+.TP
+.BI "pluto routine enable " NAME
+Enable a routine (rewrites frontmatter).
+.TP
+.BI "pluto routine disable " NAME
+Disable a routine.
+.TP
+.BI "pluto routine install " NAME
+Install a launch_daemon job for a scheduled or file-watch routine.
+.TP
+.BI "pluto routine uninstall " NAME
+Remove the launch_daemon job.
+.TP
+.BI "pluto routine log " NAME
+Show the last 50 lines of the routine's execution log.
+
+.SH SCHEDULE SUB-COMMAND
+.TP
+.B pluto schedule list
+List configured schedules with status.
+.TP
+.BI "pluto schedule add " "NAME --file FILE [--event boot|login] [--interval MINS] [--model ID]"
+Create a new schedule. Supports periodic (interval) and event-based
+(boot/login via launch_daemon) triggers.
+.TP
+.BI "pluto schedule remove " NAME
+Remove a schedule and its launch_daemon job.
+.TP
+.BI "pluto schedule enable " NAME
+Enable a schedule.
+.TP
+.BI "pluto schedule disable " NAME
+Disable a schedule.
+.TP
+.BI "pluto schedule run " NAME
+Run a schedule immediately.
+
+.SH TRUST SUB-COMMAND
+.TP
+.B pluto trust list
+List permanently trusted workspace directories.
+.TP
+.BI "pluto trust add " PATH
+Trust a directory permanently (persisted in trusted_workspaces).
+.TP
+.BI "pluto trust remove " PATH
+Remove a directory from the trusted list.
+.TP
+.B pluto trust log
+Show the last 50 lines of the access log (allow/deny decisions).
+
+.SH AUTHENTICATION
+.TP
+.B pluto login
+Start OAuth 2.0 + PKCE login flow for Claude Max/Pro plans. Opens a
+browser for authentication and stores tokens in
+.IR ~/config/settings/pluto/oauth-tokens .
+.TP
+.B pluto logout
+Remove stored OAuth tokens. Falls back to API key if set.
+
+.SH TELEMETRY
+.TP
+.B pluto stats
+Show aggregated token usage, turn counts, session counts, and estimated
+cost per model. Requires opt-in via
+.BR "touch ~/config/settings/pluto/telemetry" .
+.TP
+.B pluto stats reset
+Clear the telemetry CSV file.
+
+.SH MCP SUB-COMMAND
+.TP
+.B pluto mcp list
+List configured MCP servers across all scopes.
+.TP
+.BI "pluto mcp add " "NAME [--url URL | --command CMD] [--scope user|project|local]"
+Add a server.
+.TP
+.BI "pluto mcp remove " NAME
+Remove a server.
+.TP
+.BI "pluto mcp get " NAME
+Show details for a server.
+
+.SH SIGNALS
+.TP
+.B SIGINT (Ctrl+C)
+While a turn is streaming, aborts the in-flight HTTP request via the
+curl progress callback. The REPL keeps running; press Ctrl+C again at
+an empty prompt to quit (or use
+.BR /quit ).
+
+.SH FILES
+.TP
+.I ~/config/settings/pluto/config
+Main configuration file (key=value). Keys: provider, model, base_url,
+api_key_env, system, max_tokens, context_window, cache, font_delta,
+hook_pre_tool, hook_post_tool, hook_user_prompt.
+.TP
+.I ~/config/settings/pluto-api-key
+Fallback for the API key when the environment variable is empty.
+chmod 600.
+.TP
+.I ~/config/settings/pluto/oauth-tokens
+OAuth 2.0 access and refresh tokens (chmod 600). Written by
+.BR "pluto login" .
+.TP
+.I ~/config/settings/pluto/sessions/
+Directory containing JSONL session files. Each file has BFS
+attributes (
+.BR pluto:title ", " pluto:model ", " pluto:tags ", " pluto:tokens_in ", " pluto:tokens_out ", " pluto:created ", " pluto:updated ", " pluto:turns
+) and is searchable from Tracker's Find dialog.
+.TP
+.I ~/config/settings/pluto/pluto.md
+User-wide memory file, appended to the system prompt as
+.BR <user_memory> .
+.TP
+.I ./pluto.md
+Project-scoped memory file, appended to the system prompt as
+.BR <project_memory> .
+.TP
+.I ~/config/settings/pluto/skills/<name>/SKILL.md
+Skill definitions. Always-on skills are injected into the system prompt.
+Skills with a
+.B trigger:
+frontmatter line are loaded on demand when the user message matches.
+.TP
+.I ~/config/settings/pluto/commands/<name>.md
+Custom slash commands. Optional
+.B description:
+frontmatter. The body supports
+.B {{args}}
+substitution.
+.TP
+.I ~/config/settings/pluto/routines/<name>.md
+Routine definitions with YAML frontmatter (name, schedule, model,
+tools, notify, enabled).
+.TP
+.I ~/config/settings/pluto/agents/<name>/
+Installed agents. Each has an AGENT.md and optional skills/, routines/,
+commands/ subdirectories. A .agent-source file stores the Git URL for
+updates.
+.TP
+.I ~/config/settings/pluto/schedules/<name>.conf
+Schedule configuration files.
+.TP
+.I ~/config/settings/pluto/trusted_workspaces
+List of permanently trusted directories (one per line).
+.TP
+.I ~/config/settings/pluto/access.log
+Audit log of workspace allow/deny decisions with timestamps.
+.TP
+.I ~/config/settings/pluto/telemetry
+Empty marker file; its existence enables local telemetry.
+.TP
+.I ~/config/settings/pluto/stats.csv
+Token usage CSV (model, tokens_in, tokens_out, turns, sessions).
+.TP
+.I ./.mcp.json
+Project-scoped MCP server configuration. Each new server prompts for
+approval on first use.
+.TP
+.I ~/config/settings/pluto/mcp.json
+User-scoped MCP server configuration.
+.TP
+.I ~/config/settings/pluto/mcp-local.json
+Local (per-cwd) MCP server configuration.
+
+.SH ENVIRONMENT
+.TP
+.B ANTHROPIC_API_KEY
+API key. Takes precedence over the on-disk fallback. The variable name
+can be overridden with the
+.B api_key_env
+config key.
+.TP
+.B PLUTO_LOG
+Set to \fBdebug\fR to enable verbose logging to stderr. Shows cache
+stats, retry details, and MCP tool counts.
+
+.SH BUGS
+GUI tool approval blocks the worker thread on a semaphore released by
+the UI thread. Closing the window while a tool approval alert is open
+may stall briefly. Mitigation: dismiss the alert before quitting.
+
+.SH SEE ALSO
+.BR claude (1),
+.BR Tracker (1),
+.BR Deskbar (1)
+.PP
+Project: see
+.I /boot/home/Desktop/pluto/README.md
+and
+.I docs/architecture.md
+.
+
+.SH AUTHOR
+pluto is developed in /boot/home/Desktop/pluto by atomozero.

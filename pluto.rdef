@@ -1,0 +1,15 @@
+resource app_signature "application/x-vnd.Hay-pluto";
+
+resource app_version {
+	major  = 0,
+	middle = 3,
+	minor  = 0,
+	variety = B_APPV_ALPHA,
+	internal = 1,
+	short_info = "Pluto",
+	long_info  = "Haiku-native Claude client"
+};
+
+resource app_flags B_MULTIPLE_LAUNCH;
+
+resource(101, "BEOS:ICON") #'VICN' import "pluto.hvif";

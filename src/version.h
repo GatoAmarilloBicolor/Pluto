@@ -1,0 +1,4 @@
+#pragma once
+
+#define PLUTO_VERSION "0.6.0"
+#define PLUTO_USER_AGENT "pluto/" PLUTO_VERSION " (Haiku)"

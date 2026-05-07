@@ -1,4 +1,5 @@
 #include "HttpTransport.h"
+#include "../version.h"
 
 #include <curl/curl.h>
 
@@ -41,7 +42,7 @@ std::string HttpTransport::post(const std::string& body, std::string& err) {
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out);
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
-	curl_easy_setopt(curl, CURLOPT_USERAGENT, "pluto/0.3.0 (Haiku)");
+	curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
 	curl_easy_setopt(curl, CURLOPT_CAINFO, "/system/data/ssl/CARootCertificates.pem");
 
 	CURLcode rc = curl_easy_perform(curl);

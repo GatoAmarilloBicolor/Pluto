@@ -146,7 +146,7 @@ std::string StdioTransport::request(const std::string& body, std::string& err) {
 		json::Value v = json::Value::parse(body);
 		const json::Value* id = v.find("id");
 		if (id && id->is_num()) my_id = static_cast<int>(id->as_num());
-	} catch (...) {}
+	} catch (const std::exception&) {}
 
 	for (;;) {
 		std::string line;
@@ -159,7 +159,7 @@ std::string StdioTransport::request(const std::string& body, std::string& err) {
 			const json::Value* id = v.find("id");
 			if (!id || !id->is_num()) continue;
 			if (my_id >= 0 && static_cast<int>(id->as_num()) != my_id) continue;
-		} catch (...) { continue; }
+		} catch (const std::exception&) { continue; }
 		return line;
 	}
 }

@@ -28,6 +28,6 @@ public:
 	virtual void notify(const std::string& body) = 0;
 };
 
-std::unique_ptr<Transport> make_transport(const McpServerSpec& spec, std::string& err);
+std::unique_ptr<Transport> MakeTransport(const McpServerSpec& spec, std::string& err);
 
 }  // namespace pluto

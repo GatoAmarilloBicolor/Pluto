@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <deque>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -43,7 +44,7 @@ private:
 	std::string fUrl;
 	std::thread fThread;
 	std::mutex fMutex;
-	std::vector<Event> fQueue;
+	std::deque<Event> fQueue;
 	std::atomic<bool> fStop{false};
 	std::atomic<bool> fRunning{false};
 

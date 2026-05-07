@@ -59,6 +59,12 @@ public:
 			r.is_error = true; r.output = e.what(); return r;
 		}
 		if (pattern.empty()) { r.is_error = true; r.output = "pattern required"; return r; }
+		// Guard against pathologically complex regex patterns.
+		if (pattern.size() > 500) {
+			r.is_error = true;
+			r.output = "pattern too long (max 500 chars)";
+			return r;
+		}
 
 		std::string cmd = "grep -rnE";
 		if (icase) cmd += "i";
@@ -89,6 +95,6 @@ public:
 
 }  // namespace
 
-std::unique_ptr<Tool> make_grep_tool() { return std::make_unique<GrepTool>(); }
+std::unique_ptr<Tool> MakeGrepTool() { return std::make_unique<GrepTool>(); }
 
 }  // namespace pluto

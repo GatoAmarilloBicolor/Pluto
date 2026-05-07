@@ -1,0 +1,85 @@
+SUMMARY="Haiku-native Claude client (CLI + GUI)"
+DESCRIPTION="Pluto is a native Haiku client for the Anthropic Claude API, \
+written in C++17 against libcurl and the Be API. It provides an interactive \
+REPL, a streaming GUI with split chat/detail view, MCP client support, \
+built-in tools, and Haiku-native tools that expose BFS attributes and \
+BQuery to the model. Sessions are stored as JSONL files with BFS attributes \
+so they are searchable from Tracker's Find dialog."
+HOMEPAGE="https://github.com/atomozero/pluto"
+COPYRIGHT="2026 atomozero"
+LICENSE="MIT"
+REVISION="1"
+SOURCE_URI="https://github.com/atomozero/pluto/archive/refs/tags/v$portVersion.tar.gz"
+#CHECKSUM_SHA256=""  # fill after uploading the release tarball
+
+ARCHITECTURES="x86_64"
+
+PROVIDES="
+	pluto = $portVersion
+	app:pluto = $portVersion
+	app:pluto_gui = $portVersion
+	cmd:pluto = $portVersion
+	"
+REQUIRES="
+	haiku
+	lib:libcurl
+	lib:libcrypto
+	lib:libssl
+	"
+BUILD_REQUIRES="
+	haiku_devel
+	devel:libcurl
+	devel:libcrypto
+	devel:libssl
+	"
+BUILD_PREREQUIRES="
+	cmd:gcc
+	cmd:make
+	cmd:rc
+	"
+
+BUILD()
+{
+	make $jobArgs
+	make Pluto-gui $jobArgs
+	make 'Ask Pluto'
+}
+
+INSTALL()
+{
+	# CLI binary
+	mkdir -p $binDir
+	cp pluto $binDir/pluto
+
+	# GUI binary
+	mkdir -p $appsDir
+	cp Pluto-gui "$appsDir/Pluto-gui"
+	addAppDeskbarSymlink "$appsDir/Pluto-gui" "Pluto"
+
+	# Tracker add-on
+	addonDir=$dataDir/add-ons/Tracker
+	mkdir -p "$addonDir"
+	cp 'Ask Pluto' "$addonDir/Ask Pluto"
+
+	# Man page
+	mkdir -p $manDir/man1
+	cp docs/pluto.1 $manDir/man1/pluto.1
+
+	# Documentation
+	mkdir -p $docDir
+	cp README.md $docDir/
+	cp CHANGELOG.md $docDir/
+	cp docs/user-guide.md $docDir/
+	cp docs/architecture.md $docDir/
+	cp docs/mcp-tutorial.md $docDir/
+	cp docs/bquery-cookbook.md $docDir/
+
+	# Example routines
+	mkdir -p $docDir/examples/routines
+	cp examples/routines/*.md $docDir/examples/routines/
+}
+
+TEST()
+{
+	make check
+}

@@ -164,7 +164,7 @@ ToolResult McpClient::call_tool(const std::string& name, const std::string& argu
 	Value args(Object{});
 	if (!arguments_json.empty()) {
 		try { args = Value::parse(arguments_json); }
-		catch (...) { args = Value(Object{}); }
+		catch (const std::exception&) { args = Value(Object{}); }
 	}
 	params.set("arguments", args);
 	req.set("params", params);
@@ -214,11 +214,22 @@ ToolResult McpClient::call_tool(const std::string& name, const std::string& argu
 }
 
 void register_mcp_tools(McpClient& client, ToolRegistry& registry) {
+	int skipped = 0;
 	for (const auto& info : client.tools()) {
+		// Skip per-app generated scripting wrappers (e.g. app_application_x_vnd_*)
+		// — they are redundant with the generic get_property/set_property tools
+		// and overwhelm the model when there are hundreds of them.
+		if (info.name.substr(0, 4) == "app_") {
+			++skipped;
+			continue;
+		}
 		std::string prefixed = client.server_name() + "__" + info.name;
 		registry.add(std::make_unique<RemoteTool>(
 			&client, prefixed, info.name, info.description, info.input_schema_json));
 	}
+	if (skipped > 0)
+		std::fprintf(stderr, "[mcp/%s] skipped %d per-app wrappers\n",
+			client.server_name().c_str(), skipped);
 }
 
 }  // namespace pluto

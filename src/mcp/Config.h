@@ -22,18 +22,27 @@ struct McpServerSpec {
 };
 
 // Merge local > project > user. Shadowed entries are dropped (warning on stderr).
-std::vector<McpServerSpec> load_mcp_specs();
+std::vector<McpServerSpec> LoadMcpSpecs();
 
-bool save_mcp_spec(const McpServerSpec& spec, McpServerSpec::Scope scope, std::string& err);
-bool remove_mcp_spec(const std::string& name, McpServerSpec::Scope scope, std::string& err);
+bool SaveMcpSpec(const McpServerSpec& spec, McpServerSpec::Scope scope, std::string& err);
+bool RemoveMcpSpec(const std::string& name, McpServerSpec::Scope scope, std::string& err);
 
-bool is_project_approved(const std::string& server_name);
-void set_project_approved(const std::string& server_name);
-void reset_project_approvals();
+bool IsProjectApproved(const std::string& server_name);
+void SetProjectApproved(const std::string& server_name);
+void ResetProjectApprovals();
 
-std::string project_mcp_path();
-std::string user_mcp_path();
-std::string local_mcp_path();
-std::string approvals_path();
+std::string ProjectMcpPath();
+std::string UserMcpPath();
+std::string LocalMcpPath();
+std::string ApprovalsPath();
+
+// Auto-discovery: probe well-known localhost ports for MCP servers.
+// Returns specs for servers that responded. Quick (1-2s timeout per probe).
+struct DiscoveredServer {
+	std::string name;
+	std::string url;
+	std::string type;   // "sse" | "http"
+};
+std::vector<DiscoveredServer> DiscoverMcpServers();
 
 }  // namespace pluto

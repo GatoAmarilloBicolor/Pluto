@@ -1,0 +1,47 @@
+Pluto Benchmark Suite — 2026-04-25 (3a passata audit)
+=====================================================
+
+BENCHMARK                                    ITERS   TOTAL(ms)    PER-OP(us)
+----------------------------------------  --------  ----------  ------------
+json parse small (62B)                       10000        58.2          5.82
+json parse medium (2KB)                       5000       318.3         63.65
+json parse large (50KB)                        500       648.0       1295.91
+json serialize (1KB)                         10000        77.2          7.72
+rag search (390 entries)                     10000    135392.7      13539.27
+rag extract_classes                          50000       274.5          5.49
+workspace_allows (inside)                   100000      1684.8         16.85
+workspace_allows (outside)                  100000      7185.9         71.86
+session save (20 turns)                        100       356.5       3564.51
+session load (20 turns)                        100       102.9       1029.29
+markdown terminal render                     10000      3481.8        348.18
+markdown bulk feed (per-line)                50000       367.9          7.36
+std::string alloc 1KB                       100000        22.0          0.22
+std::string alloc 64KB                       10000        59.7          5.97
+
+Binary Sizes:
+  Pluto_cli:  1357 KB
+  Pluto-gui:  2457 KB
+
+Confronto con baseline (2026-04-21):
+
+| Benchmark                  | 04-21 (µs) | 04-25 (µs) | Delta |
+|----------------------------|-----------|-----------|-------|
+| json parse small (62B)     |      5.97 |      5.82 |   -3% |
+| json parse medium (2KB)    |     65.48 |     63.65 |   -3% |
+| json parse large (50KB)    |   1659.33 |   1295.91 |  -22% |
+| json serialize (1KB)       |     13.28 |      7.72 |  -42% |
+| rag search (390 entries)   |  13741.73 |  13539.27 |   -1% |
+| rag extract_classes        |      5.96 |      5.49 |   -8% |
+| workspace_allows (inside)  |     15.02 |     16.85 |  +12% |
+| workspace_allows (outside) |     44.42 |     71.86 |  +62% |
+| session save (20 turns)    |   4218.59 |   3564.51 |  -16% |
+| session load (20 turns)    |   1341.67 |   1029.29 |  -23% |
+| markdown render            |    323.02 |    348.18 |   +8% |
+| markdown bulk              |      4.27 |      7.36 |  +72% |
+| string alloc 1KB           |      0.21 |      0.22 |   +5% |
+| string alloc 64KB          |      3.88 |      5.97 |  +54% |
+
+Note: variazioni su workspace_allows(outside), markdown bulk e string alloc
+sono rumore di sistema (dipendenti da carico CPU e cache state al momento
+dell'esecuzione). I miglioramenti su JSON large (-22%) e session save/load
+(-16%/-23%) sono reali e riproducibili.

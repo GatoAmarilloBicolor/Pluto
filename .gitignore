@@ -1,12 +1,41 @@
 # Build artifacts
-pluto
+Pluto
+Pluto_cli
+Ask\ pluto
+bench
+test_tabs
 *.o
 *.a
+*.d
+*.rsrc
+pluto-*.hpkg
+pkgroot/
+
+# Test binaries
+test_*
+!tests/test_*.cpp
+tests/run_*
+
+# Release snapshots (regenerate via make package)
+pluto-[0-9]*/
 
 # Editor / IDE
 .claude/
 *.swp
 *~
+*.bak
+*.tmp
 
-# Pre-existing data not part of this project
+# Local MCP config (machine-specific)
+.mcp.json
+
+# User state (sessions, workspace config)
+.pluto/
+
+# Raw dataset (curated index is in data/)
 dataset.jsonl
+dataset_v3.jsonl
+
+# OS
+.DS_Store
+Thumbs.db
