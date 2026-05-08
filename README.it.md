@@ -185,9 +185,10 @@ cd pluto-0.6.0
 Richiede Haiku R1/beta5+ con `gcc`, `libcurl`, `libedit` e `libbe`.
 
 ```sh
-make              # CLI
-make Pluto        # GUI
-make build-addon  # Add-on Tracker
+make              # tutti e tre i binari (CLI + GUI + add-on Tracker)
+make Pluto_cli    # solo CLI
+make Pluto        # solo GUI
+make build-addon  # solo add-on Tracker
 make check        # 21 suite di test
 make bench        # benchmark prestazioni
 ```

@@ -104,7 +104,7 @@ CORE_OBJS = $(CORE_SRCS:.cpp=.o)
 CLI_OBJS  = $(CLI_SRCS:.cpp=.o)
 GUI_OBJS  = $(GUI_SRCS:.cpp=.o)
 
-all: Pluto_cli
+all: Pluto_cli Pluto build-addon
 
 # Compile resource definition (icon + app metadata).
 pluto.rsrc: pluto.rdef pluto.hvif
