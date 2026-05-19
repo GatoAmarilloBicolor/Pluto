@@ -1,15 +1,14 @@
 name             pluto
-version          0.3.0-1
+version          0.6.0-1
 architecture     x86_64
-summary          "Haiku-native Claude client (CLI + GUI)"
-description      "pluto is a native Haiku client for the Anthropic Claude API,
-written in C++17 against libcurl and the Be API. It provides an
-interactive REPL, a streaming GUI built on BWindow with split
-chat/detail view, MCP client support (HTTP/SSE/stdio), six built-in
-tools, and six native Haiku tools that expose BFS extended attributes
-and BQuery to the model. Sessions are stored as JSONL files with BFS
-attributes so they are searchable directly from Tracker's Find dialog.
-No SDK, no Electron — just libcurl, OpenSSL, and the Be API."
+summary          "Haiku-native AI client (CLI + GUI + Tracker add-on)"
+description      "Pluto is a native Haiku AI client written in C++17 against
+libcurl and the Be API. It supports 15+ providers (Anthropic, OpenAI, Gemini,
+OpenRouter, Ollama, and more) and ships as three binaries: a streaming REPL
+(Pluto_cli), a GUI with multi-tab conversations and markdown rendering (Pluto),
+and a Tracker add-on for right-click AI queries (Ask pluto). Features include
+23 built-in tools, MCP client, BFS attribute integration, BeAPI RAG, routines,
+agent store, and sessions searchable from Tracker Find."
 packager         "atomozero <atomozero@example.invalid>"
 vendor           "atomozero"
 licenses {
@@ -19,18 +18,17 @@ copyrights {
 	"2026 atomozero"
 }
 provides {
-	pluto = 0.3.0
-	cmd:pluto       = 0.3.0
-	cmd:pluto_gui   = 0.3.0
+	pluto = 0.6.0
+	cmd:Pluto_cli   = 0.6.0
+	app:Pluto       = 0.6.0
 }
 requires {
 	haiku >= r1~beta5
 	lib:libcurl
 	lib:libcrypto
 	lib:libssl
-	lib:libbe
 	lib:libedit
 }
 urls {
-	"https://github.com/atomozero/pluto"
+	"https://codeberg.org/atomozero/Pluto"
 }

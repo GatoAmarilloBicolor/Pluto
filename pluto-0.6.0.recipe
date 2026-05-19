@@ -1,20 +1,21 @@
-SUMMARY="Haiku-native AI client (CLI + GUI)"
-DESCRIPTION="Pluto is a native Haiku client for LLM APIs (Anthropic, OpenAI, \
-Ollama, and many more), written in C++17 against libcurl and the Be API. It \
-provides an interactive REPL, a streaming GUI with multi-tab conversations and \
-markdown rendering, MCP client support, built-in tools, and Haiku-native tools \
-that expose BFS attributes and BQuery to the model. Sessions are stored as \
-JSONL files with BFS attributes so they are searchable from Tracker's Find \
-dialog."
+SUMMARY="Haiku-native AI client (CLI + GUI + Tracker add-on)"
+DESCRIPTION="Pluto is a native Haiku AI client written in C++17 against \
+libcurl and the Be API. It supports 15+ providers (Anthropic, OpenAI, \
+Gemini, OpenRouter, Ollama, and more) and ships as three binaries: a \
+streaming REPL (Pluto_cli), a GUI with multi-tab conversations and \
+markdown rendering (Pluto), and a Tracker add-on for right-click AI \
+queries (Ask pluto). Features include 23 built-in tools, MCP client \
+support, BFS attribute integration, BeAPI knowledge base, routines, \
+agent store, and sessions searchable from Tracker's Find dialog."
 HOMEPAGE="https://codeberg.org/atomozero/Pluto"
 COPYRIGHT="2026 atomozero"
 LICENSE="MIT"
 REVISION="1"
 SOURCE_URI="https://codeberg.org/atomozero/Pluto/archive/v$portVersion.tar.gz"
-#CHECKSUM_SHA256=""  # fill after uploading the release tarball
+#CHECKSUM_SHA256=""
 SOURCE_DIR="pluto"
 
-ARCHITECTURES="x86_64"
+ARCHITECTURES="all !x86_gcc2"
 
 PROVIDES="
 	pluto = $portVersion
@@ -28,6 +29,7 @@ REQUIRES="
 	lib:libedit
 	lib:libssl
 	"
+
 BUILD_REQUIRES="
 	haiku_devel
 	devel:libcurl
@@ -43,9 +45,7 @@ BUILD_PREREQUIRES="
 
 BUILD()
 {
-	make $jobArgs Pluto_cli
-	make $jobArgs Pluto
-	make build-addon
+	make $jobArgs
 }
 
 INSTALL()
@@ -67,9 +67,11 @@ INSTALL()
 	mkdir -p $manDir/man1
 	cp docs/pluto.1 $manDir/man1/pluto.1
 
-	# Data files (BeAPI index, provider configs)
-	mkdir -p $dataDir/pluto
-	cp -r data/* $dataDir/pluto/
+	# Data files (BeAPI index, LSP config, provider profiles)
+	mkdir -p $dataDir/pluto/providers
+	cp data/beapi-index.jsonl $dataDir/pluto/
+	cp data/lsp.conf $dataDir/pluto/
+	cp data/providers/*.conf $dataDir/pluto/providers/
 
 	# Documentation
 	mkdir -p $docDir
@@ -80,11 +82,14 @@ INSTALL()
 	cp docs/mcp-tutorial.md $docDir/
 	cp docs/bquery-cookbook.md $docDir/
 
-	# Example agents and routines
-	mkdir -p $docDir/examples
-	cp -r examples/agents $docDir/examples/
-	cp -r examples/routines $docDir/examples/
-	cp -r examples/providers $docDir/examples/
+	# Examples
+	mkdir -p $docDir/examples/agents
+	cp -r examples/agents/* $docDir/examples/agents/
+	mkdir -p $docDir/examples/routines
+	cp examples/routines/*.md $docDir/examples/routines/
+	mkdir -p $docDir/examples/providers
+	cp examples/providers/*.conf $docDir/examples/providers/
+	cp examples/providers/TEMPLATE.conf $docDir/examples/providers/
 }
 
 TEST()

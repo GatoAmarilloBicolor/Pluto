@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pluto 0.5.0 installer for Haiku
+# Pluto 0.6.0 installer for Haiku
 # Run from the extracted release directory.
 
 set -e
@@ -11,7 +11,7 @@ SETTINGS_DIR="$HOME/config/settings/pluto"
 MAN_DIR="$HOME/config/non-packaged/documentation/man/man1"
 DATA_DIR="$SETTINGS_DIR"
 
-echo "Installing Pluto 0.5.0..."
+echo "Installing Pluto 0.6.0..."
 echo ""
 
 # Create directories
@@ -93,7 +93,7 @@ if [ -d "$SCRIPT_DIR/examples/providers" ]; then
 fi
 
 echo ""
-echo "Done! Pluto 0.5.0 is installed."
+echo "Done! Pluto 0.6.0 is installed."
 echo ""
 echo "Quick start:"
 echo "  pluto login              # authenticate with Claude (OAuth)"

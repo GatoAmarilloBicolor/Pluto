@@ -2,12 +2,12 @@ resource app_signature "application/x-vnd.Hay-pluto";
 
 resource app_version {
 	major  = 0,
-	middle = 3,
+	middle = 6,
 	minor  = 0,
-	variety = B_APPV_ALPHA,
+	variety = B_APPV_BETA,
 	internal = 1,
 	short_info = "Pluto",
-	long_info  = "Haiku-native Claude client"
+	long_info  = "Haiku-native AI client"
 };
 
 resource app_flags B_MULTIPLE_LAUNCH;
