@@ -245,7 +245,7 @@ void ScanPythonFile(const std::string& root, const std::string& rel_path,
 
 }  // namespace
 
-Graph ScanWorkspace(const std::string& root_dir)
+Graph ScanWorkspace(const std::string& root_dir, ScanProgress progress)
 {
 	Graph graph;
 	graph.root_dir = root_dir;
@@ -254,10 +254,15 @@ Graph ScanWorkspace(const std::string& root_dir)
 	std::vector<std::string> files;
 	ListFiles(root_dir, "", files);
 
-	std::fprintf(stderr, "[map] scanning %zu files in %s\n",
-		files.size(), root_dir.c_str());
+	int total = (int)files.size();
+	std::fprintf(stderr, "[map] scanning %d files in %s\n",
+		total, root_dir.c_str());
 
-	for (const auto& rel : files) {
+	for (int i = 0; i < total; ++i) {
+		const auto& rel = files[i];
+		if (progress)
+			progress(i + 1, total, rel);
+
 		if (IsCppFile(rel) || IsCppHeader(rel))
 			ScanCppFile(root_dir, rel, graph);
 		else if (IsPythonFile(rel))
@@ -275,6 +280,9 @@ Graph ScanWorkspace(const std::string& root_dir)
 
 	std::fprintf(stderr, "[map] %zu nodes, %zu edges\n",
 		graph.Nodes().size(), graph.Edges().size());
+
+	if (progress)
+		progress(total, total, "computing layout...");
 
 	// Compute layout.
 	float size = std::max(800.0f, (float)graph.Nodes().size() * 8.0f);

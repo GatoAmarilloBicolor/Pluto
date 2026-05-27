@@ -560,18 +560,28 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		}
 
 		if (arg.empty()) {
-			// Scan workspace and open graph viewer.
+			// Scan workspace and open graph viewer with progress updates.
 			_Append("Scanning workspace...\n", kColDim);
-			BMessenger self(this);
-			std::thread([self, root, graph_path]() {
-				auto graph = map::ScanWorkspace(root);
+			BMessenger winMsgr(this);
+			std::thread([winMsgr, root, graph_path]() {
+				auto graph = map::ScanWorkspace(root,
+					[&winMsgr](int current, int total, const std::string& file) {
+						BMessage progress('grPr');
+						char buf[256];
+						snprintf(buf, sizeof(buf), "Scanning %d/%d: %s",
+							current, total, file.c_str());
+						progress.AddString("status", buf);
+						progress.AddInt32("current", current);
+						progress.AddInt32("total", total);
+						winMsgr.SendMessage(&progress);
+					});
 				graph.SaveToFile(graph_path);
 				map::StampBfsAttributes(graph);
 
 				// Open the graph window on the GUI thread.
 				BMessage msg('grVw');
 				msg.AddString("path", graph_path.c_str());
-				self.SendMessage(&msg);
+				winMsgr.SendMessage(&msg);
 			}).detach();
 		} else if (arg.rfind("path ", 0) == 0) {
 			auto graph = map::Graph::LoadFromFile(graph_path);

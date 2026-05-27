@@ -2473,6 +2473,15 @@ void MainWindow::MessageReceived(BMessage* msg) {
 			_OpenSettings();
 			break;
 
+		case 'grPr': {
+			// Graph scan progress — update status bar.
+			const char* status = nullptr;
+			msg->FindString("status", &status);
+			if (status && fStatus)
+				fStatus->SetText(status);
+			break;
+		}
+
 		case 'grVw': {
 			// Open graph viewer window.
 			const char* path = nullptr;
@@ -2486,6 +2495,7 @@ void MainWindow::MessageReceived(BMessage* msg) {
 						+ std::to_string(graph.Nodes().size()) + " nodes, "
 						+ std::to_string(graph.Edges().size()) + " edges\n\n";
 					_Append(note, kColDim, 0, true);
+					_UpdateStatus();
 				}
 			}
 			break;
