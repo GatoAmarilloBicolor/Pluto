@@ -31,32 +31,52 @@ void GraphView::SetGraph(const map::Graph& graph)
 	fDragNode = -1;
 	fHighlighted.clear();
 
-	// Fit the graph into the view with some padding.
-	if (!fGraph.Nodes().empty()) {
-		float minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
-		for (const auto& n : fGraph.Nodes()) {
-			minX = std::min(minX, n.x);
-			minY = std::min(minY, n.y);
-			maxX = std::max(maxX, n.x);
-			maxY = std::max(maxY, n.y);
-		}
-		float gw = maxX - minX;
-		float gh = maxY - minY;
-		if (gw < 1) gw = 1;
-		if (gh < 1) gh = 1;
+	// If the view already has real dimensions, fit now.
+	// Otherwise defer to the first FrameResized.
+	BRect b = Bounds();
+	if (b.Width() > 1 && b.Height() > 1)
+		FitAll();
+	else
+		fNeedsFitAll = true;
+}
 
-		BRect b = Bounds();
-		float padding = 80;
-		float zx = (b.Width() - padding * 2) / gw;
-		float zy = (b.Height() - padding * 2) / gh;
-		fZoom = std::min(zx, zy);
-		fZoom = std::max(kMinZoom, std::min(2.0f, fZoom));
-
-		float cx = (minX + maxX) / 2;
-		float cy = (minY + maxY) / 2;
-		fPan.x = b.Width() / 2 - cx * fZoom;
-		fPan.y = b.Height() / 2 - cy * fZoom;
+void GraphView::FitAll()
+{
+	if (fGraph.Nodes().empty()) {
+		Invalidate();
+		return;
 	}
+
+	float minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+	for (const auto& n : fGraph.Nodes()) {
+		minX = std::min(minX, n.x);
+		minY = std::min(minY, n.y);
+		maxX = std::max(maxX, n.x);
+		maxY = std::max(maxY, n.y);
+	}
+	// Add margin for node radius + label height below nodes.
+	float nodeMargin = 50;
+	minX -= nodeMargin;
+	minY -= nodeMargin;
+	maxX += nodeMargin;
+	maxY += nodeMargin + 30;  // extra for labels below bottom nodes
+
+	float gw = maxX - minX;
+	float gh = maxY - minY;
+	if (gw < 1) gw = 1;
+	if (gh < 1) gh = 1;
+
+	BRect b = Bounds();
+	float zx = b.Width() / gw;
+	float zy = b.Height() / gh;
+	fZoom = std::min(zx, zy) * 0.92f;  // 8% safety margin
+	fZoom = std::max(kMinZoom, std::min(kMaxZoom, fZoom));
+
+	float cx = (minX + maxX) / 2;
+	float cy = (minY + maxY) / 2;
+	fPan.x = b.Width() / 2 - cx * fZoom;
+	fPan.y = b.Height() / 2 - cy * fZoom;
+
 	Invalidate();
 }
 
@@ -411,6 +431,76 @@ void GraphView::Draw(BRect /*updateRect*/)
 		SetHighColor(100, 100, 100, 255);
 		DrawString(stats, BPoint(bounds.left + 10, bounds.top + 16));
 	}
+
+	// Hover tooltip — drawn last so it appears on top of everything.
+	if (fHoverNode >= 0 && fHoverNode < (int)fGraph.Nodes().size()) {
+		const auto& node = fGraph.Nodes()[fHoverNode];
+		int degree = (int)fGraph.EdgesFor(node.id).size();
+
+		// Build tooltip lines.
+		std::string line1 = node.label;
+		std::string line2 = node.kind;
+		if (degree > 0)
+			line2 += "  \xe2\x80\x94  " + std::to_string(degree) + " connection"
+			       + (degree != 1 ? "s" : "");
+		std::string line3;
+		if (!node.file_path.empty()) {
+			line3 = node.file_path;
+			if (node.line > 0)
+				line3 += ":" + std::to_string(node.line);
+		}
+
+		BFont font;
+		GetFont(&font);
+		font.SetSize(11);
+		SetFont(&font);
+
+		float w1 = StringWidth(line1.c_str());
+		float w2 = StringWidth(line2.c_str());
+		float w3 = line3.empty() ? 0 : StringWidth(line3.c_str());
+		float maxW = std::max({w1, w2, w3});
+
+		float lineH = 15;
+		int numLines = line3.empty() ? 2 : 3;
+		float tipW = maxW + 16;
+		float tipH = numLines * lineH + 10;
+
+		// Position: offset from hover point, keep inside view bounds.
+		float tx = fHoverScreenPos.x + 16;
+		float ty = fHoverScreenPos.y - tipH - 8;
+		if (tx + tipW > bounds.right) tx = fHoverScreenPos.x - tipW - 8;
+		if (ty < bounds.top) ty = fHoverScreenPos.y + 20;
+
+		BRect tipRect(tx, ty, tx + tipW, ty + tipH);
+
+		// Background.
+		SetDrawingMode(B_OP_ALPHA);
+		SetHighColor(40, 40, 40, 220);
+		FillRoundRect(tipRect, 4, 4);
+		SetHighColor(100, 100, 100, 180);
+		StrokeRoundRect(tipRect, 4, 4);
+		SetDrawingMode(B_OP_COPY);
+
+		// Text.
+		float textX = tx + 8;
+		float textY = ty + lineH;
+		SetHighColor(255, 255, 255, 255);
+		font.SetFace(B_BOLD_FACE);
+		SetFont(&font);
+		DrawString(line1.c_str(), BPoint(textX, textY));
+
+		font.SetFace(B_REGULAR_FACE);
+		SetFont(&font);
+		textY += lineH;
+		SetHighColor(190, 190, 190, 255);
+		DrawString(line2.c_str(), BPoint(textX, textY));
+
+		if (!line3.empty()) {
+			textY += lineH;
+			SetHighColor(150, 170, 200, 255);
+			DrawString(line3.c_str(), BPoint(textX, textY));
+		}
+	}
 }
 
 // ---- Mouse interaction ----
@@ -453,7 +543,7 @@ void GraphView::MouseUp(BPoint /*where*/)
 	fPanning = false;
 }
 
-void GraphView::MouseMoved(BPoint where, uint32 /*transit*/,
+void GraphView::MouseMoved(BPoint where, uint32 transit,
                            const BMessage* /*msg*/)
 {
 	if (fDragNode >= 0) {
@@ -469,6 +559,17 @@ void GraphView::MouseMoved(BPoint where, uint32 /*transit*/,
 		fPan.y += dy;
 		fPanStart = where;
 		Invalidate();
+	} else {
+		// Update hover state for tooltip.
+		int prev = fHoverNode;
+		if (transit == B_EXITED_VIEW) {
+			fHoverNode = -1;
+		} else {
+			fHoverNode = _HitTest(where);
+			fHoverScreenPos = where;
+		}
+		if (fHoverNode != prev)
+			Invalidate();
 	}
 }
 
@@ -501,6 +602,10 @@ void GraphView::MessageReceived(BMessage* msg)
 
 void GraphView::FrameResized(float /*width*/, float /*height*/)
 {
+	if (fNeedsFitAll) {
+		fNeedsFitAll = false;
+		FitAll();
+	}
 	Invalidate();
 }
 

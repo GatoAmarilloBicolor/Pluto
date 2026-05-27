@@ -71,6 +71,7 @@
 #include "ScheduleDialog.h"
 #include "SessionBrowser.h"
 #include "SettingsDialog.h"
+#include "GraphWindow.h"
 #include "TelemetryDialog.h"
 #include "../oauth.h"
 #include "../schedule.h"
@@ -2471,6 +2472,24 @@ void MainWindow::MessageReceived(BMessage* msg) {
 		case kMsgPrefs:
 			_OpenSettings();
 			break;
+
+		case 'grVw': {
+			// Open graph viewer window.
+			const char* path = nullptr;
+			msg->FindString("path", &path);
+			if (path) {
+				auto graph = pluto::map::Graph::LoadFromFile(path);
+				if (!graph.Nodes().empty()) {
+					auto* win = new pluto::gui::GraphWindow(graph);
+					win->Show();
+					std::string note = "  \xe2\x9c\x93 Graph: "
+						+ std::to_string(graph.Nodes().size()) + " nodes, "
+						+ std::to_string(graph.Edges().size()) + " edges\n\n";
+					_Append(note, kColDim, 0, true);
+				}
+			}
+			break;
+		}
 
 		case kMsgExportMd:
 			_ExportMarkdown();

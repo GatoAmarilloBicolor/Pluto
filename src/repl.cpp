@@ -12,6 +12,9 @@
 #include "mcp/SseSubscriber.h"
 #include "storage/SessionStore.h"
 #include "workspace.h"
+#include "map/Graph.h"
+#include "map/Scanner.h"
+#include "map/BfsAttrs.h"
 
 #include <curl/curl.h>
 #include <dirent.h>
@@ -66,7 +69,7 @@ HistEvent  g_hev;
 // Slash command completion for Tab key.
 static const char* kSlashCommands[] = {
 	"/ask", "/commands", "/context", "/cost", "/delegate",
-	"/delete", "/events", "/help", "/init", "/list", "/load",
+	"/delete", "/events", "/map", "/help", "/init", "/list", "/load",
 	"/mode", "/model", "/models", "/modes",
 	"/peers", "/plan", "/quit", "/reset", "/resume",
 	"/routine", "/routines", "/save", "/tag", "/title",
@@ -587,6 +590,9 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 			std::printf("  /delegate <peer> <t> fire-and-forget prompt to peer (notifies)\n");
 			std::printf("  /context <peer> <t>  ask a peer what it knows about a topic\n");
 			std::printf("  /init [--force]      create pluto.md project memory in workspace\n");
+			std::printf("  /map            scan workspace and build knowledge graph\n");
+			std::printf("  /map path A B   find shortest path between two nodes\n");
+			std::printf("  /map query ...  query the graph with natural language\n");
 			continue;
 		}
 		if (line == "/reset") {
@@ -723,6 +729,106 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 			ApplyProjectMemory(cfg);
 			std::printf("  %s(project memory reloaded)%s\n", kDim, kReset);
 			continue;
+		}
+
+		if (line.rfind("/map", 0) == 0 && (line.size() == 4 || line[4] == ' ')) {
+			std::string root = WorkspaceRoot();
+			if (root.empty()) {
+				char buf[PATH_MAX];
+				if (getcwd(buf, sizeof(buf))) root = buf;
+			}
+
+			std::string arg;
+			if (line.size() > 4) {
+				arg = line.substr(4);
+				while (!arg.empty() && arg.front() == ' ') arg.erase(0, 1);
+			}
+
+			std::string graph_path = root + "/graph.json";
+
+			if (arg.rfind("path ", 0) == 0) {
+				// /map path A B
+				auto graph = map::Graph::LoadFromFile(graph_path);
+				if (graph.Nodes().empty()) {
+					std::printf("%s  no graph found — run /map first%s\n",
+						kRed, kReset);
+					continue;
+				}
+				std::string rest = arg.substr(5);
+				while (!rest.empty() && rest.front() == ' ') rest.erase(0, 1);
+				auto sp = rest.find(' ');
+				if (sp == std::string::npos) {
+					std::printf("  usage: /map path <from> <to>\n");
+					continue;
+				}
+				std::string from_pat = rest.substr(0, sp);
+				std::string to_pat = rest.substr(sp + 1);
+				while (!to_pat.empty() && to_pat.front() == ' ') to_pat.erase(0, 1);
+
+				auto from_nodes = graph.FindNodes(from_pat);
+				auto to_nodes = graph.FindNodes(to_pat);
+				if (from_nodes.empty() || to_nodes.empty()) {
+					std::printf("  node not found\n");
+					continue;
+				}
+				auto path = graph.PathBetween(from_nodes[0]->id, to_nodes[0]->id);
+				if (path.empty()) {
+					std::printf("  no path found\n");
+					continue;
+				}
+				std::printf("\n  %sPath (%zu hops):%s\n", kBold, path.size() - 1, kReset);
+				for (size_t i = 0; i < path.size(); ++i) {
+					std::printf("  %s%s%s%s\n",
+						i == 0 ? kGreen : (i == path.size() - 1 ? kCyan : ""),
+						path[i].c_str(), kReset,
+						i < path.size() - 1 ? " ->" : "");
+				}
+				std::printf("\n");
+				continue;
+			}
+
+			if (arg.rfind("query ", 0) == 0) {
+				// /map query <question> — send graph summary + question to LLM
+				auto graph = map::Graph::LoadFromFile(graph_path);
+				if (graph.Nodes().empty()) {
+					std::printf("%s  no graph found — run /map first%s\n",
+						kRed, kReset);
+					continue;
+				}
+				std::string question = arg.substr(6);
+				while (!question.empty() && question.front() == ' ')
+					question.erase(0, 1);
+				// Inject graph summary as context and ask the question.
+				std::string prompt = "Here is the knowledge graph of the project:\n\n"
+					+ graph.Summary()
+					+ "\nAnswer this question about the codebase:\n"
+					+ question;
+				messages.push_back({"user", {{ContentBlock::TEXT, prompt}}});
+				// Fall through to the agent loop (don't continue).
+			} else {
+				// /map — scan and build graph
+				std::printf("%s  scanning workspace…%s\n", kDim, kReset);
+				auto graph = map::ScanWorkspace(root);
+				graph.SaveToFile(graph_path);
+				std::printf("  %s%zu nodes, %zu edges%s\n", kGreen,
+					graph.Nodes().size(), graph.Edges().size(), kReset);
+				std::printf("  saved to %s\n", graph_path.c_str());
+
+				// Stamp BFS attributes.
+				int stamped = map::StampBfsAttributes(graph);
+				std::printf("  BFS attributes stamped on %d files\n", stamped);
+
+				// Generate report via LLM.
+				std::string summary = graph.Summary();
+				std::string prompt =
+					"I just scanned the project and built a knowledge graph.\n\n"
+					+ summary
+					+ "\nWrite a brief GRAPH_REPORT.md summarizing the architecture: "
+					"key modules, most connected components, potential issues, "
+					"and suggested areas to explore. Be concise.";
+				messages.push_back({"user", {{ContentBlock::TEXT, prompt}}});
+				// Fall through to agent loop.
+			}
 		}
 
 		if (line.rfind("/save", 0) == 0) {

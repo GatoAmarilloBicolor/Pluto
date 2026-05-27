@@ -14,6 +14,9 @@
 #include "../storage/SessionStore.h"
 #include "../wiki.h"
 #include "../workspace.h"
+#include "../map/Graph.h"
+#include "../map/Scanner.h"
+#include "../map/BfsAttrs.h"
 #include "ChatColors.h"
 
 namespace pluto {
@@ -542,6 +545,81 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		return true;
 	}
 
+	if (text.rfind("/map", 0) == 0 && (text.size() == 4 || text[4] == ' ')) {
+		std::string root = WorkspaceRoot();
+		if (root.empty()) {
+			char buf[PATH_MAX];
+			if (getcwd(buf, sizeof(buf))) root = buf;
+		}
+		std::string graph_path = root + "/graph.json";
+
+		std::string arg;
+		if (text.size() > 4) {
+			arg = text.substr(4);
+			while (!arg.empty() && arg.front() == ' ') arg.erase(0, 1);
+		}
+
+		if (arg.empty()) {
+			// Scan workspace and open graph viewer.
+			_Append("Scanning workspace...\n", kColDim);
+			BMessenger self(this);
+			std::thread([self, root, graph_path]() {
+				auto graph = map::ScanWorkspace(root);
+				graph.SaveToFile(graph_path);
+				map::StampBfsAttributes(graph);
+
+				// Open the graph window on the GUI thread.
+				BMessage msg('grVw');
+				msg.AddString("path", graph_path.c_str());
+				self.SendMessage(&msg);
+			}).detach();
+		} else if (arg.rfind("path ", 0) == 0) {
+			auto graph = map::Graph::LoadFromFile(graph_path);
+			if (graph.Nodes().empty()) {
+				_Append("No graph found. Run /map first.\n\n", kColToolRole);
+				return true;
+			}
+			std::string rest = arg.substr(5);
+			while (!rest.empty() && rest.front() == ' ') rest.erase(0, 1);
+			auto sp = rest.find(' ');
+			if (sp == std::string::npos) {
+				_Append("Usage: /map path <from> <to>\n\n", kColDim);
+				return true;
+			}
+			std::string from_pat = rest.substr(0, sp);
+			std::string to_pat = rest.substr(sp + 1);
+			auto from_nodes = graph.FindNodes(from_pat);
+			auto to_nodes = graph.FindNodes(to_pat);
+			if (from_nodes.empty() || to_nodes.empty()) {
+				_Append("Node not found.\n\n", kColToolRole);
+				return true;
+			}
+			auto path = graph.PathBetween(from_nodes[0]->id, to_nodes[0]->id);
+			if (path.empty()) {
+				_Append("No path found.\n\n", kColDim);
+				return true;
+			}
+			std::string out = "Path (" + std::to_string(path.size() - 1) + " hops):\n";
+			for (size_t i = 0; i < path.size(); ++i) {
+				out += "  " + path[i];
+				if (i < path.size() - 1) out += " ->";
+				out += "\n";
+			}
+			out += "\n";
+			_Append(out, kColAsstBody);
+		} else {
+			// /map query ... or /map view — pass as user message for LLM
+			auto graph = map::Graph::LoadFromFile(graph_path);
+			if (graph.Nodes().empty()) {
+				_Append("No graph found. Run /map first.\n\n", kColToolRole);
+				return true;
+			}
+			// Fall through as false to let the prompt be sent to the LLM.
+			return false;
+		}
+		return true;
+	}
+
 	if (text == "/help") {
 		_Append(
 			"GUI commands:\n"
@@ -550,6 +628,8 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			"  /cost              show session token totals\n"
 			"  /init [--force]    create pluto.md project memory\n"
 			"  /wiki [url|file]   show wiki or ingest content\n"
+			"  /map               scan workspace and show knowledge graph\n"
+			"  /map path A B      find shortest path between two nodes\n"
 			"  /title [new]       show or set session title\n"
 			"  /tag [name]        show tags or add one to session\n"
 			"  /untag <name>      remove a tag from session\n"

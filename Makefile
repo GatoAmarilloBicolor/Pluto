@@ -40,6 +40,10 @@ CORE_SRCS = src/lsp/LspClient.cpp \
             src/tools/TodoWrite.cpp \
             src/tools/ApplyPatch.cpp \
             src/tools/Lsp.cpp \
+            src/tools/GraphQuery.cpp \
+            src/map/Graph.cpp \
+            src/map/Scanner.cpp \
+            src/map/BfsAttrs.cpp \
             src/haiku/BfsTools.cpp \
             src/haiku/DesktopTools.cpp \
             src/mcp/Client.cpp \
@@ -72,6 +76,8 @@ GUI_SRCS = src/gui/main_gui.cpp \
            src/gui/ScheduleDialog.cpp \
            src/gui/SessionBrowser.cpp \
            src/gui/MiniMapView.cpp \
+           src/gui/GraphView.cpp \
+           src/gui/GraphWindow.cpp \
            src/gui/TelemetryDialog.cpp \
            src/gui/DeskbarReplicant.cpp \
            src/gui/ColumnListView.cpp \

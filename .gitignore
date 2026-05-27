@@ -33,6 +33,10 @@ pluto-[0-9]*/
 # User state (sessions, workspace config)
 .pluto/
 
+# Generated files
+graph.json
+pluto-*-haiku-*.zip
+
 # Raw dataset (curated index is in data/)
 dataset.jsonl
 dataset_v3.jsonl

@@ -18,6 +18,7 @@
 #include "../workspace.h"
 #include "../haiku/DesktopTools.h"
 #include "../tools/BeapiLookup.h"
+#include "../tools/GraphQuery.h"
 #include "../tools/Builtin.h"
 #include "../tools/Tool.h"
 #include "../tools/WebFetch.h"
@@ -114,6 +115,7 @@ int main(int argc, char** argv) {
 	tools.add(pluto::MakeTodoWriteTool());
 	tools.add(pluto::MakeApplyPatchTool());
 	tools.add(pluto::MakeLspTool());
+	tools.add(pluto::MakeGraphQueryTool());
 
 	pluto::gui::App app(&cfg, &tools, key);
 	app.Run();
