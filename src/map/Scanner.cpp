@@ -1,4 +1,5 @@
 #include "Scanner.h"
+#include "../cancel.h"
 
 #include <cstdio>
 #include <dirent.h>
@@ -245,21 +246,65 @@ void ScanPythonFile(const std::string& root, const std::string& rel_path,
 
 }  // namespace
 
-Graph ScanWorkspace(const std::string& root_dir, ScanProgress progress)
+Graph ScanWorkspace(const std::string& root_dir, ScanProgress progress,
+                    int save_interval, std::atomic<bool>* cancel)
 {
-	Graph graph;
-	graph.root_dir = root_dir;
+	std::string graph_path = root_dir + "/graph.json";
 
 	// Collect source files.
 	std::vector<std::string> files;
 	ListFiles(root_dir, "", files);
-
 	int total = (int)files.size();
+
+	// Try to resume from a partial graph.
+	Graph graph;
+	graph.root_dir = root_dir;
+	std::set<std::string> already_scanned;
+
+	Graph existing = Graph::LoadFromFile(graph_path);
+	if (!existing.Nodes().empty()) {
+		// Collect file IDs already in the graph.
+		for (const auto& n : existing.Nodes()) {
+			if (n.kind == "file" || n.kind == "header")
+				already_scanned.insert(n.file_path);
+		}
+		// Check if all files are already scanned.
+		bool all_done = true;
+		for (const auto& f : files) {
+			if (already_scanned.find(f) == already_scanned.end()) {
+				all_done = false;
+				break;
+			}
+		}
+		if (all_done) {
+			std::fprintf(stderr, "[map] graph is up to date (%zu nodes)\n",
+				existing.Nodes().size());
+			return existing;
+		}
+		graph = std::move(existing);
+		std::fprintf(stderr, "[map] resuming scan (%zu files already done)\n",
+			already_scanned.size());
+	}
+
 	std::fprintf(stderr, "[map] scanning %d files in %s\n",
 		total, root_dir.c_str());
 
+	int scanned = 0;
 	for (int i = 0; i < total; ++i) {
+		bool stop = cancel ? cancel->load() : pluto::IsCancelRequested();
+		if (stop) {
+			std::fprintf(stderr, "\n[map] cancelled at %d/%d — progress saved\n",
+				i, total);
+			graph.SaveToFile(graph_path);
+			return graph;
+		}
+
 		const auto& rel = files[i];
+
+		// Skip files already in the graph (resume support).
+		if (already_scanned.count(rel))
+			continue;
+
 		if (progress)
 			progress(i + 1, total, rel);
 
@@ -268,13 +313,21 @@ Graph ScanWorkspace(const std::string& root_dir, ScanProgress progress)
 		else if (IsPythonFile(rel))
 			ScanPythonFile(root_dir, rel, graph);
 		else {
-			// Generic file node (Makefile, .md, .sh, etc.)
 			GraphNode fnode;
 			fnode.id = "file:" + rel;
 			fnode.kind = "file";
 			fnode.label = rel;
 			fnode.file_path = rel;
 			graph.AddNode(std::move(fnode));
+		}
+
+		++scanned;
+
+		// Incremental save.
+		if (save_interval > 0 && scanned % save_interval == 0) {
+			graph.SaveToFile(graph_path);
+			if (progress)
+				progress(i + 1, total, "(saved checkpoint)");
 		}
 	}
 
@@ -287,6 +340,9 @@ Graph ScanWorkspace(const std::string& root_dir, ScanProgress progress)
 	// Compute layout.
 	float size = std::max(800.0f, (float)graph.Nodes().size() * 8.0f);
 	graph.ForceDirectedLayout(120, size, size);
+
+	// Final save.
+	graph.SaveToFile(graph_path);
 
 	return graph;
 }

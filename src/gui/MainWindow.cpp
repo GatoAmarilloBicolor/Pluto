@@ -1315,6 +1315,9 @@ MainWindow::MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
 		entries.push_back({"/tag",      "/tag [name] — show or add session tag", "Commands"});
 		entries.push_back({"/untag",    "/untag <name> — remove a session tag", "Commands"});
 		entries.push_back({"/wiki",     "/wiki [url|file] — show wiki or ingest content", "Commands"});
+		entries.push_back({"/map",      "/map — scan workspace and build knowledge graph", "Commands"});
+		entries.push_back({"/map path", "/map path <from> <to> — find path between nodes", "Commands"});
+		entries.push_back({"/map query","/map query <question> — query the graph with LLM", "Commands"});
 
 		// Routines.
 		auto routines = pluto::ListRoutines();

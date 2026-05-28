@@ -806,10 +806,14 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 				messages.push_back({"user", {{ContentBlock::TEXT, prompt}}});
 				// Fall through to the agent loop (don't continue).
 			} else {
-				// /map — scan and build graph
-				std::printf("%s  scanning workspace…%s\n", kDim, kReset);
-				auto graph = map::ScanWorkspace(root);
-				graph.SaveToFile(graph_path);
+				// /map — scan and build graph (with live progress)
+				auto progress = [](int cur, int total, const std::string& file) {
+					std::fprintf(stderr, "\r\x1b[K  [%d/%d] %s",
+						cur, total, file.c_str());
+					std::fflush(stderr);
+				};
+				auto graph = map::ScanWorkspace(root, progress, 50, nullptr);
+				std::fprintf(stderr, "\r\x1b[K");  // clear progress line
 				std::printf("  %s%zu nodes, %zu edges%s\n", kGreen,
 					graph.Nodes().size(), graph.Edges().size(), kReset);
 				std::printf("  saved to %s\n", graph_path.c_str());
