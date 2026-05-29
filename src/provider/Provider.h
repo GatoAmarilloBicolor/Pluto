@@ -44,7 +44,11 @@ struct CompletionRequest {
 	std::vector<ToolDef> tools;
 	int max_tokens = 4096;
 	bool use_cache = true;   // emit cache_control on system+tools when true
-	std::atomic<bool>* cancel = nullptr;  // per-request cancel flag (optional)
+	// Per-request cancellation flag (optional).  When non-null the provider
+	// polls this flag during the HTTP transfer and aborts if it becomes true.
+	// nullptr means "not cancellable" — providers must check for nullptr
+	// before dereferencing and simply ignore it.
+	std::atomic<bool>* cancel = nullptr;
 };
 
 struct StreamEvent {
