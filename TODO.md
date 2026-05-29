@@ -1108,11 +1108,12 @@ Diviso per severità e area.
       offset (`header_offset`, `body_offset`, etc.) azzerati — il
       `ToolBlockManager` usa solo paragraph indices.
 
-- [ ] **Legacy fOutput (BTextView nascosto)** — `ConversationView.h:242`:
-      `BTextView* fOutput` mantenuto "per compatibilità" ma il rendering
-      usa `TextDocumentView`. Verificare se è ancora necessario per
-      offset tracking in ToolBlockManager, e rimuovere se non serve.
-      Complessità: M
+- [x] **Legacy fOutput (BTextView nascosto)** — Fix: removed stale
+      BTextView forward declaration from ConversationView.h, removed legacy
+      BTextView methods and offset fields from ToolBlockManager (collapse,
+      expand, toggle, hit_test, ArrowFn, header_offset, header_len,
+      body_offset, body_len). Rewrote test_toolblock.cpp for paragraph API.
+      Only TextDocument-based paragraph mode remains.
 
 ---
 
@@ -1142,12 +1143,11 @@ Binary sizes: CLI 1353 KB, GUI 2454 KB — ragionevoli per C++ con `-O2`.
 
 ### CRITICAL — Sicurezza
 
-- [ ] **Shell injection via hook commands** — `Loop.cpp` e `repl.cpp` passano
-      hook a `std::system()`. Il nome tool è escapato, ma il comando hook
-      stesso viene da config e non è validato. Se l'utente configura un hook
-      con backtick o `$()`, il rischio è auto-inflitto (config è dell'utente)
-      ma documentare chiaramente. Valutare `execvp()` come alternativa.
-      Complessità: M
+- [x] **Shell injection via hook commands** — Fix: replaced `std::system()`
+      with `fork()/execl()` + `setenv()` in both `Loop.cpp` and `repl.cpp`.
+      Env vars (`PLUTO_TOOL`, `PLUTO_PROMPT`) are now passed via `setenv()`
+      in the child process, never interpolated into the command string.
+      This prevents shell metacharacter injection from tool names or user input.
 
 - [x] **Path traversal in `@file` mentions** — Fix: `input.h`
       `build_user_content()` ora verifica `workspace_allows(path)` prima
@@ -1218,15 +1218,12 @@ Binary sizes: CLI 1353 KB, GUI 2454 KB — ragionevoli per C++ con `-O2`.
 
 ### LOW — Haiku-native miglioramenti
 
-- [ ] **Config directory scanning con BDirectory** — `config.cpp` e
-      `agent_store.cpp` usano `opendir()`/`readdir()`. Haiku idiomatico:
-      `BDirectory dir(path); BEntry entry; while (dir.GetNextEntry(&entry) == B_OK)`.
-      Complessità: S
-
-- [ ] **Workspace path con BPath::Normalize()** — `workspace.cpp` usa
-      `realpath()` POSIX. `BPath::Normalize()` fa risoluzione lessicale
-      senza accesso filesystem (più veloce per path già canonici).
-      Complessità: S
+- [x] **Config directory scanning con BDirectory** — Fix: replaced all
+      opendir/readdir/closedir in config.cpp (load_confs_from, ApplySkills,
+      LoadModes) with BDirectory/BEntry iteration. Removed dirent.h include.
+- [x] **Workspace path con BPath::Normalize()** — Fix: replaced realpath()
+      with BPath::SetTo(path, nullptr, true) in workspace.cpp canonicalize().
+      Fallback parent-walking loop also uses BPath.
 
 - [x] **SessionStore con BQuery** — implementato in SessionStore::list() — Attualmente itera directory per
       listare sessioni. Con gli indici BFS già creati (`pluto:title`,
@@ -1241,10 +1238,9 @@ Binary sizes: CLI 1353 KB, GUI 2454 KB — ragionevoli per C++ con `-O2`.
       corto. Unificare la strategia o documentare perché sono diverse.
       Complessità: S
 
-- [ ] **Provider.h: cancel pointer nullable** — `std::atomic<bool>* cancel`
-      è opzionale ma la documentazione non dice cosa succede con nullptr.
-      Aggiungere un commento o un assert.
-      Complessità: S
+- [x] **Provider.h: cancel pointer nullable** — Fix: added documentation
+      comment explaining nullptr means "not cancellable". Both Anthropic.cpp
+      and OpenAICompat.cpp already guard with `if (flag && flag->load())`.
 
 - [x] **CSV injection in telemetry** — Fix: `telemetry.cpp` ora filtra
       commas, newlines, carriage returns e virgolette dal model name
