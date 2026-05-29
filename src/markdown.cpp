@@ -318,17 +318,22 @@ std::string TerminalMarkdown::_RenderLine(const std::string& line) {
 }
 
 std::string TerminalMarkdown::Feed(const std::string& chunk) {
-	std::string out;
 	fLineBuf += chunk;
+
+	// Fast path: no newline in buffer, nothing to render yet.
+	if (fLineBuf.find('\n') == std::string::npos)
+		return {};
+
+	std::string out;
+	out.reserve(fLineBuf.size() + 64);
 
 	// Process all complete lines.
 	size_t pos = 0;
 	while (pos < fLineBuf.size()) {
 		size_t nl = fLineBuf.find('\n', pos);
-		if (nl == std::string::npos) break;  // incomplete line — keep in buffer
+		if (nl == std::string::npos) break;
 
 		std::string line = fLineBuf.substr(pos, nl - pos);
-		// Strip trailing \r.
 		if (!line.empty() && line.back() == '\r') line.pop_back();
 
 		out += _RenderLine(line);
@@ -336,8 +341,9 @@ std::string TerminalMarkdown::Feed(const std::string& chunk) {
 		pos = nl + 1;
 	}
 
-	// Keep any remaining partial line in the buffer.
-	fLineBuf = fLineBuf.substr(pos);
+	// Erase processed content, keep partial line.
+	if (pos > 0)
+		fLineBuf.erase(0, pos);
 	return out;
 }
 
