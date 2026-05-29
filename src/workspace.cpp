@@ -156,14 +156,19 @@ bool WorkspaceAllows(const std::string& path) {
 	// If workspace not initialized, allow everything (backwards compat).
 	if (g_WorkspaceRoot.empty()) return true;
 
-	std::string cp = canonicalize(path);
-	if (cp.empty()) cp = path;  // if file doesn't exist yet, use raw
+	// Fast path: check raw path first before expensive canonicalization.
+	// This avoids BPath/realpath for the common case where the path is
+	// already under the workspace root.
+	if (starts_with(path, g_WorkspaceRoot)) return true;
 
-	// Check workspace root.
-	if (starts_with(cp, g_WorkspaceRoot)) return true;
-
-	// Check session trust.
+	// Session trust covers everything — no need to canonicalize.
 	if (g_session_trusted) return true;
+
+	// Canonicalize for symlink resolution and .. elimination.
+	std::string cp = canonicalize(path);
+	if (cp.empty()) cp = path;
+
+	if (starts_with(cp, g_WorkspaceRoot)) return true;
 
 	// Check trusted workspaces.
 	auto trusted = ListTrustedWorkspaces();
