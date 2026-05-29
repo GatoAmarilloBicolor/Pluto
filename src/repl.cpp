@@ -73,7 +73,7 @@ static const char* kSlashCommands[] = {
 	"/delete", "/events", "/map", "/help", "/init", "/list", "/load",
 	"/mode", "/model", "/models", "/modes",
 	"/peers", "/plan", "/quit", "/reset", "/resume",
-	"/routine", "/routines", "/save", "/tag", "/title",
+	"/routine", "/routines", "/save", "/share", "/tag", "/title",
 	"/tools", "/untag", "/unwatch", "/watch",
 	nullptr
 };
@@ -570,6 +570,7 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 			std::printf("  /models [URL]        list models on Ollama/OpenAI server\n");
 			std::printf("  /cost                show session token totals\n");
 			std::printf("  /save [title]        save session to BFS store\n");
+			std::printf("  /share [path]        export conversation as Markdown file\n");
 			std::printf("  /load <query>        load a session by title or index\n");
 			std::printf("  /list                list saved sessions\n");
 			std::printf("  /resume              load most recent session\n");
@@ -859,6 +860,60 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 				current_session_path = p;
 				std::printf("%s  saved: %s%s\n", kDim, p.c_str(), kReset);
 			}
+			continue;
+		}
+
+		if (line.rfind("/share", 0) == 0) {
+			if (messages.empty()) {
+				std::printf("%s(nothing to share)%s\n", kDim, kReset);
+				continue;
+			}
+			// Determine output path.
+			std::string out_path;
+			if (line.size() > 6) {
+				out_path = line.substr(6);
+				while (!out_path.empty() && out_path.front() == ' ')
+					out_path.erase(0, 1);
+			}
+			if (out_path.empty()) {
+				// Generate a filename from the title or timestamp.
+				std::string slug = current_title;
+				if (slug.empty()) slug = "conversation";
+				for (char& c : slug) {
+					if (c == ' ' || c == '/') c = '-';
+					else c = std::tolower(static_cast<unsigned char>(c));
+				}
+				out_path = slug + ".md";
+			}
+
+			// Export as Markdown.
+			std::ofstream out(out_path);
+			if (!out) {
+				std::printf("%s[share] cannot write %s%s\n",
+					kRed, out_path.c_str(), kReset);
+				continue;
+			}
+			out << "# " << (current_title.empty() ? "Conversation" : current_title) << "\n\n";
+			out << "*Model: " << cfg.model << " | "
+				<< "Tokens: " << session_input_tokens << " in / "
+				<< session_output_tokens << " out*\n\n---\n\n";
+			for (const auto& m : messages) {
+				if (m.role == "user") out << "## You\n\n";
+				else if (m.role == "assistant") out << "## Pluto\n\n";
+				else continue;
+				for (const auto& b : m.content) {
+					if (b.type == ContentBlock::TEXT && !b.text.empty())
+						out << b.text << "\n\n";
+					else if (b.type == ContentBlock::TOOL_USE)
+						out << "> **" << b.tool_name << "**\n>\n> ```json\n> "
+							<< b.tool_input << "\n> ```\n\n";
+					else if (b.type == ContentBlock::TOOL_RESULT)
+						out << "> *Result:*\n>\n> ```\n> "
+							<< b.text.substr(0, 500) << "\n> ```\n\n";
+				}
+			}
+			out.close();
+			std::printf("%s  shared: %s%s\n", kDim, out_path.c_str(), kReset);
 			continue;
 		}
 
