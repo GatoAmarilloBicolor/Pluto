@@ -161,6 +161,30 @@ public:
 			r.output = "only http:// and https:// URLs are supported";
 			return r;
 		}
+		// Block requests to localhost and private networks (SSRF prevention).
+		{
+			// Extract host from URL: skip scheme, find host before : or /
+			size_t hostStart = url.find("://");
+			if (hostStart != std::string::npos) hostStart += 3;
+			else hostStart = 0;
+			size_t hostEnd = url.find_first_of(":/?#", hostStart);
+			std::string host = url.substr(hostStart,
+				hostEnd == std::string::npos ? hostEnd : hostEnd - hostStart);
+			if (host == "localhost" || host == "127.0.0.1" || host == "::1"
+			    || host == "0.0.0.0" || host.rfind("10.", 0) == 0
+			    || host.rfind("192.168.", 0) == 0
+			    || host.rfind("169.254.", 0) == 0
+			    || host.rfind("172.16.", 0) == 0
+			    || host.rfind("172.17.", 0) == 0
+			    || host.rfind("172.18.", 0) == 0
+			    || host.rfind("172.19.", 0) == 0
+			    || host.rfind("172.2", 0) == 0
+			    || host.rfind("172.3", 0) == 0) {
+				r.is_error = true;
+				r.output = "requests to local/private network addresses are blocked";
+				return r;
+			}
+		}
 
 		CURL* c = curl_easy_init();
 		if (!c) {
