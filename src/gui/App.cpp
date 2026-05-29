@@ -366,21 +366,61 @@ void App::_LaunchMain() {
 				open_prefs_after = true;
 			}
 		} else {
-			// No Ollama, no credentials — guide the user.
+			// No Ollama, no credentials — welcome wizard.
+			// Load .conf providers to find OpenRouter config.
+			auto confs = pluto::LoadProviderConfs();
+			int or_idx = -1;
+			for (size_t i = 0; i < confs.size(); ++i) {
+				if (confs[i].base_url.find("openrouter.ai") != std::string::npos)
+					{ or_idx = (int)i; break; }
+			}
+
 			BAlert* alert = new BAlert("Pluto",
 				"Welcome to Pluto!\n\n"
-				"To get started, configure an AI provider in "
-				"Preferences.\n\n"
-				"Free options (no credit card):\n"
-				"  - Ollama (local, private, install from HaikuDepot)\n"
-				"  - Google Gemini (API key from aistudio.google.com)\n"
-				"  - Groq (API key from console.groq.com)\n"
-				"  - Cerebras (API key from cloud.cerebras.ai)\n\n"
-				"All support tool calling for full Pluto functionality.",
-				"Open Preferences", nullptr, nullptr,
+				"Quick start (no credit card needed):\n\n"
+				"  OpenRouter — one free signup, many AI models\n"
+				"    (Gemma, Llama, Qwen and more)\n\n"
+				"  Ollama — install from HaikuDepot, fully offline\n\n"
+				"Or choose from 15+ providers in Preferences.",
+				"OpenRouter", "Ollama", "Preferences",
 				B_WIDTH_AS_USUAL, B_IDEA_ALERT);
-			alert->Go();
-			open_prefs_after = true;
+			int32 choice = alert->Go();
+			if (choice == 0) {
+				// OpenRouter — use .conf if available.
+				fConfig->provider = "openai-compat";
+				if (or_idx >= 0) {
+					fConfig->base_url = confs[or_idx].base_url;
+					fConfig->api_key_env = confs[or_idx].api_key_env;
+					if (!confs[or_idx].models.empty()) {
+						fConfig->model = confs[or_idx].models[0].id;
+						fConfig->max_tokens = confs[or_idx].models[0].max_tokens;
+						fConfig->context_window = confs[or_idx].models[0].context_window;
+					}
+				} else {
+					fConfig->base_url = "https://openrouter.ai/api";
+					fConfig->model = "google/gemma-4-31b-it:free";
+					fConfig->api_key_env = "OPENROUTER_API_KEY";
+					fConfig->context_window = 131072;
+				}
+				pluto::SaveConfig(*fConfig);
+				fCreds = { Credentials::API_KEY, "" };
+				needs_setup = false;
+				// Open preferences so the user can enter their API key.
+				open_prefs_after = true;
+			} else if (choice == 1) {
+				// Ollama — zero config.
+				fConfig->provider = "openai-compat";
+				fConfig->base_url = "http://localhost:11434";
+				fConfig->model = "llama3.1";
+				fConfig->api_key_env.clear();
+				fConfig->context_window = 128000;
+				pluto::SaveConfig(*fConfig);
+				fCreds = { Credentials::API_KEY, "" };
+				needs_setup = false;
+			} else {
+				// Preferences — let the user pick manually.
+				open_prefs_after = true;
+			}
 		}
 	}
 
