@@ -251,7 +251,10 @@ private:
 			if (fPos < fSrc.size() && (fSrc[fPos] == '+' || fSrc[fPos] == '-')) ++fPos;
 			while (fPos < fSrc.size() && fSrc[fPos] >= '0' && fSrc[fPos] <= '9') ++fPos;
 		}
-		return Value(std::strtod(fSrc.substr(start, fPos - start).c_str(), nullptr));
+		// Parse directly from the source buffer without allocating a substring.
+		// strtod reads until it hits a non-numeric character, which is safe
+		// because the JSON input is always null-terminated.
+		return Value(std::strtod(fSrc.c_str() + start, nullptr));
 	}
 
 	Value parse_bool() {
