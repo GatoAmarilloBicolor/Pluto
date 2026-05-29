@@ -343,8 +343,10 @@ std::vector<SessionMetadata> SessionStore::list() {
 
 	// Try BQuery first: uses the pluto:updated BFS index for fast lookup.
 	// Falls back to BDirectory scan if the query fails (e.g. no index).
+	// Skip BQuery when dir_override is set (test mode) — BQuery requires
+	// a running BApplication and indexed attributes on the boot volume.
 	bool used_query = false;
-	{
+	if (dir_override().empty()) {
 		BVolumeRoster roster;
 		BVolume vol;
 		if (roster.GetBootVolume(&vol) == B_OK) {

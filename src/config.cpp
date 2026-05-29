@@ -197,21 +197,55 @@ std::vector<ProviderConf> LoadProviderConfs() {
 bool RunFirstRunWizard(Config& cfg) {
 	std::printf("\n");
 	std::printf("  \x1b[1mWelcome to Pluto!\x1b[0m\n\n");
-	std::printf("  Choose your LLM provider:\n\n");
-
-	// Anthropic is always option 1 (native provider, not from .conf).
-	std::printf("    1. Anthropic (Claude)         — API key or Claude Max/Pro\n");
 
 	// Load all .conf providers dynamically.
 	auto confs = LoadProviderConfs();
+
+	// Partition providers into categories for a friendlier menu.
+	// "Quick start" = no signup or one signup for many models.
+	// Find Ollama and OpenRouter indices in the confs list.
+	int ollama_idx = -1, openrouter_idx = -1;
 	for (size_t i = 0; i < confs.size(); ++i) {
+		if (confs[i].base_url.find("localhost:11434") != std::string::npos)
+			ollama_idx = (int)i;
+		else if (confs[i].base_url.find("openrouter.ai") != std::string::npos)
+			openrouter_idx = (int)i;
+	}
+
+	std::printf("  \x1b[1mQuick start\x1b[0m (no credit card needed):\n\n");
+	int num = 1;
+	// Ollama first — zero signup.
+	if (ollama_idx >= 0) {
+		std::printf("    %d. Ollama (local)              — no signup, private, offline\n", num);
+	} else {
+		std::printf("    %d. Ollama (local)              — install from HaikuDepot\n", num);
+	}
+	int choice_ollama = num++;
+
+	// OpenRouter second — one signup, many free models.
+	std::printf("    %d. OpenRouter (free models)    — one free signup, many models\n", num);
+	int choice_openrouter = num++;
+
+	std::printf("\n  \x1b[1mAll providers\x1b[0m:\n\n");
+
+	// Anthropic (native, always present).
+	std::printf("    %d. Anthropic (Claude)         — API key or Claude Max/Pro\n", num);
+	int choice_anthropic = num++;
+
+	// All .conf providers except Ollama and OpenRouter (already shown).
+	std::vector<int> conf_map;  // maps menu number → confs[] index
+	for (size_t i = 0; i < confs.size(); ++i) {
+		if ((int)i == ollama_idx || (int)i == openrouter_idx)
+			continue;
 		const auto& p = confs[i];
 		std::string hint;
 		if (p.api_key_env.empty())
 			hint = "no key needed";
 		else
-			hint = "API key (" + p.api_key_env + ")";
-		std::printf("   %2zu. %-28s — %s\n", i + 2, p.label.c_str(), hint.c_str());
+			hint = p.api_key_env;
+		std::printf("    %d. %-28s — %s\n", num, p.label.c_str(), hint.c_str());
+		conf_map.push_back((int)i);
+		num++;
 	}
 
 	std::printf("\n  > ");
@@ -223,23 +257,10 @@ bool RunFirstRunWizard(Config& cfg) {
 
 	int choice = std::atoi(buf);
 
-	if (choice == 1) {
-		// Anthropic (native provider).
-		cfg.provider = "anthropic";
-		cfg.model = "claude-sonnet-4-5";
-		cfg.api_key_env = "ANTHROPIC_API_KEY";
-		cfg.base_url.clear();
-		std::printf("\n  Provider: Anthropic\n");
-		std::printf("  Model:    claude-sonnet-4-5\n");
-		std::printf("\n  To authenticate:\n");
-		std::printf("    Option A: pluto login  (Claude Max/Pro subscription)\n");
-		std::printf("    Option B: export ANTHROPIC_API_KEY=sk-ant-...\n");
-	} else if (choice >= 2 && choice <= (int)(confs.size() + 1)) {
-		const auto& p = confs[choice - 2];
+	auto apply_conf = [&](const ProviderConf& p) {
 		cfg.provider = "openai-compat";
 		cfg.base_url = p.base_url;
 		cfg.api_key_env = p.api_key_env;
-		// Use the first model as default.
 		if (!p.models.empty()) {
 			cfg.model = p.models[0].id;
 			cfg.max_tokens = p.models[0].max_tokens;
@@ -250,12 +271,60 @@ bool RunFirstRunWizard(Config& cfg) {
 		if (!p.base_url.empty())
 			std::printf("  Base URL: %s\n", p.base_url.c_str());
 		if (!p.api_key_env.empty())
-			std::printf("\n  Set your key: export %s=<your-key>\n", p.api_key_env.c_str());
+			std::printf("\n  Set your key: export %s=<your-key>\n",
+				p.api_key_env.c_str());
 		else
 			std::printf("\n  No API key required.\n");
+	};
+
+	if (choice == choice_ollama) {
+		if (ollama_idx >= 0) {
+			apply_conf(confs[ollama_idx]);
+		} else {
+			// Ollama not in confs — use hardcoded defaults.
+			cfg.provider = "openai-compat";
+			cfg.base_url = "http://localhost:11434";
+			cfg.model = "llama3.1";
+			cfg.api_key_env.clear();
+			cfg.context_window = 128000;
+			std::printf("\n  Provider: Ollama (local)\n");
+			std::printf("  Model:    llama3.1\n");
+			std::printf("\n  No API key required.\n");
+			std::printf("  Make sure Ollama is running: ollama serve\n");
+		}
+	} else if (choice == choice_openrouter) {
+		if (openrouter_idx >= 0) {
+			apply_conf(confs[openrouter_idx]);
+		} else {
+			cfg.provider = "openai-compat";
+			cfg.base_url = "https://openrouter.ai/api";
+			cfg.model = "google/gemma-4-31b-it:free";
+			cfg.api_key_env = "OPENROUTER_API_KEY";
+			cfg.context_window = 131072;
+			std::printf("\n  Provider: OpenRouter\n");
+			std::printf("  Model:    google/gemma-4-31b-it:free\n");
+			std::printf("\n  Get a free key: https://openrouter.ai/keys\n");
+			std::printf("  Then: export OPENROUTER_API_KEY=sk-or-...\n");
+		}
+	} else if (choice == choice_anthropic) {
+		cfg.provider = "anthropic";
+		cfg.model = "claude-sonnet-4-5";
+		cfg.api_key_env = "ANTHROPIC_API_KEY";
+		cfg.base_url.clear();
+		std::printf("\n  Provider: Anthropic\n");
+		std::printf("  Model:    claude-sonnet-4-5\n");
+		std::printf("\n  To authenticate:\n");
+		std::printf("    Option A: pluto login  (Claude Max/Pro subscription)\n");
+		std::printf("    Option B: export ANTHROPIC_API_KEY=sk-ant-...\n");
 	} else {
-		std::printf("\n  Invalid choice. Using default (Anthropic).\n");
-		return false;
+		// Check the "All providers" section.
+		int idx_in_map = choice - (choice_anthropic + 1);
+		if (idx_in_map >= 0 && idx_in_map < (int)conf_map.size()) {
+			apply_conf(confs[conf_map[idx_in_map]]);
+		} else {
+			std::printf("\n  Invalid choice. Using default (Anthropic).\n");
+			return false;
+		}
 	}
 
 	// Save config immediately.

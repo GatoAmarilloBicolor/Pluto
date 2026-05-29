@@ -169,8 +169,10 @@ bool WorkspaceAllows(const std::string& path) {
 
 	// Fast path: check raw path first before expensive canonicalization.
 	// This avoids BPath/realpath for the common case where the path is
-	// already under the workspace root.
-	if (starts_with(path, g_WorkspaceRoot)) return true;
+	// already under the workspace root. Skip if the path contains ".."
+	// which could escape the workspace despite matching the prefix.
+	if (starts_with(path, g_WorkspaceRoot)
+	    && path.find("..") == std::string::npos) return true;
 
 	// Session trust covers everything — no need to canonicalize.
 	if (g_session_trusted) return true;
