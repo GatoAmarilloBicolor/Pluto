@@ -20,6 +20,7 @@
 #include <dirent.h>
 #include <histedit.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <cctype>
@@ -1435,13 +1436,17 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 		// setenv/unsetenv which are not thread-safe with the SSE
 		// background subscriber.
 		for (const auto& hook : cfg.hooks_user_prompt) {
-			std::string full = "PLUTO_PROMPT='";
-			for (char c : line) {
-				if (c == '\'') full += "'\\''"; else full += c;
+			if (hook.empty()) continue;
+			pid_t pid = fork();
+			if (pid == 0) {
+				::setenv("PLUTO_PROMPT", line.c_str(), 1);
+				::execl("/bin/sh", "sh", "-c", hook.c_str(), nullptr);
+				::_exit(127);
 			}
-			full += "' ";
-			full += hook;
-			std::system(full.c_str());
+			if (pid > 0) {
+				int status = 0;
+				::waitpid(pid, &status, 0);
+			}
 		}
 
 		// Trigger-based skill loading: check if user message matches

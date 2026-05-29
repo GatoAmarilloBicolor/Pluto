@@ -8,6 +8,9 @@
 #include <set>
 #include <string>
 
+#include <sys/wait.h>
+#include <unistd.h>
+
 namespace pluto {
 
 namespace {
@@ -109,19 +112,29 @@ int prune_to_fit(std::vector<Message>& msgs, size_t target) {
 	return dropped;
 }
 
+// Run a hook command in a child process with env vars set safely.
+// This avoids shell injection: env var values are passed via setenv()
+// in the child process, never interpolated into the command string.
+int run_hook_safe(const char* cmd, const char* env_name, const std::string& env_value) {
+	pid_t pid = fork();
+	if (pid < 0) return -1;
+	if (pid == 0) {
+		// Child: set env var safely, then exec the hook via /bin/sh.
+		::setenv(env_name, env_value.c_str(), 1);
+		::execl("/bin/sh", "sh", "-c", cmd, nullptr);
+		::_exit(127);
+	}
+	int status = 0;
+	::waitpid(pid, &status, 0);
+	return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
 void run_hooks(const std::vector<std::string>& hooks, const char* phase,
                const std::string& tool_name) {
 	for (const auto& cmd : hooks) {
 		if (cmd.empty()) continue;
-		// Expose the tool name to the hook via env var.
-		std::string full = "PLUTO_TOOL='";
-		for (char c : tool_name) {
-			if (c == '\'') full += "'\\''"; else full += c;
-		}
-		full += "' ";
-		full += cmd;
 		std::fprintf(stderr, "[hook %s] %s\n", phase, cmd.c_str());
-		int rc = std::system(full.c_str());
+		int rc = run_hook_safe(cmd.c_str(), "PLUTO_TOOL", tool_name);
 		if (rc != 0)
 			std::fprintf(stderr, "[hook %s] exit %d\n", phase, rc);
 	}
