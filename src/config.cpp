@@ -8,11 +8,11 @@
 #include "util.h"
 
 #include <Directory.h>
+#include <Entry.h>
 #include <FindDirectory.h>
 #include <Path.h>
 #include <image.h>
 
-#include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -149,17 +149,17 @@ bool ParseProviderConf(const std::string& path, ProviderConf& out) {
 namespace {
 
 void load_confs_from(const std::string& dir, std::vector<ProviderConf>& out) {
-	DIR* d = opendir(dir.c_str());
-	if (!d) return;
+	BDirectory bdir(dir.c_str());
+	if (bdir.InitCheck() != B_OK) return;
 	std::vector<std::string> files;
-	struct dirent* e;
-	while ((e = readdir(d)) != nullptr) {
-		std::string name = e->d_name;
-		if (name.size() < 6) continue;
-		if (name.substr(name.size() - 5) != ".conf") continue;
-		files.push_back(name);
+	BEntry entry;
+	while (bdir.GetNextEntry(&entry) == B_OK) {
+		char name[B_FILE_NAME_LENGTH];
+		if (entry.GetName(name) != B_OK) continue;
+		std::string s = name;
+		if (s.size() < 6 || s.substr(s.size() - 5) != ".conf") continue;
+		files.push_back(s);
 	}
-	closedir(d);
 	std::sort(files.begin(), files.end());
 	for (const auto& name : files) {
 		ProviderConf p;
@@ -568,18 +568,19 @@ static std::string parse_skill_frontmatter(const std::string& content,
 
 void ApplySkills(Config& cfg) {
 	std::string skills_dir = home_dir() + "/config/settings/pluto/skills";
-	DIR* d = opendir(skills_dir.c_str());
-	if (!d) return;
+	BDirectory bdir(skills_dir.c_str());
+	if (bdir.InitCheck() != B_OK) return;
 
 	std::string always_block;
 	int always_count = 0;
 	std::string catalog;
 	int triggered_count = 0;
 
-	struct dirent* e;
-	while ((e = readdir(d)) != nullptr) {
-		std::string name = e->d_name;
-		if (name == "." || name == "..") continue;
+	BEntry entry;
+	while (bdir.GetNextEntry(&entry) == B_OK) {
+		char nameBuf[B_FILE_NAME_LENGTH];
+		if (entry.GetName(nameBuf) != B_OK) continue;
+		std::string name = nameBuf;
 		std::string skill_path = skills_dir + "/" + name + "/SKILL.md";
 		std::string raw = read_file_to_string(skill_path);
 		if (raw.empty()) continue;
@@ -632,7 +633,6 @@ void ApplySkills(Config& cfg) {
 			++triggered_count;
 		}
 	}
-	closedir(d);
 
 	if (always_count > 0) {
 		if (!cfg.system_prompt.empty()) cfg.system_prompt += "\n\n";
@@ -806,12 +806,14 @@ void LoadModes(Config& cfg) {
 
 	// Load user-defined modes from ~/config/settings/pluto/modes/*.md
 	std::string modes_dir = home_dir() + "/config/settings/pluto/modes";
-	DIR* d = opendir(modes_dir.c_str());
-	if (!d) return;
+	BDirectory modesDir(modes_dir.c_str());
+	if (modesDir.InitCheck() != B_OK) return;
 
-	struct dirent* e;
-	while ((e = readdir(d)) != nullptr) {
-		std::string fname = e->d_name;
+	BEntry modeEntry;
+	while (modesDir.GetNextEntry(&modeEntry) == B_OK) {
+		char nameBuf[B_FILE_NAME_LENGTH];
+		if (modeEntry.GetName(nameBuf) != B_OK) continue;
+		std::string fname = nameBuf;
 		if (fname.size() < 4
 			|| fname.substr(fname.size() - 3) != ".md")
 			continue;
@@ -830,7 +832,6 @@ void LoadModes(Config& cfg) {
 		if (!duplicate)
 			cfg.modes.push_back(std::move(m));
 	}
-	closedir(d);
 }
 
 const ModeEntry* FindMode(const Config& cfg, const std::string& name) {
