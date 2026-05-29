@@ -167,9 +167,19 @@ int RagEntryCount() {
 	return (int)g_entries.size();
 }
 
+// Simple cache: memoize the last query to avoid re-scoring all 390 entries
+// when the same query (or prefix) is repeated within a turn.
+static std::string g_cache_query;
+static int g_cache_top_k = 0;
+static std::vector<RagResult> g_cache_results;
+
 std::vector<RagResult> RagSearch(const std::string& query, int top_k) {
 	std::lock_guard<std::mutex> lock(g_rag_mutex);
 	if (g_entries.empty() || query.empty()) return {};
+
+	// Return cached results if query and top_k match.
+	if (query == g_cache_query && top_k == g_cache_top_k)
+		return g_cache_results;
 
 	auto query_tokens = Tokenize(query);
 	auto query_classes = RagExtractClasses(query);
@@ -196,6 +206,11 @@ std::vector<RagResult> RagSearch(const std::string& query, int top_k) {
 	// Trim to top_k.
 	if ((int)results.size() > top_k)
 		results.resize(top_k);
+
+	// Cache results for repeated queries within the same turn.
+	g_cache_query = query;
+	g_cache_top_k = top_k;
+	g_cache_results = results;
 
 	return results;
 }
