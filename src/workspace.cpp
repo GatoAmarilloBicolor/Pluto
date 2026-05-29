@@ -2,6 +2,8 @@
 #include "filelock.h"
 #include "util.h"
 
+#include <Path.h>
+
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -87,15 +89,17 @@ std::string normalize_path(const std::string& path) {
 	return result;
 }
 
-// Canonicalize a path: resolve via realpath if possible. If the full
+// Canonicalize a path: resolve via BPath if possible. If the full
 // path doesn't exist (e.g. not-yet-created file), resolve the longest
 // existing parent prefix and append the remainder. The result is always
 // normalized (no . or .. components) to prevent path traversal.
 std::string canonicalize(const std::string& raw) {
 	if (raw.empty()) return raw;
-	char buf[PATH_MAX];
-	if (::realpath(raw.c_str(), buf))
-		return std::string(buf);
+
+	// Try BPath normalization first (resolves symlinks for existing paths).
+	BPath bpath;
+	if (bpath.SetTo(raw.c_str(), nullptr, true) == B_OK)
+		return bpath.Path();
 
 	// Walk up until we find an existing parent.
 	std::string dir = raw;
@@ -107,9 +111,9 @@ std::string canonicalize(const std::string& raw) {
 		dir = dir.substr(0, slash);
 		if (dir.empty()) dir = "/";
 		tail = name + tail;
-		if (::realpath(dir.c_str(), buf)) {
+		if (bpath.SetTo(dir.c_str(), nullptr, true) == B_OK) {
 			// Normalize to eliminate any .. in the unresolved tail.
-			std::string result = normalize_path(std::string(buf) + tail);
+			std::string result = normalize_path(std::string(bpath.Path()) + tail);
 			while (result.size() > 1 && result.back() == '/')
 				result.pop_back();
 			return result;
