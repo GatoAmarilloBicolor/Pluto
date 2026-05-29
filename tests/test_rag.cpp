@@ -89,24 +89,24 @@ static std::string write_test_index() {
 
 static void test_init_loads_entries() {
 	std::string path = write_test_index();
-	int n = pluto::rag_init(path);
+	int n = pluto::RagInit(path);
 	assert(n == 5);
-	assert(pluto::rag_entry_count() == 5);
+	assert(pluto::RagEntryCount() == 5);
 	std::printf("  init loads entries... ok\n");
 }
 
 static void test_init_bad_path() {
-	int n = pluto::rag_init("/nonexistent/path.jsonl");
+	int n = pluto::RagInit("/nonexistent/path.jsonl");
 	assert(n == 0);
-	assert(pluto::rag_entry_count() == 0);
+	assert(pluto::RagEntryCount() == 0);
 	std::printf("  init bad path... ok\n");
 }
 
 static void test_search_by_class() {
 	std::string path = write_test_index();
-	pluto::rag_init(path);
+	pluto::RagInit(path);
 
-	auto results = pluto::rag_search("I need a BSlider for volume control");
+	auto results = pluto::RagSearch("I need a BSlider for volume control");
 	assert(!results.empty());
 	assert(results[0].entry->topic.find("BSlider") != std::string::npos);
 	assert(results[0].score > 0.0);
@@ -115,9 +115,9 @@ static void test_search_by_class() {
 
 static void test_search_by_keyword() {
 	std::string path = write_test_index();
-	pluto::rag_init(path);
+	pluto::RagInit(path);
 
-	auto results = pluto::rag_search("notification");
+	auto results = pluto::RagSearch("notification");
 	assert(!results.empty());
 	assert(results[0].entry->topic.find("BNotification") != std::string::npos);
 	std::printf("  search by keyword... ok\n");
@@ -125,10 +125,10 @@ static void test_search_by_keyword() {
 
 static void test_search_ranking() {
 	std::string path = write_test_index();
-	pluto::rag_init(path);
+	pluto::RagInit(path);
 
 	// Searching for BFilePanel should rank BFilePanel entry first.
-	auto results = pluto::rag_search("BFilePanel open file dialog");
+	auto results = pluto::RagSearch("BFilePanel open file dialog");
 	assert(!results.empty());
 	assert(results[0].entry->topic.find("BFilePanel") != std::string::npos);
 
@@ -141,24 +141,24 @@ static void test_search_ranking() {
 
 static void test_search_top_k() {
 	std::string path = write_test_index();
-	pluto::rag_init(path);
+	pluto::RagInit(path);
 
-	auto results = pluto::rag_search("Haiku", 2);
+	auto results = pluto::RagSearch("Haiku", 2);
 	assert((int)results.size() <= 2);
 	std::printf("  search top_k... ok\n");
 }
 
 static void test_search_no_match() {
 	std::string path = write_test_index();
-	pluto::rag_init(path);
+	pluto::RagInit(path);
 
-	auto results = pluto::rag_search("quantum entanglement physics");
+	auto results = pluto::RagSearch("quantum entanglement physics");
 	assert(results.empty());
 	std::printf("  search no match... ok\n");
 }
 
 static void test_extract_classes() {
-	auto classes = pluto::rag_extract_classes(
+	auto classes = pluto::RagExtractClasses(
 		"I need a BView with BSlider and BMenuBar inside");
 	assert(classes.size() == 3);
 	// Should find BView, BSlider, BMenuBar
@@ -178,7 +178,7 @@ static void test_extract_classes_no_false_positives() {
 	// "BOLD" starts with B but second char is O (uppercase) - should match
 	// but it's only 4 chars and is a common word. Our filter requires B+uppercase,
 	// so "BOLD" would match. Let's test that single-B words don't match.
-	auto classes = pluto::rag_extract_classes("use bold text BY the way");
+	auto classes = pluto::RagExtractClasses("use bold text BY the way");
 	// "BY" is only 2 chars, filtered out (< 3).
 	// "BOLD" would not match because 'O' follows 'B' and is uppercase — but
 	// this IS the pattern. Let's verify behavior is consistent.
@@ -190,10 +190,10 @@ static void test_extract_classes_no_false_positives() {
 
 static void test_search_multiple_classes() {
 	std::string path = write_test_index();
-	pluto::rag_init(path);
+	pluto::RagInit(path);
 
 	// BView + drawing → should find the BView custom drawing entry
-	auto results = pluto::rag_search("BView custom Draw BRect");
+	auto results = pluto::RagSearch("BView custom Draw BRect");
 	assert(!results.empty());
 	assert(results[0].entry->topic.find("BView") != std::string::npos);
 	std::printf("  search multiple classes... ok\n");

@@ -31,14 +31,14 @@ int main() {
 	// --- Test 1: plain text passes through ---
 	{
 		TerminalMarkdown md;
-		std::string out = md.feed("hello world\n");
+		std::string out = md.Feed("hello world\n");
 		assert(strip_ansi(out) == "hello world\n");
 	}
 
 	// --- Test 2: bold ---
 	{
 		TerminalMarkdown md;
-		std::string out = md.feed("this is **bold** text\n");
+		std::string out = md.Feed("this is **bold** text\n");
 		assert(strip_ansi(out) == "this is bold text\n");
 		assert(has_ansi(out, "\x1b[1m"));   // bold on
 		assert(has_ansi(out, "\x1b[22m"));  // bold off
@@ -47,7 +47,7 @@ int main() {
 	// --- Test 3: italic ---
 	{
 		TerminalMarkdown md;
-		std::string out = md.feed("this is *italic* text\n");
+		std::string out = md.Feed("this is *italic* text\n");
 		assert(strip_ansi(out) == "this is italic text\n");
 		assert(has_ansi(out, "\x1b[3m"));   // italic on
 		assert(has_ansi(out, "\x1b[23m"));  // italic off
@@ -56,7 +56,7 @@ int main() {
 	// --- Test 4: inline code ---
 	{
 		TerminalMarkdown md;
-		std::string out = md.feed("run `make install`\n");
+		std::string out = md.Feed("run `make install`\n");
 		assert(strip_ansi(out) == "run make install\n");
 		assert(has_ansi(out, "\x1b[36m"));  // cyan
 	}
@@ -64,7 +64,7 @@ int main() {
 	// --- Test 5: header ---
 	{
 		TerminalMarkdown md;
-		std::string out = md.feed("## Section Title\n");
+		std::string out = md.Feed("## Section Title\n");
 		assert(strip_ansi(out) == "Section Title\n");
 		assert(has_ansi(out, "\x1b[1m"));  // bold
 		assert(has_ansi(out, "\x1b[4m"));  // underline (level <= 2)
@@ -73,7 +73,7 @@ int main() {
 	// --- Test 6: code block ---
 	{
 		TerminalMarkdown md;
-		std::string out = md.feed("```cpp\nint x = 1;\n```\n");
+		std::string out = md.Feed("```cpp\nint x = 1;\n```\n");
 		std::string plain = strip_ansi(out);
 		// Should contain the code line indented.
 		assert(plain.find("  int x = 1;") != std::string::npos);
@@ -82,7 +82,7 @@ int main() {
 	// --- Test 7: horizontal rule ---
 	{
 		TerminalMarkdown md;
-		std::string out = md.feed("---\n");
+		std::string out = md.Feed("---\n");
 		std::string plain = strip_ansi(out);
 		// Should contain box-drawing characters.
 		assert(plain.find("\xe2\x94\x80") != std::string::npos);
@@ -91,7 +91,7 @@ int main() {
 	// --- Test 8: unordered list ---
 	{
 		TerminalMarkdown md;
-		std::string out = md.feed("- first item\n- second item\n");
+		std::string out = md.Feed("- first item\n- second item\n");
 		std::string plain = strip_ansi(out);
 		assert(plain.find("\xe2\x80\xa2 first item") != std::string::npos);   // bullet
 		assert(plain.find("\xe2\x80\xa2 second item") != std::string::npos);
@@ -100,7 +100,7 @@ int main() {
 	// --- Test 9: ordered list ---
 	{
 		TerminalMarkdown md;
-		std::string out = md.feed("1. first\n2. second\n");
+		std::string out = md.Feed("1. first\n2. second\n");
 		std::string plain = strip_ansi(out);
 		assert(plain.find("1. first") != std::string::npos);
 		assert(plain.find("2. second") != std::string::npos);
@@ -109,7 +109,7 @@ int main() {
 	// --- Test 10: blockquote ---
 	{
 		TerminalMarkdown md;
-		std::string out = md.feed("> quoted text\n");
+		std::string out = md.Feed("> quoted text\n");
 		std::string plain = strip_ansi(out);
 		assert(plain.find("\xe2\x94\x82 quoted text") != std::string::npos);
 	}
@@ -117,26 +117,26 @@ int main() {
 	// --- Test 11: streaming (partial lines) ---
 	{
 		TerminalMarkdown md;
-		std::string out1 = md.feed("hel");
+		std::string out1 = md.Feed("hel");
 		assert(out1.empty());  // no newline yet, buffered
-		std::string out2 = md.feed("lo\n");
+		std::string out2 = md.Feed("lo\n");
 		assert(strip_ansi(out2) == "hello\n");
 	}
 
 	// --- Test 12: flush partial line ---
 	{
 		TerminalMarkdown md;
-		md.feed("partial");
-		std::string out = md.flush();
+		md.Feed("partial");
+		std::string out = md.Flush();
 		assert(strip_ansi(out) == "partial");
 	}
 
 	// --- Test 13: reset clears state ---
 	{
 		TerminalMarkdown md;
-		md.feed("```\ncode line");
-		md.reset();
-		std::string out = md.feed("normal text\n");
+		md.Feed("```\ncode line");
+		md.Reset();
+		std::string out = md.Feed("normal text\n");
 		// Should NOT be in code block mode after reset.
 		assert(strip_ansi(out) == "normal text\n");
 	}

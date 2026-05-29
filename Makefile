@@ -186,16 +186,17 @@ test_sse: tests/test_sse.cpp src/json.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 test_session: tests/test_session.cpp \
-              src/storage/SessionStore.o src/json.o
+              src/storage/SessionStore.o src/json.o src/util.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lbe
 
 test_tools: tests/test_tools.cpp \
             src/tools/Tool.o src/tools/ReadFile.o src/tools/WriteFile.o \
-            src/tools/EditFile.o src/tools/Bash.o src/json.o src/workspace.o
+            src/tools/EditFile.o src/tools/Bash.o src/json.o src/workspace.o \
+            src/util.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lbe
 
-test_workspace: tests/test_workspace.cpp src/workspace.o src/json.o
-	$(CXX) $(CXXFLAGS) -o $@ $^
+test_workspace: tests/test_workspace.cpp src/workspace.o src/json.o src/util.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lbe
 
 test_desktop_script: tests/test_desktop_script.cpp \
                      src/haiku/DesktopTools.o src/tools/Tool.o src/json.o
@@ -204,10 +205,10 @@ test_desktop_script: tests/test_desktop_script.cpp \
 test_image: tests/test_image.cpp src/json.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
-test_schedule: tests/test_schedule.cpp src/schedule.o
-	$(CXX) $(CXXFLAGS) -o $@ $^
+test_schedule: tests/test_schedule.cpp src/schedule.o src/util.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lbe
 
-test_routine: tests/test_routine.cpp src/routine.o
+test_routine: tests/test_routine.cpp src/routine.o src/util.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lbe
 
 test_tracker_addon: tests/test_tracker_addon.cpp build-addon
@@ -216,26 +217,28 @@ test_tracker_addon: tests/test_tracker_addon.cpp build-addon
 test_syntax: tests/test_syntax.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $<
 
-test_oauth: tests/test_oauth.cpp src/oauth.o src/json.o
+test_oauth: tests/test_oauth.cpp src/oauth.o src/json.o src/util.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lcurl -lbe -lcrypto -lnetwork
 
-test_agent_store: tests/test_agent_store.cpp src/agent_store.o
-	$(CXX) $(CXXFLAGS) -o $@ $^
+test_agent_store: tests/test_agent_store.cpp src/agent_store.o src/util.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lbe
 
-test_skills: tests/test_skills.cpp src/config.o src/oauth.o src/rag.o src/json.o
+test_skills: tests/test_skills.cpp src/config.o src/oauth.o src/rag.o src/json.o \
+             src/frontmatter.o src/text_index.o src/util.o src/cancel.o \
+             src/provider/Anthropic.o src/provider/OpenAICompat.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lcurl -lbe -lcrypto -lnetwork
 
 test_markdown: tests/test_markdown.cpp src/markdown.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
-test_rag: tests/test_rag.cpp src/rag.o src/json.o
+test_rag: tests/test_rag.cpp src/rag.o src/json.o src/text_index.o src/util.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lbe
 
 test_history: tests/test_history.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $< -ledit
 
 test_lsp: tests/test_lsp.cpp src/lsp/LspClient.o src/lsp/LspConfig.o src/json.o \
-          src/workspace.o
+          src/workspace.o src/util.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lbe
 
 test_ipc: tests/test_ipc.cpp src/ipc/PlutoMessenger.o
@@ -257,6 +260,7 @@ test_tabs: tests/test_tabs.cpp src/gui/ConversationView.o \
            src/tools/BeapiLookup.o \
            src/haiku/BfsTools.o src/haiku/DesktopTools.o \
            src/config.o src/oauth.o src/rag.o src/workspace.o \
+           src/frontmatter.o src/text_index.o src/util.o \
            src/provider/Anthropic.o src/provider/OpenAICompat.o \
            src/mcp/Client.o src/mcp/Config.o src/mcp/Manager.o \
            src/mcp/Transport.o src/mcp/HttpTransport.o \
