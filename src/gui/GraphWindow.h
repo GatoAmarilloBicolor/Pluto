@@ -33,6 +33,7 @@ private:
 	BButton*      fSearchBtn = nullptr;
 	BButton*      fFitAllBtn = nullptr;
 	BStringView*  fStatsLabel = nullptr;
+	BStringView*  fHintLabel = nullptr;
 	BTextView*    fDetailView = nullptr;
 	BScrollView*  fDetailScroll = nullptr;
 

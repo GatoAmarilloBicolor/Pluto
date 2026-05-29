@@ -229,7 +229,11 @@ void GraphView::_DrawNode(int index, bool selected, bool highlighted)
 {
 	const auto& node = fGraph.Nodes()[index];
 	BPoint center = _GraphToScreen(node.x, node.y);
-	float r = kNodeRadius * fZoom * 0.5f;
+
+	// Scale node radius by connection count — hubs are bigger.
+	int degree = (int)fGraph.EdgesFor(node.id).size();
+	float degreeScale = 1.0f + std::min(degree, 15) * 0.08f;
+	float r = kNodeRadius * fZoom * 0.5f * degreeScale;
 	if (r < 3.0f) r = 3.0f;
 
 	rgb_color fill = _ColorForKind(node.kind);
@@ -273,8 +277,11 @@ void GraphView::_DrawNode(int index, bool selected, bool highlighted)
 	}
 	SetPenSize(1.0f);
 
-	// Label — only when zoomed in enough to read.
-	if (fZoom >= 0.3f) {
+	// Label — show always for selected/highlighted/hubs, otherwise when
+	// zoomed in enough. This ensures important nodes are always labeled.
+	bool showLabel = selected || highlighted || degree >= 4
+	                 || fZoom >= 0.15f;
+	if (showLabel) {
 		BFont font;
 		GetFont(&font);
 		float fontSize = std::max(9.0f, 11.0f * fZoom);

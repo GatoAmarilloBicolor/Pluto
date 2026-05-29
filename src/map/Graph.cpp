@@ -170,11 +170,32 @@ void Graph::ForceDirectedLayout(int iterations, float width, float height)
 	float area = width * height;
 	float k = std::sqrt(area / (float)n) * 1.2f;  // ideal edge length (wider spacing)
 
-	// Initialize with circular layout.
+	// Initialize with directory-clustered layout.
+	// Group nodes by directory and place each cluster in a sector.
+	std::unordered_map<std::string, std::vector<int>> clusters;
 	for (int i = 0; i < n; ++i) {
-		float angle = 2.0f * 3.14159f * i / n;
-		fNodes[i].x = width / 2 + (width * 0.4f) * std::cos(angle);
-		fNodes[i].y = height / 2 + (height * 0.4f) * std::sin(angle);
+		std::string dir;
+		auto slash = fNodes[i].file_path.rfind('/');
+		if (slash != std::string::npos)
+			dir = fNodes[i].file_path.substr(0, slash);
+		else
+			dir = fNodes[i].kind;
+		clusters[dir].push_back(i);
+	}
+	int ci = 0;
+	int numClusters = (int)clusters.size();
+	if (numClusters < 1) numClusters = 1;
+	for (auto& [dir, members] : clusters) {
+		float clusterAngle = 2.0f * 3.14159f * ci / numClusters;
+		float cx2 = width / 2 + (width * 0.3f) * std::cos(clusterAngle);
+		float cy2 = height / 2 + (height * 0.3f) * std::sin(clusterAngle);
+		for (int j = 0; j < (int)members.size(); ++j) {
+			float spread = std::min(width, height) * 0.1f;
+			float a2 = 2.0f * 3.14159f * j / members.size();
+			fNodes[members[j]].x = cx2 + spread * std::cos(a2);
+			fNodes[members[j]].y = cy2 + spread * std::sin(a2);
+		}
+		ci++;
 	}
 
 	// Node index lookup.
@@ -224,6 +245,25 @@ void Graph::ForceDirectedLayout(int iterations, float width, float height)
 			float fy = (ey / dist) * force;
 			dx[s] -= fx;  dy[s] -= fy;
 			dx[t] += fx;  dy[t] += fy;
+		}
+
+		// Cluster cohesion: nodes in the same directory attract each other
+		// gently to maintain grouping.
+		for (auto& [dir, members] : clusters) {
+			if (members.size() < 2) continue;
+			// Compute cluster centroid.
+			float ccx = 0, ccy = 0;
+			for (int m : members) {
+				ccx += fNodes[m].x;
+				ccy += fNodes[m].y;
+			}
+			ccx /= members.size();
+			ccy /= members.size();
+			float cohesion = 0.15f;
+			for (int m : members) {
+				dx[m] += (ccx - fNodes[m].x) * cohesion;
+				dy[m] += (ccy - fNodes[m].y) * cohesion;
+			}
 		}
 
 		// Gravity toward center to prevent disconnected components flying away.

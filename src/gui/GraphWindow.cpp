@@ -37,11 +37,15 @@ GraphWindow::GraphWindow(const map::Graph& graph)
 	fFitAllBtn = new BButton("fitall", "Fit All",
 		new BMessage(kMsgFitAll));
 
-	// Stats label.
+	// Stats and hint labels.
 	char stats[128];
 	snprintf(stats, sizeof(stats), "%zu nodes, %zu edges",
 		graph.Nodes().size(), graph.Edges().size());
 	fStatsLabel = new BStringView("stats", stats);
+
+	fHintLabel = new BStringView("hint",
+		"\xe2\x80\x94  scroll to zoom, drag to pan");
+	fHintLabel->SetHighColor(140, 140, 140, 255);
 
 	// Detail panel.
 	fDetailView = new BTextView("detail");
@@ -65,6 +69,7 @@ GraphWindow::GraphWindow(const map::Graph& graph)
 			.Add(fFitAllBtn, 0)
 			.AddGlue()
 			.Add(fStatsLabel, 0)
+			.Add(fHintLabel, 0)
 		.End()
 		.AddSplit(B_HORIZONTAL, 2, 1.0f)
 			.Add(fGraphView, 3.0f)
