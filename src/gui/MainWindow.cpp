@@ -2112,7 +2112,10 @@ void MainWindow::_UpdateSidePanel(const std::string& title,
 				if (sz > 0 && sz < 20 * 1024 * 1024) {
 					BMallocIO memIO;
 					memIO.SetSize(sz);
-					file.Read(const_cast<void*>(memIO.Buffer()), sz);
+					ssize_t bytesRead = file.Read(
+						const_cast<void*>(memIO.Buffer()), sz);
+					if (bytesRead < sz)
+						memIO.SetSize(bytesRead > 0 ? bytesRead : 0);
 					memIO.Seek(0, SEEK_SET);
 
 					BBitmap* bitmap = nullptr;
