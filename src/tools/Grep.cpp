@@ -1,6 +1,7 @@
 #include "Builtin.h"
 #include "Tool.h"
 #include "../json.h"
+#include "../workspace.h"
 
 #include <array>
 #include <cstdio>
@@ -63,6 +64,14 @@ public:
 		if (pattern.size() > 500) {
 			r.is_error = true;
 			r.output = "pattern too long (max 500 chars)";
+			return r;
+		}
+		// Resolve and validate path against workspace sandbox.
+		char* resolved = realpath(path.c_str(), nullptr);
+		if (resolved) { path = resolved; free(resolved); }
+		if (!WorkspaceAllows(path)) {
+			r.is_error = true;
+			r.output = path + " is outside the workspace";
 			return r;
 		}
 
