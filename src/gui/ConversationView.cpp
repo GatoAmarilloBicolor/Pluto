@@ -1108,10 +1108,11 @@ void ConversationView::MessageReceived(BMessage* msg) {
 			msg->FindBool("error", &is_err);
 			std::string full(out ? out : "");
 			std::string tool = HandleToolResult(full, is_err);
-			if (fDelegate)
+			if (fDelegate) {
 				fDelegate->OnToolOutput(tool, full,
 					in_json ? in_json : "", is_err);
-			fDelegate->OnStatusChanged();
+				fDelegate->OnStatusChanged();
+			}
 			break;
 		}
 
