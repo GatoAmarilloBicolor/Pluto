@@ -1,4 +1,4 @@
-# Pluto 0.6.0
+# Pluto 0.7.0
 
 Ahoy, ciurma di programmatori! Questo qui è **Pluto** — un client AI nativo
 per Haiku, forgiato in C++17, temprato nei fuochi della Be API e varato dal
@@ -374,6 +374,7 @@ fedele sulla spalla.
 /model [ID]          cambia le carte di navigazione
 /cost                conta i dobloni spesi
 /save [titolo]       stiva la sessione nella stiva
+/share [percorso]    esporta la conversazione come Markdown
 /load                recupera una sessione stivata
 /resume              riprendi dall'ultimo porto
 /peers               avvista altre navi Pluto in mare

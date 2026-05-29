@@ -1,4 +1,4 @@
-# Pluto 0.6.0
+# Pluto 0.7.0
 
 Ahoy, ye scurvy coders! This here be **Pluto** — a Haiku-native AI client
 forged in C++17, tempered in the fires of the Be API, and launched from the
@@ -355,6 +355,7 @@ Deskbar shelf — always ready for duty, like a loyal parrot on yer shoulder.
 /model [ID]          switch yer navigation charts
 /cost                count the doubloons spent
 /save [title]        stash the session in the hold
+/share [path]        export conversation as Markdown
 /load                retrieve a stashed session
 /resume              pick up where ye left off
 /peers               spot other Pluto vessels on the sea

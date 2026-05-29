@@ -1,5 +1,53 @@
 # Pluto changelog
 
+## 0.7.0 — 2026-05-30
+
+### Added
+
+- **Welcome wizard (CLI + GUI)** — first-run setup with "Quick start"
+  section: Ollama (zero signup, offline) and OpenRouter (one signup,
+  many free models) at the top. CLI shows all 15+ providers dynamically
+  from .conf files. GUI shows a 3-button dialog (OpenRouter, Ollama,
+  Preferences).
+- **`/share` command** — export the current conversation as a Markdown
+  file. `/share` auto-generates a filename from the session title;
+  `/share path.md` writes to a specific file. Includes metadata header,
+  user/assistant messages, and tool call blocks.
+- **Together AI and Hugging Face providers** — added as bundled provider
+  profiles (data/providers/14-together.conf, 15-huggingface.conf).
+- **Base system prompt** — the model now knows it is Pluto, has access
+  to tools, and knows the current workspace path.
+
+### Fixed
+
+- **GUI blank window on startup** — fixed race condition in
+  `_RestoreWorkspace` that skipped tab creation for single-tab
+  workspaces, leaving the window empty.
+- **Provider switch not applied for keyless providers** — fixed
+  `api_key_env` guard that prevented switching to Ollama/LM Studio
+  from Preferences.
+- **Thinking spinner flicker** — spinner now updates text in-place
+  via `Replace()` instead of removing and re-adding the paragraph.
+- **Path traversal in WorkspaceAllows** — fast path now rejects paths
+  containing `..` even if they match the workspace prefix.
+- **HTTP 400 with free models** — removed blanket tool blacklist for
+  `:free` models; provider now auto-retries without tools on 400.
+- **Provider .conf not found from GUI** — resolve data/providers path
+  relative to executable, not working directory.
+- **Test suite link errors** — fixed missing dependencies in 7 test
+  targets after code cleanup.
+- **test_session crash** — skip BQuery in test mode (requires
+  BApplication context).
+- **test_markdown/test_rag naming** — updated to UpperCamelCase API.
+
+### Changed
+
+- **`make` builds all three binaries** — default target changed from
+  `Pluto_cli` to `all` (CLI + GUI + Tracker add-on).
+- **OpenRouter config updated** — removed dead gemma-3-27b-it:free,
+  added gemma-4-31b and qwen3-72b free models.
+- **Groq config updated** — added qwen-qwq-32b model.
+
 ## 0.6.0 — 2026-05-02
 
 ### Added
