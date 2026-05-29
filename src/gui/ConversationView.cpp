@@ -783,7 +783,6 @@ void ConversationView::HandleToolStart(const std::string& name,
 	fCurrentTool = name;
 
 	ToolBlock block;
-	block.header_offset = 0;  // legacy, paragraph-based tracking used instead
 	block.collapsed = false;
 	block.is_error = false;
 
@@ -817,10 +816,6 @@ void ConversationView::HandleToolStart(const std::string& name,
 	}
 	_Append("\n", kColToolRole);
 
-	block.header_len = 0;
-	block.body_offset = 0;
-	block.body_len = 0;
-
 	// Record header paragraph count.
 	if (fTextDoc.IsSet() && block.header_para >= 0)
 		block.header_para_count = fTextDoc->CountParagraphs() - block.header_para;
@@ -842,7 +837,6 @@ std::string ConversationView::HandleToolResult(const std::string& output,
 
 	if (auto* b_ptr = fToolBlocks.at(fPendingTool)) {
 		auto& b = *b_ptr;
-		b.body_offset = 0;
 		b.body_text = display;
 		b.is_error = is_error;
 
@@ -850,7 +844,6 @@ std::string ConversationView::HandleToolResult(const std::string& output,
 		b.body_para = fTextDoc.IsSet() ? fTextDoc->CountParagraphs() : -1;
 
 		_Append(display, is_error ? kColErr : kColToolBody, 0, true);
-		b.body_len = (int32)display.size();
 
 		// Record body paragraph count.
 		if (fTextDoc.IsSet() && b.body_para >= 0)

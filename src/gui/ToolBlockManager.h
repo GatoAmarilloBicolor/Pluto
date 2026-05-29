@@ -6,17 +6,10 @@
 
 #include "textview/TextDocument.h"
 
-class BTextView;
-
 namespace pluto {
 namespace gui {
 
 struct ToolBlock {
-	// Legacy BTextView offsets (kept for backward compat with tests).
-	int32_t     header_offset = 0;
-	int32_t     header_len    = 0;
-	int32_t     body_offset   = 0;
-	int32_t     body_len      = 0;
 	std::string body_text;
 	bool        is_error      = false;
 	bool        collapsed     = false;
@@ -31,8 +24,7 @@ struct ToolBlock {
 	std::vector<Paragraph> saved_body;
 };
 
-// Manages a list of collapsible ToolBlocks.
-// Supports both BTextView (legacy) and TextDocument (new) modes.
+// Manages a list of collapsible ToolBlocks using TextDocument paragraphs.
 class ToolBlockManager {
 public:
 	void clear() { fBlocks.clear(); }
@@ -44,16 +36,6 @@ public:
 	// Access a block by index (nullptr if out of range).
 	ToolBlock*       at(int idx);
 	const ToolBlock* at(int idx) const;
-
-	// --- Legacy BTextView mode ---
-	using ArrowFn = void(*)(BTextView* tv, int32_t offset,
-	                        const char* arrow, void* ctx);
-	void collapse(int idx, BTextView* tv, ArrowFn fn, void* ctx);
-	void expand(int idx, BTextView* tv, ArrowFn fn, void* ctx);
-	void toggle(int idx, BTextView* tv, ArrowFn fn, void* ctx);
-	int hit_test(int32_t offset) const;
-
-	// --- TextDocument paragraph mode ---
 
 	// Collapse: remove body paragraphs from the document, save them.
 	// Updates the arrow glyph in the header paragraph.

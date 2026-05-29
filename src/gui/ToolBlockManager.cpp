@@ -1,7 +1,5 @@
 #include "ToolBlockManager.h"
 
-#include <TextView.h>
-
 namespace pluto {
 namespace gui {
 
@@ -19,76 +17,6 @@ const ToolBlock* ToolBlockManager::at(int idx) const {
 	if (idx < 0 || (size_t)idx >= fBlocks.size()) return nullptr;
 	return &fBlocks[idx];
 }
-
-// --- Legacy BTextView mode ---
-
-void ToolBlockManager::collapse(int idx, BTextView* tv,
-                                ArrowFn fn, void* ctx) {
-	if (idx < 0 || (size_t)idx >= fBlocks.size()) return;
-	auto& b = fBlocks[idx];
-	if (b.collapsed) return;
-
-	if (b.body_len > 0) {
-		int32_t body_end = b.body_offset + b.body_len;
-		int32_t deleted = b.body_len;
-		tv->Delete(b.body_offset, body_end);
-
-		for (size_t i = 0; i < fBlocks.size(); ++i) {
-			if ((int)i == idx) continue;
-			auto& o = fBlocks[i];
-			if (o.header_offset >= body_end) o.header_offset -= deleted;
-			if (o.body_offset   >= body_end) o.body_offset   -= deleted;
-		}
-		b.body_len = 0;
-	}
-
-	if (fn) fn(tv, b.header_offset + 1, "\xE2\x96\xB8", ctx);  // ▸
-	b.collapsed = true;
-}
-
-void ToolBlockManager::expand(int idx, BTextView* tv,
-                              ArrowFn fn, void* ctx) {
-	if (idx < 0 || (size_t)idx >= fBlocks.size()) return;
-	auto& b = fBlocks[idx];
-	if (!b.collapsed) return;
-
-	int32_t ins_pos = b.body_offset;
-	int32_t ins_len = (int32_t)b.body_text.size();
-	if (ins_len > 0) {
-		tv->Insert(ins_pos, b.body_text.data(), ins_len);
-
-		for (size_t i = 0; i < fBlocks.size(); ++i) {
-			if ((int)i == idx) continue;
-			auto& o = fBlocks[i];
-			if (o.header_offset >= ins_pos) o.header_offset += ins_len;
-			if (o.body_offset   >= ins_pos) o.body_offset   += ins_len;
-		}
-		b.body_len = ins_len;
-	}
-
-	if (fn) fn(tv, b.header_offset + 1, "\xE2\x96\xBE", ctx);  // ▾
-	b.collapsed = false;
-}
-
-void ToolBlockManager::toggle(int idx, BTextView* tv,
-                              ArrowFn fn, void* ctx) {
-	if (idx < 0 || (size_t)idx >= fBlocks.size()) return;
-	if (fBlocks[idx].collapsed) expand(idx, tv, fn, ctx);
-	else                        collapse(idx, tv, fn, ctx);
-}
-
-int ToolBlockManager::hit_test(int32_t offset) const {
-	for (size_t i = 0; i < fBlocks.size(); ++i) {
-		const auto& b = fBlocks[i];
-		if (offset >= b.header_offset
-		    && offset < b.header_offset + b.header_len) {
-			return (int)i;
-		}
-	}
-	return -1;
-}
-
-// --- TextDocument paragraph mode ---
 
 void ToolBlockManager::_AdjustParaIndices(int skip_idx, int32 from_para,
                                            int32 delta) {

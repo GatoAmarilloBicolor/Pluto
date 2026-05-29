@@ -1,7 +1,7 @@
 #pragma once
 // ConversationView — per-conversation BView for the multi-tab refactor.
 //
-// Owns:  fOutput (chat text), fMessages, fToolBlocks, fStreamingMd,
+// Owns:  fDocView (chat text), fMessages, fToolBlocks, fStreamingMd,
 //        fWorker (agent thread), token counters, session metadata.
 // Does NOT own: input field, side panel, menus, provider, config, tools.
 //
@@ -29,8 +29,6 @@
 
 class BMessageRunner;
 class BScrollView;
-class BTextView;
-
 namespace pluto {
 
 class McpClient;
