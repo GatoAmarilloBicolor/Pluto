@@ -24,6 +24,17 @@ namespace {
 std::string g_WorkspaceRoot;
 bool g_session_trusted = false;
 
+// Shell-safe quoting: wraps in single quotes, escapes embedded quotes.
+std::string shq(const std::string& s) {
+	std::string out = "'";
+	for (char c : s) {
+		if (c == '\'') out += "'\\''";
+		else out += c;
+	}
+	out += "'";
+	return out;
+}
+
 // Empty means "use default". Non-empty means override (for tests).
 std::string g_trusted_file_override;
 std::string g_log_file_override;
@@ -294,7 +305,7 @@ ProjectInfo DetectProject(const std::string& root) {
 
 	// Detect git remote.
 	{
-		std::string cmd = "cd '" + root + "' && git remote get-url origin 2>/dev/null";
+		std::string cmd = "cd " + shq(root) + " && git remote get-url origin 2>/dev/null";
 		FILE* p = popen(cmd.c_str(), "r");
 		if (p) {
 			char buf[512];
