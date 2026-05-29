@@ -110,21 +110,21 @@ void bench_json_serialize() {
 // ---------- RAG benchmarks ----------
 
 void bench_rag_search() {
-	std::string idx = pluto::rag_default_path();
+	std::string idx = pluto::RagDefaultPath();
 	if (idx.empty()) {
 		std::printf("  [skip] RAG index not found\n");
 		return;
 	}
-	pluto::rag_init(idx);
-	int count = pluto::rag_entry_count();
+	pluto::RagInit(idx);
+	int count = pluto::RagEntryCount();
 
 	BENCH("rag search (390 entries)", 10000, {
-		auto r = pluto::rag_search("BWindow BView layout", 3);
+		auto r = pluto::RagSearch("BWindow BView layout", 3);
 		(void)r;
 	});
 
 	BENCH("rag extract_classes", 50000, {
-		auto c = pluto::rag_extract_classes(
+		auto c = pluto::RagExtractClasses(
 			"Create a BWindow with a BView child and use BLayoutBuilder");
 		(void)c;
 	});
@@ -225,9 +225,9 @@ void bench_markdown_render() {
 	BENCH("markdown terminal render", 10000, {
 		pluto::TerminalMarkdown tm;
 		for (size_t i = 0; i < md.size(); ++i) {
-			tm.feed(md.substr(i, 1));
+			tm.Feed(md.substr(i, 1));
 		}
-		tm.flush();
+		tm.Flush();
 	});
 }
 
@@ -239,8 +239,8 @@ void bench_markdown_render_bulk() {
 
 	BENCH("markdown bulk feed (per-line)", 50000, {
 		pluto::TerminalMarkdown tm;
-		tm.feed(md);
-		tm.flush();
+		tm.Feed(md);
+		tm.Flush();
 	});
 }
 
