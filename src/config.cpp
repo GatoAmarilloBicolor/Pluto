@@ -17,9 +17,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <set>
 #include <sstream>
 #include <string>
 
@@ -583,9 +585,10 @@ std::string read_file_to_string(const std::string& path) {
 }
 
 // Append a single file to cfg.system_prompt wrapped in a tag.
-void append_doc(Config& cfg, const std::string& path, const char* tag) {
+// Returns true if anything was appended.
+bool append_doc(Config& cfg, const std::string& path, const char* tag) {
 	std::string body = read_file_to_string(path);
-	if (body.empty()) return;
+	if (body.empty()) return false;
 	if (!cfg.system_prompt.empty()) cfg.system_prompt += "\n\n";
 	cfg.system_prompt += "<";
 	cfg.system_prompt += tag;
@@ -596,6 +599,29 @@ void append_doc(Config& cfg, const std::string& path, const char* tag) {
 	cfg.system_prompt += "\n</";
 	cfg.system_prompt += tag;
 	cfg.system_prompt += ">";
+	return true;
+}
+
+// Canonicalize a path via BPath. Falls back to the input if normalization
+// fails (e.g. non-existent path).
+std::string canon(const std::string& raw) {
+	if (raw.empty()) return raw;
+	BPath p;
+	if (p.SetTo(raw.c_str(), nullptr, true) == B_OK) return p.Path();
+	return raw;
+}
+
+// At a given directory, return the absolute path of the first memory file
+// that exists: pluto.md → AGENTS.md → CLAUDE.md. Empty string if none.
+std::string find_memory_file(const std::string& dir) {
+	static const char* kNames[] = { "pluto.md", "AGENTS.md", "CLAUDE.md" };
+	struct stat st;
+	for (const char* name : kNames) {
+		std::string path = dir + "/" + name;
+		if (::stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode))
+			return path;
+	}
+	return {};
 }
 
 }  // namespace
@@ -603,9 +629,12 @@ void append_doc(Config& cfg, const std::string& path, const char* tag) {
 void ApplyProjectMemory(Config& cfg) {
 	// Prepend a base system prompt if the user hasn't set a custom one.
 	// This tells the model about its capabilities and workspace.
+	char cwd_buf[PATH_MAX] = {};
+	::getcwd(cwd_buf, sizeof(cwd_buf));
+	std::string cwd = canon(cwd_buf);
+	std::string home = canon(home_dir());
+
 	if (cfg.system_prompt.empty()) {
-		char cwd[PATH_MAX] = {};
-		::getcwd(cwd, sizeof(cwd));
 		cfg.system_prompt =
 			"You are Pluto, a Haiku-native AI coding assistant. "
 			"You have access to tools that let you read, write, edit, "
@@ -613,12 +642,43 @@ void ApplyProjectMemory(Config& cfg) {
 			"and query the file system. Use these tools proactively to "
 			"answer questions about the project — do not ask the user to "
 			"provide files you can read yourself.\n\n"
-			"Current workspace: " + std::string(cwd);
+			"Current workspace: " + cwd;
 	}
 
-	append_doc(cfg, home_dir() + "/config/settings/pluto/pluto.md",
-		"user_memory");
-	append_doc(cfg, "./pluto.md", "project_memory");
+	// Global user memory — always loaded first, highest in conversation
+	// context order so per-project files can override.
+	std::string user_mem = home_dir() + "/config/settings/pluto/pluto.md";
+	std::set<std::string> seen;
+	if (append_doc(cfg, user_mem, "user_memory"))
+		seen.insert(canon(user_mem));
+
+	// Walk parent directories from $HOME (or "/") down to cwd, collecting
+	// memory files. Outermost-first so cwd-level memory appears last and
+	// has the strongest claim on the model's attention. Matches Pi/Codex
+	// AGENTS.md conventions: pluto.md → AGENTS.md → CLAUDE.md per level.
+	std::vector<std::string> chain;
+	{
+		std::string base = (cwd.rfind(home, 0) == 0) ? home : std::string("/");
+		if (base.empty()) base = "/";
+		std::string cur = cwd;
+		while (true) {
+			chain.push_back(cur);
+			if (cur == base || cur == "/" || cur.empty()) break;
+			size_t slash = cur.rfind('/');
+			if (slash == std::string::npos) break;
+			cur = (slash == 0) ? std::string("/") : cur.substr(0, slash);
+			if (chain.size() > 64) break;  // sanity cap
+		}
+	}
+	std::reverse(chain.begin(), chain.end());
+
+	for (const auto& dir : chain) {
+		std::string path = find_memory_file(dir);
+		if (path.empty()) continue;
+		std::string c = canon(path);
+		if (!seen.insert(c).second) continue;
+		append_doc(cfg, path, "project_memory");
+	}
 }
 
 // Parse optional YAML-ish frontmatter from a skill file.

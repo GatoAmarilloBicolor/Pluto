@@ -149,11 +149,17 @@ std::string ResolveProviderKey(const std::string& env_name);
 bool SaveApiKey(const std::string& key);
 bool SaveApiKey(const std::string& key, const std::string& env_name);
 
-// Append project-memory files to cfg.system_prompt:
-//   ~/config/settings/pluto/pluto.md   (user memory, always)
-//   ./pluto.md                         (project memory, if cwd is a project)
-// Each file is wrapped in a <user_memory> / <project_memory> tag so the
-// model can tell them apart. Equivalent to Claude Code's CLAUDE.md.
+// Append project-memory files to cfg.system_prompt.
+//
+// Loaded in this order (outer first, so cwd has the strongest claim on
+// the model's attention):
+//   ~/config/settings/pluto/pluto.md             (user memory, always)
+//   For every directory from $HOME (or /) down to cwd:
+//     first match of pluto.md → AGENTS.md → CLAUDE.md
+//
+// Each file is wrapped in <user_memory> / <project_memory source="…">
+// so the model can tell them apart. AGENTS.md and CLAUDE.md fallbacks
+// let Pluto pick up context written for Codex/Claude Code.
 void ApplyProjectMemory(Config& cfg);
 
 // Scan ~/config/settings/pluto/skills/<name>/SKILL.md and process skills:

@@ -16,6 +16,9 @@
 #include "map/Scanner.h"
 #include "map/BfsAttrs.h"
 
+#include <Clipboard.h>
+#include <Message.h>
+
 #include <curl/curl.h>
 #include <dirent.h>
 #include <histedit.h>
@@ -69,9 +72,9 @@ HistEvent  g_hev;
 
 // Slash command completion for Tab key.
 static const char* kSlashCommands[] = {
-	"/ask", "/commands", "/context", "/cost", "/delegate",
-	"/delete", "/events", "/map", "/help", "/init", "/list", "/load",
-	"/mode", "/model", "/models", "/modes",
+	"/ask", "/commands", "/context", "/copy", "/cost", "/delegate",
+	"/delete", "/events", "/help", "/hotkeys", "/init", "/list", "/load",
+	"/map", "/mode", "/model", "/models", "/modes",
 	"/peers", "/plan", "/quit", "/reset", "/resume",
 	"/routine", "/routines", "/save", "/share", "/tag", "/title",
 	"/tools", "/untag", "/unwatch", "/watch",
@@ -569,6 +572,8 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 			std::printf("  /model ID            switch model for subsequent turns\n");
 			std::printf("  /models [URL]        list models on Ollama/OpenAI server\n");
 			std::printf("  /cost                show session token totals\n");
+			std::printf("  /copy                copy last assistant reply to clipboard\n");
+			std::printf("  /hotkeys             list REPL key bindings\n");
 			std::printf("  /save [title]        save session to BFS store\n");
 			std::printf("  /share [path]        export conversation as Markdown file\n");
 			std::printf("  /load <query>        load a session by title or index\n");
@@ -1126,6 +1131,49 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 			std::printf("  output: %lld tokens\n", session_output_tokens);
 			std::printf("  total:  %lld tokens\n",
 				session_input_tokens + session_output_tokens);
+			continue;
+		}
+		if (line == "/copy") {
+			// Find the last assistant message and concatenate its TEXT blocks.
+			std::string text;
+			for (auto it = messages.rbegin(); it != messages.rend(); ++it) {
+				if (it->role != "assistant") continue;
+				for (const auto& b : it->content)
+					if (b.type == ContentBlock::TEXT) text += b.text;
+				break;
+			}
+			if (text.empty()) {
+				std::printf("%s(nothing to copy)%s\n", kDim, kReset);
+				continue;
+			}
+			BClipboard clipboard("system");
+			if (!clipboard.Lock()) {
+				std::printf("%s[copy] cannot lock clipboard%s\n", kRed, kReset);
+				continue;
+			}
+			clipboard.Clear();
+			BMessage* data = clipboard.Data();
+			if (data) {
+				data->AddData("text/plain", B_MIME_TYPE,
+					text.data(), text.size());
+				clipboard.Commit();
+			}
+			clipboard.Unlock();
+			std::printf("%s  copied %zu bytes to clipboard%s\n",
+				kDim, text.size(), kReset);
+			continue;
+		}
+		if (line == "/hotkeys") {
+			std::printf("REPL key bindings:\n");
+			std::printf("  Tab                  complete /slash command or @path\n");
+			std::printf("  Up / Down            history previous / next\n");
+			std::printf("  Ctrl+R               reverse-search history\n");
+			std::printf("  Ctrl+A / Ctrl+E      jump to start / end of line\n");
+			std::printf("  Ctrl+W               delete word backward\n");
+			std::printf("  Ctrl+U               clear line\n");
+			std::printf("  Ctrl+L               clear screen\n");
+			std::printf("  Ctrl+C               cancel mid-stream / abort input\n");
+			std::printf("  Ctrl+D               EOF (exits on empty line)\n");
 			continue;
 		}
 		if (line.rfind("/models", 0) == 0 && (line.size() == 7 || line[7] == ' ')) {

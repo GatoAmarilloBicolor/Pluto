@@ -3,6 +3,8 @@
 
 #include "MainWindow.h"
 
+#include <Clipboard.h>
+#include <Message.h>
 #include <StringView.h>
 #include <image.h>
 
@@ -71,6 +73,62 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			tIn, tOut, tIn + tOut,
 			ac->EstimateCost());
 		_Append(info.String(), kColDim);
+		return true;
+	}
+
+	if (text == "/copy") {
+		auto* ac = _ActiveConv();
+		if (!ac) return true;
+		const auto& msgs = ac->Messages();
+		std::string body;
+		for (auto it = msgs.rbegin(); it != msgs.rend(); ++it) {
+			if (it->role != "assistant") continue;
+			for (const auto& b : it->content)
+				if (b.type == ContentBlock::TEXT) body += b.text;
+			break;
+		}
+		if (body.empty()) {
+			_Append("(nothing to copy)\n\n", kColDim);
+			return true;
+		}
+		BClipboard clipboard("system");
+		if (!clipboard.Lock()) {
+			_Append("[copy] cannot lock clipboard\n\n", kColDim);
+			return true;
+		}
+		clipboard.Clear();
+		BMessage* data = clipboard.Data();
+		if (data) {
+			data->AddData("text/plain", B_MIME_TYPE,
+				body.data(), body.size());
+			clipboard.Commit();
+		}
+		clipboard.Unlock();
+		BString info;
+		info.SetToFormat("copied %zu bytes to clipboard\n\n", body.size());
+		_Append(info.String(), kColDim);
+		return true;
+	}
+
+	if (text == "/hotkeys") {
+		_Append(
+			"Keyboard shortcuts:\n"
+			"  Cmd+N              new conversation\n"
+			"  Cmd+T              new tab\n"
+			"  Cmd+W              close tab\n"
+			"  Cmd+Left / Right   previous / next tab\n"
+			"  Cmd+S              save session\n"
+			"  Cmd+R              resume last session\n"
+			"  Cmd+B              session browser\n"
+			"  Cmd+F              find in conversation\n"
+			"  Cmd+,              preferences\n"
+			"  Cmd+= / -          zoom in / out\n"
+			"  Cmd+0              reset zoom\n"
+			"  Cmd+Q              quit\n"
+			"  Enter              send message\n"
+			"  Shift+Enter        newline in input\n"
+			"  Escape             cancel mid-stream\n\n",
+			kColDim);
 		return true;
 	}
 
@@ -636,6 +694,8 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			"  /tools             list registered tools\n"
 			"  /model [ID]        show or switch model\n"
 			"  /cost              show session token totals\n"
+			"  /copy              copy last assistant reply to clipboard\n"
+			"  /hotkeys           list keyboard shortcuts\n"
 			"  /init [--force]    create pluto.md project memory\n"
 			"  /wiki [url|file]   show wiki or ingest content\n"
 			"  /map               scan workspace and show knowledge graph\n"
