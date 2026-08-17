@@ -9,7 +9,6 @@
 
 #include <Directory.h>
 #include <Entry.h>
-#include <FindDirectory.h>
 #include <Path.h>
 #include <image.h>
 
@@ -37,18 +36,10 @@ std::string trim(const std::string& s) {
 }
 
 std::string home_dir() {
-	BPath path;
-	if (find_directory(B_USER_DIRECTORY, &path) == B_OK)
-		return path.Path();
 	return HomeDir();
 }
 
 std::string settings_dir() {
-	BPath path;
-	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) == B_OK) {
-		path.Append("pluto");
-		return path.Path();
-	}
 	return home_dir() + "/config/settings/pluto";
 }
 

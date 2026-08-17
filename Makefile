@@ -3,7 +3,7 @@ CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -Isrc -I/boot/system/develop/headers/pri
 LDLIBS   = -lcurl -lbe -lcrypto -lnetwork -ledit
 
 PKG_NAME    = pluto
-PKG_VERSION = 0.6.0
+PKG_VERSION = 0.7.0
 PKG_ARCH    = x86_64
 
 CORE_SRCS = src/lsp/LspClient.cpp \
@@ -293,17 +293,22 @@ ci: clean Pluto_cli Pluto check
 
 # --- Packaging ---
 
-package: Pluto_cli Pluto
+package: Pluto_cli Pluto build-addon
 	rm -rf pkgroot
 	mkdir -p pkgroot/apps pkgroot/bin \
+	         pkgroot/add-ons/Tracker \
 	         pkgroot/documentation/man/man1 \
-	         pkgroot/documentation/packages/$(PKG_NAME)
+	         pkgroot/documentation/packages/$(PKG_NAME)/examples
 	cp Pluto_cli  pkgroot/bin/Pluto_cli
 	cp Pluto      pkgroot/apps/Pluto
 	cp pluto.hvif pkgroot/apps/Pluto.hvif
+	cp '$(TRACKER_ADDON)' 'pkgroot/add-ons/Tracker/$(TRACKER_ADDON)'
 	cp docs/pluto.1 pkgroot/documentation/man/man1/pluto.1
-	cp README.md docs/architecture.md docs/user-guide.md CHANGELOG.md \
+	cp README.md CHANGELOG.md docs/architecture.md docs/user-guide.md \
+	   docs/mcp-tutorial.md docs/bquery-cookbook.md \
 	   pkgroot/documentation/packages/$(PKG_NAME)/
+	cp -r examples/agents examples/routines examples/providers \
+	   pkgroot/documentation/packages/$(PKG_NAME)/examples/
 	mkdir -p pkgroot/data/pluto/providers
 	cp data/beapi-index.jsonl pkgroot/data/pluto/
 	cp data/providers/*.conf pkgroot/data/pluto/providers/

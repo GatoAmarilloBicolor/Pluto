@@ -1,5 +1,5 @@
 name             pluto
-version          0.6.0-1
+version          0.7.0-1
 architecture     x86_64
 summary          "Haiku-native AI client (CLI + GUI + Tracker add-on)"
 description      "Pluto is a native Haiku AI client written in C++17 against
@@ -18,9 +18,9 @@ copyrights {
 	"2026 atomozero"
 }
 provides {
-	pluto = 0.6.0
-	cmd:Pluto_cli   = 0.6.0
-	app:Pluto       = 0.6.0
+	pluto = 0.7.0
+	cmd:Pluto_cli   = 0.7.0
+	app:Pluto       = 0.7.0
 }
 requires {
 	haiku >= r1~beta5
