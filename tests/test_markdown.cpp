@@ -141,6 +141,49 @@ int main() {
 		assert(strip_ansi(out) == "normal text\n");
 	}
 
+	// --- Test 14: strikethrough ---
+	{
+		TerminalMarkdown md;
+		std::string out = md.Feed("this is ~~gone~~ text\n");
+		assert(strip_ansi(out) == "this is gone text\n");
+		assert(has_ansi(out, "\x1b[9m"));   // strikethrough on
+		assert(has_ansi(out, "\x1b[29m"));  // strikethrough off
+	}
+
+	// --- Test 15: link ---
+	{
+		TerminalMarkdown md;
+		std::string out = md.Feed("see [docs](http://example.com) now\n");
+		std::string plain = strip_ansi(out);
+		assert(plain.find("docs") != std::string::npos);
+		assert(plain.find("http://example.com") != std::string::npos);
+		assert(has_ansi(out, "\x1b[4m"));  // underline
+	}
+
+	// --- Test 16: table ---
+	{
+		TerminalMarkdown md;
+		std::string out = md.Feed(
+			"| Col A | Col B |\n"
+			"|-------|-------|\n"
+			"| 1     | 2     |\n"
+			"\n");
+		std::string plain = strip_ansi(out);
+		assert(plain.find("Col A") != std::string::npos);
+		assert(plain.find("Col B") != std::string::npos);
+		assert(plain.find("\xe2\x94\x8c") != std::string::npos);  // ┌ top border
+		assert(plain.find("\xe2\x94\xbc") != std::string::npos);  // ┼ header/body cross
+	}
+
+	// --- Test 17: pipe line without a separator row is not a table ---
+	{
+		TerminalMarkdown md;
+		std::string out = md.Feed("cmd | grep foo\nnext line\n");
+		std::string plain = strip_ansi(out);
+		assert(plain.find("cmd | grep foo") != std::string::npos);
+		assert(plain.find("\xe2\x94\x8c") == std::string::npos);  // no table border
+	}
+
 	std::printf("all markdown tests passed\n");
 	return 0;
 }
