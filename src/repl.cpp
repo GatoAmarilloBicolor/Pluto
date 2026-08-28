@@ -58,10 +58,17 @@ std::string history_path() {
 	return dir + "/history";
 }
 
-// Prompt callback required by editline.
+// Prompt callback required by editline. The color escape is bracketed
+// with '\1' (paired with EL_PROMPT_ESC below) so libedit knows it's
+// zero-width and passes it through, instead of stripping the
+// unprintable ESC byte while leaving the rest of the sequence
+// ("[36m") behind as literal text. This Haiku libedit build only
+// honors a single such escape zone per prompt (a second \1..\1 pair
+// is silently dropped), so the trailing reset is sent explicitly
+// after read_line() returns rather than from here.
 const char* el_prompt_cb(EditLine* /*el*/) {
 	static std::string prompt_str;
-	prompt_str = std::string(kCyan) + "> " + kReset;
+	prompt_str = "\1" + std::string(kCyan) + "\1> ";
 	return prompt_str.c_str();
 }
 
@@ -135,6 +142,8 @@ bool read_line(std::string& out) {
 	if (g_el) {
 		int count = 0;
 		const char* line = el_gets(g_el, &count);
+		std::printf("%s", kReset);  // undo the prompt's cyan for anything printed next
+		std::fflush(stdout);
 		if (!line || count <= 0) return false;
 		out.assign(line, count);
 		while (!out.empty() && (out.back() == '\n' || out.back() == '\r'))
@@ -416,7 +425,7 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 	}
 	g_el = el_init("pluto", stdin, stdout, stderr);
 	if (g_el) {
-		el_set(g_el, EL_PROMPT, el_prompt_cb);
+		el_set(g_el, EL_PROMPT_ESC, el_prompt_cb, '\1');
 		el_set(g_el, EL_EDITOR, "emacs");   // emacs keybindings (Ctrl-A/E/K/W)
 		if (g_hist) el_set(g_el, EL_HIST, history, g_hist);
 		el_set(g_el, EL_SIGNAL, 1);         // handle window resize
