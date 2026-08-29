@@ -1,5 +1,26 @@
 # Pluto changelog
 
+## 0.7.1 — 2026-08-29
+
+### Added
+
+- **CLI markdown tables, links, strikethrough** — the terminal renderer
+  now draws pipe tables as aligned box-drawing tables, renders
+  `[text](url)` links (underlined text + dimmed URL), and
+  `~~strikethrough~~`. Nested list items get depth-varied bullets
+  (•, ◦, ▪).
+
+### Fixed
+
+- **`settings_dir()` ignored `$HOME`** — `config.cpp` and
+  `agent_store.cpp` resolved settings via `find_directory()` instead of
+  respecting `$HOME` like the rest of the codebase, which broke test
+  sandboxing and could silently write to the wrong user's settings
+  directory.
+- **CLI prompt showed raw `[36m> [0m` instead of a colored prompt** —
+  this Haiku libedit build strips the unprintable ESC byte from prompt
+  strings that aren't marked as zero-width via `EL_PROMPT_ESC`.
+
 ## 0.7.0 — 2026-05-30
 
 ### Added

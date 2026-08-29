@@ -3,7 +3,7 @@ CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -Isrc -I/boot/system/develop/headers/pri
 LDLIBS   = -lcurl -lbe -lcrypto -lnetwork -ledit
 
 PKG_NAME    = pluto
-PKG_VERSION = 0.7.0
+PKG_VERSION = 0.7.1
 PKG_ARCH    = x86_64
 
 CORE_SRCS = src/lsp/LspClient.cpp \
