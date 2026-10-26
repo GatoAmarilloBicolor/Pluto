@@ -6,6 +6,7 @@
 #include <Clipboard.h>
 #include <Message.h>
 #include <StringView.h>
+#include <TextView.h>
 #include <image.h>
 
 #include <ctime>
@@ -424,7 +425,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 
 		// Send as a user message to the active conversation.
 		_ActiveConv()->AppendText("You\n", ui_color(B_CONTROL_TEXT_COLOR), B_BOLD_FACE);
-		_Append("/init — AI project analysis\n\n", kColUserBody);
+		_Append("/init — AI project analysis\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 
 		std::vector<ContentBlock> blocks;
 		ContentBlock tb;
@@ -478,7 +479,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		}
 		std::string err;
 		if (!pluto::SessionStore::add_tag(_ActiveConv()->GetSessionPath(), tag, err))
-			_Append("[tag] " + err + "\n\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+			_Append("[tag] " + err + "\n\n", rgb_color{245, 101, 101, 255});
 		else
 			_Append("Tagged: " + tag + "\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		return true;
@@ -494,7 +495,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		if (tag.empty()) return true;
 		std::string err;
 		if (!pluto::SessionStore::remove_tag(_ActiveConv()->GetSessionPath(), tag, err))
-			_Append("[untag] " + err + "\n\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+			_Append("[untag] " + err + "\n\n", rgb_color{245, 101, 101, 255});
 		else
 			_Append("Untagged: " + tag + "\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		return true;
@@ -688,7 +689,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 				out += "\n";
 			}
 			out += "\n";
-			_Append(out, kColAsstBody);
+			_Append(out, ui_color(B_DOCUMENT_TEXT_COLOR));
 		} else {
 			// /map query ... or /map view — pass as user message for LLM
 			auto graph = map::Graph::LoadFromFile(graph_path);

@@ -80,3 +80,33 @@ PipeGuard::close()
 
 
 } // namespace pluto
+
+// Execute a hook command safely using fork/exec (no shell injection).
+// Sets the given environment variable in the child process before exec.
+// Returns the exit code, or -1 on fork failure.
+int RunHookSafe(const char* cmd, const char* env_name, const std::string& env_value) {
+	pid_t pid = fork();
+	if (pid < 0) return -1;
+	if (pid == 0) {
+		// Child: set env var safely, then exec hook via /bin/sh.
+		::setenv(env_name, env_value.c_str(), 1);
+		::execl("/bin/sh", "sh", "-c", cmd, nullptr);
+		::_exit(127);
+	}
+	int status = 0;
+	::waitpid(pid, &status, 0);
+	return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+// Execute multiple hook commands safely.
+void RunHooksSafe(const std::vector<std::string>& hooks, const char* phase, const std::string& env_value) {
+	for (const auto& cmd : hooks) {
+		if (cmd.empty()) continue;
+		std::fprintf(stderr, "[hook %s] %s\n", phase, cmd.c_str());
+		int rc = RunHookSafe(cmd.c_str(), "PLUTO_PROMPT", env_value);
+		if (rc != 0)
+			std::fprintf(stderr, "[hook %s] exit %d\n", phase, rc);
+	}
+}
+
+} // namespace pluto

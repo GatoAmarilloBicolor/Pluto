@@ -143,7 +143,7 @@ void MainWindow::_ExportMarkdown() {
 
 	std::ofstream f(path, std::ios::trunc);
 	if (!f) {
-		_Append("Export failed: cannot write " + path + "\n\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+		_Append("Export failed: cannot write " + path + "\n\n", rgb_color{245, 101, 101, 255});
 		return;
 	}
 
@@ -172,7 +172,7 @@ void MainWindow::_ExportJsonl() {
 
 	std::ofstream f(path, std::ios::trunc);
 	if (!f) {
-		_Append("Export failed: cannot write " + path + "\n\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+		_Append("Export failed: cannot write " + path + "\n\n", rgb_color{245, 101, 101, 255});
 		return;
 	}
 

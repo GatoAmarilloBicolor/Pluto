@@ -675,7 +675,7 @@ void ConversationView::_RenderMessages() {
 					if (body.size() > 600)
 						body = body.substr(0, 600) + "\n\xe2\x80\xa6";
 					body += "\n";
-					_Append(body, b.is_error ? ui_color(B_ALERT_BACKGROUND_COLOR) : ui_color(B_PANEL_BACKGROUND_COLOR), 0, true);
+					_Append(body, b.is_error ? rgb_color{245, 101, 101, 255} : ui_color(B_PANEL_BACKGROUND_COLOR), 0, true);
 				}
 			}
 		} else if (m.role == "assistant") {
@@ -843,7 +843,7 @@ std::string ConversationView::HandleToolResult(const std::string& output,
 		// Record body paragraph start.
 		b.body_para = fTextDoc.IsSet() ? fTextDoc->CountParagraphs() : -1;
 
-		_Append(display, is_error ? ui_color(B_ALERT_BACKGROUND_COLOR) : ui_color(B_PANEL_BACKGROUND_COLOR), 0, true);
+		_Append(display, is_error ? rgb_color{245, 101, 101, 255} : ui_color(B_PANEL_BACKGROUND_COLOR), 0, true);
 
 		// Record body paragraph count.
 		if (fTextDoc.IsSet() && b.body_para >= 0)
@@ -858,7 +858,7 @@ std::string ConversationView::HandleToolResult(const std::string& output,
 
 		fPendingTool = -1;
 	} else {
-		_Append(display, is_error ? ui_color(B_ALERT_BACKGROUND_COLOR) : ui_color(B_PANEL_BACKGROUND_COLOR), 0, true);
+		_Append(display, is_error ? rgb_color{245, 101, 101, 255} : ui_color(B_PANEL_BACKGROUND_COLOR), 0, true);
 	}
 	std::string tool = fCurrentTool;
 	fCurrentTool.clear();
@@ -872,7 +872,7 @@ void ConversationView::HandleError(const std::string& error) {
 	std::string line = "\n\xE2\x9A\xA0 ";  // ⚠
 	line += error;
 	line += "\n";
-	_Append(line, ui_color(B_ALERT_BACKGROUND_COLOR), B_BOLD_FACE);
+	_Append(line, rgb_color{245, 101, 101, 255}, B_BOLD_FACE);
 }
 
 void ConversationView::HandleUsage(long in, long out,
@@ -1304,7 +1304,7 @@ void ConversationView::LoadSession(const std::string& path) {
 	std::string error;
 
 	if (!SessionStore::load(path, msgs, meta, error)) {
-		_Append("[error] " + error + "\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+		_Append("[error] " + error + "\n", rgb_color{245, 101, 101, 255});
 		return;
 	}
 
@@ -1350,7 +1350,7 @@ void ConversationView::SaveSession() {
 		fTokensIn, fTokensOut, fMessages, error);
 
 	if (saved.empty()) {
-		_Append("[error] save failed: " + error + "\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+		_Append("[error] save failed: " + error + "\n", rgb_color{245, 101, 101, 255});
 		return;
 	}
 

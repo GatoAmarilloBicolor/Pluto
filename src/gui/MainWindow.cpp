@@ -1471,7 +1471,7 @@ MainWindow::MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
 			const size_t kMaxProv = kLeftCol - 14;
 			if (prov.size() > kMaxProv)
 				prov = prov.substr(0, kMaxProv - 1) + "\xe2\x80\xa6";
-			_Append(prov, kColAsstBody, 0, true);
+			_Append(prov, ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			pad_to(13 + prov.size());
 			emit_art(2);
 			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
@@ -1485,7 +1485,7 @@ MainWindow::MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
 			const size_t kMaxModel = kLeftCol - 14;  // 13 prefix + 1 space
 			if (model.size() > kMaxModel)
 				model = model.substr(0, kMaxModel - 1) + "\xe2\x80\xa6";  // …
-			_Append(model, kColAsstBody, 0, true);
+			_Append(model, ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			pad_to(13 + model.size());
 			emit_art(3);
 			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
@@ -1501,7 +1501,7 @@ MainWindow::MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
 				std::snprintf(buf, sizeof(buf), " + %ld remote", total_remote);
 				tools_val += buf;
 			}
-			_Append(tools_val, kColAsstBody, 0, true);
+			_Append(tools_val, ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			pad_to(13 + tools_val.size());
 			emit_art(4);
 			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
@@ -1510,7 +1510,7 @@ MainWindow::MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
 		// Line 5: MCP or Routines + art[5]
 		if (!mcp_str.empty()) {
 			_Append("  MCP        ", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
-			_Append(mcp_str, kColAsstBody, 0, true);
+			_Append(mcp_str, ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			pad_to(13 + mcp_str.size());
 			emit_art(5);
 			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
@@ -1526,7 +1526,7 @@ MainWindow::MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
 			std::snprintf(buf, sizeof(buf), "%ld routine%s",
 				(long)routines.size(), routines.size() == 1 ? "" : "s");
 			_Append("  Routines   ", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
-			_Append(buf, kColAsstBody, 0, true);
+			_Append(buf, ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
 		if (mcp_str.empty() && !routines.empty()) {
@@ -1534,21 +1534,21 @@ MainWindow::MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
 			std::snprintf(buf, sizeof(buf), "%ld routine%s",
 				(long)routines.size(), routines.size() == 1 ? "" : "s");
 			_Append("  Routines   ", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
-			_Append(buf, kColAsstBody, 0, true);
+			_Append(buf, ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
 		if (!ws.empty()) {
 			_Append("  Workspace  ", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
-			_Append(ws, kColAsstBody, 0, true);
+			_Append(ws, ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
 
 		_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
-		_Append("  Enter", kColAsstBody, B_BOLD_FACE, true);
+		_Append("  Enter", ui_color(B_DOCUMENT_TEXT_COLOR), B_BOLD_FACE, true);
 		_Append(" send  ", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
-		_Append("Shift+Enter", kColAsstBody, B_BOLD_FACE, true);
+		_Append("Shift+Enter", ui_color(B_DOCUMENT_TEXT_COLOR), B_BOLD_FACE, true);
 		_Append(" newline  ", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
-		_Append("/", kColAsstBody, B_BOLD_FACE, true);
+		_Append("/", ui_color(B_DOCUMENT_TEXT_COLOR), B_BOLD_FACE, true);
 		_Append(" commands\n\n", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 	}
 
@@ -1772,7 +1772,7 @@ void MainWindow::OnTurnDone(const std::string& preview) {
 							BFont mono = *be_fixed_font;
 							fSideView->SetFontAndColor(0, n, &mono, B_FONT_ALL, nullptr);
 						} else {
-							_Append("\nFailed to write " + path + "\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+							_Append("\nFailed to write " + path + "\n", rgb_color{245, 101, 101, 255});
 						}
 					}
 					break;
@@ -1780,7 +1780,7 @@ void MainWindow::OnTurnDone(const std::string& preview) {
 			}
 		} else {
 			_Append("\n/init failed — no response from model. "
-				"Try switching to a different model and run /init --force\n\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+				"Try switching to a different model and run /init --force\n\n", rgb_color{245, 101, 101, 255});
 		}
 	}
 
@@ -2163,12 +2163,12 @@ void MainWindow::_UpdateSidePanel(const std::string& title,
 		BFont bold_f = *be_plain_font;
 		bold_f.SetFace(B_BOLD_FACE);
 		bold_f.SetSize(bold_f.Size() + fFontDelta + 2);
-		fSideView->SetFontAndColor(0, header_end, &bold_f, B_FONT_ALL, &ui_color(B_ALERT_BACKGROUND_COLOR));
+		fSideView->SetFontAndColor(0, header_end, &bold_f, B_FONT_ALL, &rgb_color{245, 101, 101, 255});
 		// Style the body.
 		int32 n = fSideView->TextLength();
 		BFont mono_f = *be_fixed_font;
 		mono_f.SetSize(mono_f.Size() + fFontDelta);
-		fSideView->SetFontAndColor(header_end, n, &mono_f, B_FONT_ALL, &ui_color(B_ALERT_BACKGROUND_COLOR));
+		fSideView->SetFontAndColor(header_end, n, &mono_f, B_FONT_ALL, &rgb_color{245, 101, 101, 255});
 		fSideView->ScrollToOffset(0);
 	} else {
 		// Render as markdown — tool output often contains structured text.
@@ -2262,7 +2262,7 @@ void MainWindow::_UpdateStatus() {
 		fCtxWarningShown = 90;
 		_Append("\xe2\x9a\xa0 Context window 90% full — "
 			"consider starting a new conversation (/reset)\n\n",
-			ui_color(B_ALERT_BACKGROUND_COLOR), B_BOLD_FACE);
+			rgb_color{245, 101, 101, 255}, B_BOLD_FACE);
 		BNotification n(B_IMPORTANT_NOTIFICATION);
 		n.SetGroup("Pluto");
 		n.SetTitle("Context almost full");
@@ -2874,30 +2874,77 @@ void MainWindow::MessageReceived(BMessage* msg) {
 			if (InstallDeskbarReplicant())
 				_Append("Deskbar icon installed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			else
-				_Append("Could not install Deskbar icon.\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+				_Append("Could not install Deskbar icon.\n", rgb_color{245, 101, 101, 255});
 			break;
 
 		case kMsgDeskbarRemove:
 			if (RemoveDeskbarReplicant())
 				_Append("Deskbar icon removed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			else
-				_Append("Could not remove Deskbar icon.\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+				_Append("Could not remove Deskbar icon.\n", rgb_color{245, 101, 101, 255});
 			break;
 
 		case kMsgTrackerAddonInstall: {
-			std::string src = "Ask Pluto";
-			// Try to find the add-on binary near the Pluto-gui binary.
-			image_info info;
-			int32 cookie = 0;
-			while (get_next_image_info(B_CURRENT_TEAM, &cookie, &info) == B_OK) {
-				if (info.type == B_APP_IMAGE) {
-					BPath dir(info.name);
-					dir.GetParent(&dir);
-					BPath addon(dir.Path(), "Ask Pluto");
-					struct stat st;
-					if (stat(addon.Path(), &st) == 0) {
-						src = addon.Path();
-						break;
+		std::string src = "Ask Pluto";
+		// Try to find the add-on binary near the Pluto-gui binary.
+		image_info info;
+		int32 cookie = 0;
+		while (get_next_image_info(B_CURRENT_TEAM, &cookie, &info) == B_OK) {
+			if (info.type == B_APP_IMAGE) {
+				BPath dir(info.name);
+				dir.GetParent(&dir);
+				BPath addon(dir.Path(), "Ask Pluto");
+				struct stat st;
+				if (stat(addon.Path(), &st) == 0) {
+					src = addon.Path();
+					break;
+				}
+			}
+		}
+
+		std::string dst_dir = HomeDir() + "/config/non-packaged/add-ons/Tracker";
+		// Use native Haiku APIs instead of system() for security
+		BDirectory dir(dst_dir.c_str());
+		if (dir.InitCheck() != B_OK) {
+			// Create directory hierarchy
+			BPath path(dst_dir.c_str());
+			path.GetParent(&path);
+			status_t err = path.CreateDirectory(dst_dir.c_str(), 0755);
+			if (err != B_OK) {
+				_Append("Could not create Tracker add-ons directory.
+", rgb_color{245, 101, 101, 255});
+				break;
+			}
+		}
+
+		// Copy the add-on file
+		BEntry srcEntry(src.c_str());
+		if (srcEntry.InitCheck() != B_OK) {
+			_Append("Could not find add-on binary.
+", rgb_color{245, 101, 101, 255});
+			break;
+		}
+
+		BDirectory dstDir(dst_dir.c_str());
+		if (dstDir.InitCheck() == B_OK) {
+			BEntry dstEntry;
+			if (srcEntry.Copy(&dstDir, "Ask Pluto", &dstEntry) == B_OK) {
+				_Append("Tracker add-on "Ask Pluto" installed.
+", ui_color(B_DOCUMENT_TEXT_COLOR));
+				_Append("Right-click files in Tracker to use it.
+", ui_color(B_DOCUMENT_TEXT_COLOR));
+			} else {
+				_Append("Could not copy add-on to Tracker directory.
+", rgb_color{245, 101, 101, 255});
+				_Append("Build it first: make 'Ask Pluto'
+", rgb_color{245, 101, 101, 255});
+			}
+		} else {
+			_Append("Could not access Tracker add-ons directory.
+", rgb_color{245, 101, 101, 255});
+		}
+		break;
+	}
 					}
 				}
 			}
@@ -2908,8 +2955,8 @@ void MainWindow::MessageReceived(BMessage* msg) {
 				_Append("Tracker add-on \"Ask Pluto\" installed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 				_Append("Right-click files in Tracker to use it.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			} else {
-				_Append("Could not install Tracker add-on.\n", ui_color(B_ALERT_BACKGROUND_COLOR));
-				_Append("Build it first: make 'Ask Pluto'\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+				_Append("Could not install Tracker add-on.\n", rgb_color{245, 101, 101, 255});
+				_Append("Build it first: make 'Ask Pluto'\n", rgb_color{245, 101, 101, 255});
 			}
 			break;
 		}
@@ -2920,7 +2967,7 @@ void MainWindow::MessageReceived(BMessage* msg) {
 			if (std::remove(path.c_str()) == 0)
 				_Append("Tracker add-on removed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			else
-				_Append("Tracker add-on not found.\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+				_Append("Tracker add-on not found.\n", rgb_color{245, 101, 101, 255});
 			break;
 		}
 
@@ -3030,7 +3077,7 @@ void MainWindow::MessageReceived(BMessage* msg) {
 				}
 			} else {
 				_Append("Login failed — check browser or network.\n\n",
-					ui_color(B_ALERT_BACKGROUND_COLOR));
+					rgb_color{245, 101, 101, 255});
 			}
 			break;
 		}
@@ -3201,7 +3248,7 @@ void MainWindow::_SendCurrentInput() {
 
 	_ActiveConv()->AppendText("You\n", ui_color(B_CONTROL_TEXT_COLOR), B_BOLD_FACE);
 	if (!text.empty())
-		_Append(text + "\n", kColUserBody);
+		_Append(text + "\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 	// Show attached images inline in the chat.
 	for (const auto& img : fPendingImages) {
 		if (img.kind == "audio") {
@@ -3215,19 +3262,15 @@ void MainWindow::_SendCurrentInput() {
 			_Append("\xf0\x9f\x96\xbc [" + img.filename + "]\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
 	}
-	_Append("\n", kColUserBody);
+	_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 
-	fInput->SetText("");
+fInput->SetText("");
 
-	// Fire user_prompt hooks before the turn (from active tab's config).
-	const auto& hooks = _ActiveConv()
-		? _ActiveConv()->GetConfig().hooks_user_prompt
-		: fConfig->hooks_user_prompt;
-	for (const auto& hook : hooks) {
-		setenv("PLUTO_PROMPT", text.c_str(), 1);
-		std::system(hook.c_str());
-		unsetenv("PLUTO_PROMPT");
-	}
+// Fire user_prompt hooks before turn (from tab's config).
+const auto& hooks = _ActiveConv()
+	? _ActiveConv()->GetConfig().hooks_user_prompt
+	: fConfig->hooks_user_prompt;
+pluto::RunHooksSafe(hooks, "user_prompt", text);
 
 	// Build content blocks for the message.
 	// Process @file and @image mentions in the text.
@@ -4209,7 +4252,7 @@ void MainWindow::_SaveImageToFile(const entry_ref* dir, const char* name) {
 	BDirectory d(dir);
 	BFile file(&d, name, B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
 	if (file.InitCheck() != B_OK) {
-		_Append("[error] Could not create file.\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+		_Append("[error] Could not create file.\n", rgb_color{245, 101, 101, 255});
 		return;
 	}
 
@@ -4229,7 +4272,7 @@ void MainWindow::_SaveImageToFile(const entry_ref* dir, const char* name) {
 		msg += "\n";
 		_Append(msg, ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 	} else {
-		_Append("[error] Failed to save image.\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+		_Append("[error] Failed to save image.\n", rgb_color{245, 101, 101, 255});
 	}
 }
 
@@ -4281,7 +4324,7 @@ void MainWindow::_SaveBitmapAndAttach(BBitmap* bmp) {
 	if (roster->Translate(&stream, nullptr, nullptr,
 	    &pngIO, B_PNG_FORMAT) != B_OK) {
 		stream.DetachBitmap(&bmp);  // reclaim ownership
-		_Append("[error: could not encode bitmap as PNG]\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+		_Append("[error: could not encode bitmap as PNG]\n", rgb_color{245, 101, 101, 255});
 		return;
 	}
 	stream.DetachBitmap(&bmp);  // reclaim so caller can delete
@@ -4291,7 +4334,7 @@ void MainWindow::_SaveBitmapAndAttach(BBitmap* bmp) {
 	char tmp[] = "/tmp/pluto-clip-XXXXXX";
 	int fd = mkstemp(tmp);
 	if (fd < 0) {
-		_Append("[error: could not create temp file for bitmap]\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+		_Append("[error: could not create temp file for bitmap]\n", rgb_color{245, 101, 101, 255});
 		return;
 	}
 	::write(fd, pngIO.Buffer(), pngIO.BufferLength());
@@ -4333,12 +4376,12 @@ void MainWindow::_AttachImageToInput(const std::string& path,
 	// Read binary data and encode as base64.
 	struct stat st;
 	if (stat(path.c_str(), &st) != 0 || st.st_size > 20 * 1024 * 1024) {
-		_Append("Image too large or unreadable: " + path + "\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+		_Append("Image too large or unreadable: " + path + "\n", rgb_color{245, 101, 101, 255});
 		return;
 	}
 	std::ifstream f(path, std::ios::binary);
 	if (!f) {
-		_Append("Cannot read image: " + path + "\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+		_Append("Cannot read image: " + path + "\n", rgb_color{245, 101, 101, 255});
 		return;
 	}
 	std::string raw(static_cast<size_t>(st.st_size), '\0');
@@ -4513,12 +4556,12 @@ void MainWindow::_AttachMediaToInput(const std::string& path,
                                      const std::string& kind) {
 	struct stat st;
 	if (stat(path.c_str(), &st) != 0 || st.st_size > 20 * 1024 * 1024) {
-		_Append("File too large or unreadable: " + path + "\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+		_Append("File too large or unreadable: " + path + "\n", rgb_color{245, 101, 101, 255});
 		return;
 	}
 	std::ifstream f(path, std::ios::binary);
 	if (!f) {
-		_Append("Cannot read file: " + path + "\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+		_Append("Cannot read file: " + path + "\n", rgb_color{245, 101, 101, 255});
 		return;
 	}
 	std::string raw(static_cast<size_t>(st.st_size), '\0');

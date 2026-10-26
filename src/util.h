@@ -66,5 +66,12 @@ private:
 	FILE* fPipe;
 };
 
+// Execute a hook command safely using fork/exec (no shell injection).
+// Sets the given environment variable in the child process before exec.
+// Returns the exit code, or -1 on fork failure.
+int RunHookSafe(const char* cmd, const char* env_name, const std::string& env_value);
+
+// Execute multiple hook commands safely.
+void RunHooksSafe(const std::vector<std::string>& hooks, const char* phase, const std::string& env_value);
 
 }  // namespace pluto
