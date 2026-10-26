@@ -1,6 +1,6 @@
 #pragma once
-// ChatColors.h — Shared color constants, arrow glyphs, and helper BTextView
-// subclasses for both MainWindow and ConversationView.
+// ChatColors.h — Arrow glyphs, cursor, shared message constants, and
+// helper BTextView subclasses for both MainWindow and ConversationView.
 
 #include <InterfaceDefs.h>
 #include <Message.h>
@@ -10,27 +10,6 @@
 
 namespace pluto {
 namespace gui {
-
-// Palette — mutable: recomputed from ui_color() by _InitPalette() so the
-// app honours the user's Haiku theme. Defaults are sane for the light theme.
-extern rgb_color kColUserRole;
-extern rgb_color kColUserBody;
-extern rgb_color kColAsstRole;
-extern rgb_color kColAsstBody;
-extern rgb_color kColToolRole;
-extern rgb_color kColToolBody;
-extern rgb_color kColErr;
-extern rgb_color kColWarn;
-extern rgb_color kColDim;
-extern rgb_color kColShimmer;
-
-// Syntax highlight colors for code blocks.
-extern rgb_color kColSynKeyword;
-extern rgb_color kColSynString;
-extern rgb_color kColSynComment;
-extern rgb_color kColSynNumber;
-extern rgb_color kColSynPreproc;
-extern rgb_color kColSynType;
 
 // Arrow glyphs for collapsible blocks (3 bytes each in UTF-8).
 extern const char* kArrowOpen;   // ▾

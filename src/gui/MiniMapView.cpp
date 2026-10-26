@@ -1,5 +1,4 @@
 #include "MiniMapView.h"
-#include "ChatColors.h"
 
 #include <ScrollBar.h>
 

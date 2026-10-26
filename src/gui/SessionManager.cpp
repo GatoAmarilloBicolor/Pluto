@@ -16,7 +16,6 @@
 #include "../storage/SessionStore.h"
 #include "../util.h"
 #include "../workspace.h"
-#include "ChatColors.h"
 
 namespace pluto {
 namespace gui {
@@ -144,7 +143,7 @@ void MainWindow::_ExportMarkdown() {
 
 	std::ofstream f(path, std::ios::trunc);
 	if (!f) {
-		_Append("Export failed: cannot write " + path + "\n\n", kColErr);
+		_Append("Export failed: cannot write " + path + "\n\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 		return;
 	}
 
@@ -159,7 +158,7 @@ void MainWindow::_ExportMarkdown() {
 				f << "```\n" << b.text.substr(0, 500) << "\n```\n\n";
 		}
 	}
-	_Append("Exported to: " + path + "\n\n", kColDim);
+	_Append("Exported to: " + path + "\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 }
 
 
@@ -173,7 +172,7 @@ void MainWindow::_ExportJsonl() {
 
 	std::ofstream f(path, std::ios::trunc);
 	if (!f) {
-		_Append("Export failed: cannot write " + path + "\n\n", kColErr);
+		_Append("Export failed: cannot write " + path + "\n\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 		return;
 	}
 
@@ -187,7 +186,7 @@ void MainWindow::_ExportJsonl() {
 		j.set("content", text);
 		f << j.serialize() << "\n";
 	}
-	_Append("Exported to: " + path + "\n\n", kColDim);
+	_Append("Exported to: " + path + "\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 }
 
 

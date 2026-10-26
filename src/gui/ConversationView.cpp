@@ -193,7 +193,7 @@ void ConversationView::_EmitUserHeader() {
 	if (fTextDoc.IsSet() && fTextDoc->CountParagraphs() > 2) {
 		// Thin dotted separator — lighter than the old solid bar.
 		CharacterStyle hrStyle;
-		rgb_color sepColor = kColDim;
+		rgb_color sepColor = ui_color(B_DOCUMENT_TEXT_COLOR);
 		sepColor.alpha = 100;  // semi-transparent
 		hrStyle.SetForegroundColor(sepColor);
 		BFont hrFont = *be_plain_font;
@@ -203,17 +203,17 @@ void ConversationView::_EmitUserHeader() {
 		        "\xC2\xB7 \xC2\xB7 \xC2\xB7 \xC2\xB7 \xC2\xB7 "
 		        "\xC2\xB7 \xC2\xB7 \xC2\xB7 \xC2\xB7 \xC2\xB7 "
 		        "\xC2\xB7 \xC2\xB7 \xC2\xB7 \xC2\xB7 \xC2\xB7\n",
-		        kColDim, 0, false);
-		_Append("\n", kColDim, 0, false);
+		        ui_color(B_DOCUMENT_TEXT_COLOR), 0, false);
+		_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR), 0, false);
 	}
-	_Append("\xF0\x9F\x91\xA4 You\n", kColUserRole, B_BOLD_FACE);
+	_Append("\xF0\x9F\x91\xA4 You\n", ui_color(B_CONTROL_TEXT_COLOR), B_BOLD_FACE);
 }
 
 void ConversationView::_EmitAssistantHeader() {
 	fAsstHeaderOff = 0;  // legacy offset, unused by paragraph-based ToolBlockManager
 
 	// Breathing space before assistant response.
-	_Append("\n", kColDim, 0, false);
+	_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR), 0, false);
 
 	fAsstHeaderPara = fTextDoc.IsSet() ? fTextDoc->CountParagraphs() : -1;
 
@@ -231,7 +231,7 @@ void ConversationView::_EmitAssistantHeader() {
 		if (fFontDelta != 0) font.SetSize(font.Size() + fFontDelta);
 		CharacterStyle style;
 		style.SetFont(font);
-		style.SetForegroundColor(kColAsstRole);
+		style.SetForegroundColor(ui_color(B_CONTROL_TEXT_COLOR));
 
 		BMessage* clickMsg = new BMessage(kMsgToolToggle);
 		clickMsg->AddInt32("block_idx", (int32)fPendingAsstBlock);
@@ -244,7 +244,7 @@ void ConversationView::_EmitAssistantHeader() {
 		span.SetClickMessage(clickMsg);
 		fCurrentPara.Append(span);
 	}
-	_Append("\n", kColAsstRole);
+	_Append("\n", ui_color(B_CONTROL_TEXT_COLOR));
 
 	fAsstBodyOff = 0;  // legacy offset, unused
 }
@@ -311,7 +311,7 @@ void ConversationView::_RenderAssistantInline(const std::string& line) {
 			size_t end = line.find('`', i + 1);
 			if (end != std::string::npos) {
 				_Append(line.substr(i + 1, end - i - 1),
-					kColToolBody, 0, true);
+					ui_color(B_PANEL_BACKGROUND_COLOR), 0, true);
 				i = end + 1;
 				continue;
 			}
@@ -324,7 +324,7 @@ void ConversationView::_RenderAssistantInline(const std::string& line) {
 				size_t pclose = line.find(')', close + 2);
 				if (pclose != std::string::npos) {
 					std::string label = line.substr(i + 1, close - i - 1);
-					_Append(label, kColUserRole, B_UNDERSCORE_FACE, false);
+					_Append(label, ui_color(B_CONTROL_TEXT_COLOR), B_UNDERSCORE_FACE, false);
 					i = pclose + 1;
 					continue;
 				}
@@ -335,7 +335,7 @@ void ConversationView::_RenderAssistantInline(const std::string& line) {
 			size_t end = line.find("~~", i + 2);
 			if (end != std::string::npos) {
 				_Append(line.substr(i + 2, end - i - 2),
-					kColDim, B_STRIKEOUT_FACE, false);
+					ui_color(B_DOCUMENT_TEXT_COLOR), B_STRIKEOUT_FACE, false);
 				i = end + 2;
 				continue;
 			}
@@ -357,17 +357,17 @@ void ConversationView::_FlushMdCodeBlockImpl(const std::string& code,
                                               const std::string& lang) {
 	if (!lang.empty())
 		_Append("  \xE2\x94\x8C\xE2\x94\x80 " + lang + " \xE2\x94\x80\xE2\x94\x80\n",
-		kColDim, 0, true);  // ┌─ lang ──
+		ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);  // ┌─ lang ──
 	auto syn_tokens = highlight(code, lang);
 	for (const auto& tok : syn_tokens) {
-		rgb_color tc = kColToolBody;
+		rgb_color tc = ui_color(B_PANEL_BACKGROUND_COLOR);
 		switch (tok.type) {
-			case TokenType::Keyword:      tc = kColSynKeyword; break;
-			case TokenType::String:       tc = kColSynString; break;
-			case TokenType::Comment:      tc = kColSynComment; break;
-			case TokenType::Number:       tc = kColSynNumber; break;
-			case TokenType::Preprocessor: tc = kColSynPreproc; break;
-			case TokenType::Type:         tc = kColSynType; break;
+			case TokenType::Keyword:      tc = ui_color(B_CONTROL_TEXT_COLOR); break;
+			case TokenType::String:       tc = ui_color(B_CONTROL_TEXT_COLOR); break;
+			case TokenType::Comment:      tc = ui_color(B_DOCUMENT_TEXT_COLOR); break;
+			case TokenType::Number:       tc = ui_color(B_CONTROL_TEXT_COLOR); break;
+			case TokenType::Preprocessor: tc = ui_color(B_CONTROL_TEXT_COLOR); break;
+			case TokenType::Type:         tc = ui_color(B_CONTROL_TEXT_COLOR); break;
 			default: break;
 		}
 		_Append(tok.text, tc, 0, true);
@@ -387,7 +387,7 @@ void ConversationView::_RenderAssistantLine(const std::string& line) {
 			while (!heading.empty() && heading.front() == ' ')
 				heading.erase(0, 1);
 			_Append("\n", kColAsstBody);
-			_Append(heading + "\n", kColAsstRole, B_BOLD_FACE);
+			_Append(heading + "\n", ui_color(B_CONTROL_TEXT_COLOR), B_BOLD_FACE);
 			if (level <= 2) {
 				size_t ul = heading.size();
 				if (ul > 40) ul = 40;
@@ -396,7 +396,7 @@ void ConversationView::_RenderAssistantLine(const std::string& line) {
 					underline += (level == 1)
 						? "\xe2\x94\x81"   // ━
 						: "\xe2\x94\x80";   // ─
-				_Append(underline + "\n", kColDim, 0, true);
+				_Append(underline + "\n", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			}
 			_Append("\n", kColAsstBody);
 			return;
@@ -413,7 +413,7 @@ void ConversationView::_RenderAssistantLine(const std::string& line) {
 			_Append("\n  \xE2\x94\x80 \xE2\x94\x80 \xE2\x94\x80 "
 			        "\xE2\x94\x80 \xE2\x94\x80 \xE2\x94\x80 "
 			        "\xE2\x94\x80 \xE2\x94\x80 \xE2\x94\x80 "
-			        "\xE2\x94\x80\n\n", kColDim, 0, true);
+			        "\xE2\x94\x80\n\n", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			return;
 		}
 	}
@@ -422,9 +422,9 @@ void ConversationView::_RenderAssistantLine(const std::string& line) {
 	if (!line.empty() && line[0] == '>') {
 		std::string q = line.substr(1);
 		while (!q.empty() && q.front() == ' ') q.erase(0, 1);
-		_Append("   \xE2\x94\x83 ", kColAsstRole, 0, false);  // ┃ (thick bar)
-		_Append(q, kColDim, B_ITALIC_FACE, false);
-		_Append("\n", kColDim);
+		_Append("   \xE2\x94\x83 ", ui_color(B_CONTROL_TEXT_COLOR), 0, false);  // ┃ (thick bar)
+		_Append(q, ui_color(B_DOCUMENT_TEXT_COLOR), B_ITALIC_FACE, false);
+		_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		return;
 	}
 
@@ -437,9 +437,9 @@ void ConversationView::_RenderAssistantLine(const std::string& line) {
 		const char* box = checked
 			? "  \xe2\x98\x91 "    // ☑
 			: "  \xe2\x98\x90 ";   // ☐
-		_Append(box, checked ? kColAsstRole : kColDim);
+		_Append(box, checked ? ui_color(B_CONTROL_TEXT_COLOR) : ui_color(B_DOCUMENT_TEXT_COLOR));
 		if (checked)
-			_Append(item, kColDim, B_STRIKEOUT_FACE);
+			_Append(item, ui_color(B_DOCUMENT_TEXT_COLOR), B_STRIKEOUT_FACE);
 		else
 			_RenderAssistantInline(item);
 		_Append("\n", kColAsstBody);
@@ -449,7 +449,7 @@ void ConversationView::_RenderAssistantLine(const std::string& line) {
 	// Bullet list — wider indent, softer bullet
 	if (line.size() >= 2 && (line[0] == '-' || line[0] == '*')
 	    && line[1] == ' ') {
-		_Append("   \xE2\x80\xA2 ", kColDim);  // •  (dimmed bullet)
+		_Append("   \xE2\x80\xA2 ", ui_color(B_DOCUMENT_TEXT_COLOR));  // •  (dimmed bullet)
 		_RenderAssistantInline(line.substr(2));
 		_Append("\n", kColAsstBody);
 		return;
@@ -526,7 +526,7 @@ void ConversationView::_ShowCursor() {
 	if (fFontDelta != 0) font.SetSize(font.Size() + fFontDelta);
 	CharacterStyle style;
 	style.SetFont(font);
-	style.SetForegroundColor(kColAsstRole);
+	style.SetForegroundColor(ui_color(B_CONTROL_TEXT_COLOR));
 	Paragraph cursorPara;
 	cursorPara.Append(TextSpan(kCursorChar, style));
 	fTextDoc->Append(cursorPara);
@@ -574,7 +574,7 @@ void ConversationView::OnCursorTick() {
 		if (fFontDelta != 0) font.SetSize(font.Size() + fFontDelta);
 		CharacterStyle style;
 		style.SetFont(font);
-		style.SetForegroundColor(kColDim);
+		style.SetForegroundColor(ui_color(B_DOCUMENT_TEXT_COLOR));
 
 		BString text;
 		text.SetToFormat("%s thinking\xE2\x80\xA6", kFrames[fSpinnerFrame % 10]);
@@ -636,7 +636,7 @@ void ConversationView::_RenderMessages() {
 	BString header;
 	header.SetToFormat("(loaded %ld turn%s)\n\n",
 		(long)fMessages.size(), fMessages.size() == 1 ? "" : "s");
-	_Append(header.String(), kColDim);
+	_Append(header.String(), ui_color(B_DOCUMENT_TEXT_COLOR));
 
 	for (const auto& m : fMessages) {
 		if (m.role == "user") {
@@ -656,7 +656,7 @@ void ConversationView::_RenderMessages() {
 						std::string label = "\xf0\x9f\x96\xbc [";
 						label += b.image_media_type.empty() ? "image" : b.image_media_type;
 						label += "]\n";
-						_Append(label, kColDim, B_ITALIC_FACE);
+						_Append(label, ui_color(B_DOCUMENT_TEXT_COLOR), B_ITALIC_FACE);
 					}
 				} else if (b.type == ContentBlock::AUDIO) {
 					std::string label = "\xf0\x9f\x94\x8a [audio: ";
@@ -664,18 +664,18 @@ void ConversationView::_RenderMessages() {
 					label += ", ";
 					label += std::to_string(b.audio_data.size() / 1370);
 					label += " KB]\n";
-					_Append(label, kColDim, B_ITALIC_FACE);
+					_Append(label, ui_color(B_DOCUMENT_TEXT_COLOR), B_ITALIC_FACE);
 				} else if (b.type == ContentBlock::DOCUMENT) {
 					std::string label = "\xf0\x9f\x93\x84 [PDF: ";
 					label += std::to_string(b.doc_data.size() / 1370);
 					label += " KB]\n";
-					_Append(label, kColDim, B_ITALIC_FACE);
+					_Append(label, ui_color(B_DOCUMENT_TEXT_COLOR), B_ITALIC_FACE);
 				} else if (b.type == ContentBlock::TOOL_RESULT) {
 					std::string body = b.text;
 					if (body.size() > 600)
 						body = body.substr(0, 600) + "\n\xe2\x80\xa6";
 					body += "\n";
-					_Append(body, b.is_error ? kColErr : kColToolBody, 0, true);
+					_Append(body, b.is_error ? ui_color(B_ALERT_BACKGROUND_COLOR) : ui_color(B_PANEL_BACKGROUND_COLOR), 0, true);
 				}
 			}
 		} else if (m.role == "assistant") {
@@ -693,20 +693,20 @@ void ConversationView::_RenderMessages() {
 						std::string label = "\xf0\x9f\x96\xbc [";
 						label += b.image_media_type.empty() ? "image" : b.image_media_type;
 						label += "]\n";
-						_Append(label, kColDim, B_ITALIC_FACE);
+						_Append(label, ui_color(B_DOCUMENT_TEXT_COLOR), B_ITALIC_FACE);
 					}
 				} else if (b.type == ContentBlock::AUDIO) {
-					_Append("\xf0\x9f\x94\x8a [audio attached]\n", kColDim, B_ITALIC_FACE);
+					_Append("\xf0\x9f\x94\x8a [audio attached]\n", ui_color(B_DOCUMENT_TEXT_COLOR), B_ITALIC_FACE);
 				} else if (b.type == ContentBlock::DOCUMENT) {
-					_Append("\xf0\x9f\x93\x84 [PDF attached]\n", kColDim, B_ITALIC_FACE);
+					_Append("\xf0\x9f\x93\x84 [PDF attached]\n", ui_color(B_DOCUMENT_TEXT_COLOR), B_ITALIC_FACE);
 				} else if (b.type == ContentBlock::TOOL_USE) {
 					std::string head = "\n\xE2\x97\x86 ";  // ◆
 					head += b.tool_name;
 					head += "\n";
-					_Append(head, kColToolRole, B_BOLD_FACE);
+					_Append(head, ui_color(B_CONTROL_TEXT_COLOR), B_BOLD_FACE);
 				}
 			}
-			_Append("\n", kColDim);
+			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
 	}
 }
@@ -790,7 +790,7 @@ void ConversationView::HandleToolStart(const std::string& name,
 	block.header_para = fTextDoc.IsSet() ? fTextDoc->CountParagraphs() : -1;
 
 	// Build the header with a clickable arrow span carrying a tool-toggle message.
-	_Append("\n", kColToolRole);
+	_Append("\n", ui_color(B_CONTROL_TEXT_COLOR));
 
 	// Create the arrow+tool name as a clickable span with a toggle message.
 	{
@@ -799,7 +799,7 @@ void ConversationView::HandleToolStart(const std::string& name,
 		if (fFontDelta != 0) font.SetSize(font.Size() + fFontDelta);
 		CharacterStyle style;
 		style.SetFont(font);
-		style.SetForegroundColor(kColToolRole);
+		style.SetForegroundColor(ui_color(B_CONTROL_TEXT_COLOR));
 
 		// Attach a click message for tool block toggle.
 		BMessage* clickMsg = new BMessage(kMsgToolToggle);
@@ -814,7 +814,7 @@ void ConversationView::HandleToolStart(const std::string& name,
 		span.SetClickMessage(clickMsg);
 		fCurrentPara.Append(span);
 	}
-	_Append("\n", kColToolRole);
+	_Append("\n", ui_color(B_CONTROL_TEXT_COLOR));
 
 	// Record header paragraph count.
 	if (fTextDoc.IsSet() && block.header_para >= 0)
@@ -843,7 +843,7 @@ std::string ConversationView::HandleToolResult(const std::string& output,
 		// Record body paragraph start.
 		b.body_para = fTextDoc.IsSet() ? fTextDoc->CountParagraphs() : -1;
 
-		_Append(display, is_error ? kColErr : kColToolBody, 0, true);
+		_Append(display, is_error ? ui_color(B_ALERT_BACKGROUND_COLOR) : ui_color(B_PANEL_BACKGROUND_COLOR), 0, true);
 
 		// Record body paragraph count.
 		if (fTextDoc.IsSet() && b.body_para >= 0)
@@ -858,7 +858,7 @@ std::string ConversationView::HandleToolResult(const std::string& output,
 
 		fPendingTool = -1;
 	} else {
-		_Append(display, is_error ? kColErr : kColToolBody, 0, true);
+		_Append(display, is_error ? ui_color(B_ALERT_BACKGROUND_COLOR) : ui_color(B_PANEL_BACKGROUND_COLOR), 0, true);
 	}
 	std::string tool = fCurrentTool;
 	fCurrentTool.clear();
@@ -872,7 +872,7 @@ void ConversationView::HandleError(const std::string& error) {
 	std::string line = "\n\xE2\x9A\xA0 ";  // ⚠
 	line += error;
 	line += "\n";
-	_Append(line, kColErr, B_BOLD_FACE);
+	_Append(line, ui_color(B_ALERT_BACKGROUND_COLOR), B_BOLD_FACE);
 }
 
 void ConversationView::HandleUsage(long in, long out,
@@ -889,7 +889,7 @@ void ConversationView::HandleUsage(long in, long out,
 std::string ConversationView::HandleTurnDone() {
 	_FinalizeAssistantBlock();
 	_HideCursor();
-	_Append("\n", kColDim);
+	_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 	fBusy = false;
 	fTextOngoing = false;
 	fThinking = false;
@@ -904,18 +904,18 @@ std::string ConversationView::HandleTurnDone() {
 void ConversationView::HandleStatusMessage(const std::string& status,
                                             bool is_warning) {
 	if (is_warning) {
-		_Append("\xe2\x9a\xa0 ", kColWarn, B_BOLD_FACE);
-		_Append(status + "\n", kColWarn);
+		_Append("\xe2\x9a\xa0 ", {255, 180, 0, 255}, B_BOLD_FACE);
+		_Append(status + "\n", {255, 180, 0, 255});
 	} else {
 		std::string line = "[retry] ";
 		line += status;
 		line += "\n";
-		_Append(line, kColDim);
+		_Append(line, ui_color(B_DOCUMENT_TEXT_COLOR));
 	}
 }
 
 void ConversationView::HandleRagHint(const std::string& hint) {
-	_Append(hint, kColDim);
+	_Append(hint, ui_color(B_DOCUMENT_TEXT_COLOR));
 }
 
 void ConversationView::PrepareTurn(std::vector<ContentBlock> user_blocks) {
@@ -1304,7 +1304,7 @@ void ConversationView::LoadSession(const std::string& path) {
 	std::string error;
 
 	if (!SessionStore::load(path, msgs, meta, error)) {
-		_Append("[error] " + error + "\n", kColErr);
+		_Append("[error] " + error + "\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 		return;
 	}
 
@@ -1350,7 +1350,7 @@ void ConversationView::SaveSession() {
 		fTokensIn, fTokensOut, fMessages, error);
 
 	if (saved.empty()) {
-		_Append("[error] save failed: " + error + "\n", kColErr);
+		_Append("[error] save failed: " + error + "\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 		return;
 	}
 
@@ -1634,7 +1634,7 @@ void ConversationView::_InsertInlineImage(const std::string& base64_data) {
 	// Decode base64 → raw image bytes → BBitmap via BTranslatorRoster.
 	std::string raw = base64_decode(base64_data);
 	if (raw.empty()) {
-		_Append("\xf0\x9f\x96\xbc [image decode failed]\n", kColDim);
+		_Append("\xf0\x9f\x96\xbc [image decode failed]\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		return;
 	}
 
@@ -1697,7 +1697,7 @@ void ConversationView::_InsertInlineImage(const std::string& base64_data) {
 		}
 		delete bitmap;  // original no longer needed, scaled copy is in doc
 	} else {
-		_Append("\xf0\x9f\x96\xbc [image — could not render]\n", kColDim);
+		_Append("\xf0\x9f\x96\xbc [image — could not render]\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 	}
 
 	// Also send to side panel for full-size preview.

@@ -19,7 +19,6 @@
 #include "../map/Graph.h"
 #include "../map/Scanner.h"
 #include "../map/BfsAttrs.h"
-#include "ChatColors.h"
 
 namespace pluto {
 namespace gui {
@@ -44,7 +43,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 					disabled.insert(dt);
 			}
 		}
-		_Append("Registered tools:\n", kColDim, B_BOLD_FACE);
+		_Append("Registered tools:\n", ui_color(B_DOCUMENT_TEXT_COLOR), B_BOLD_FACE);
 		for (const Tool* t : fTools->list()) {
 			bool hidden = disabled.count(t->name()) > 0;
 			std::string desc = t->description();
@@ -55,9 +54,9 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			if (hidden)
 				line += " (disabled by " + fConfig->active_mode + " mode)";
 			line += "\n";
-			_Append(line, kColDim);
+			_Append(line, ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
-		_Append("\n", kColDim);
+		_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		return true;
 	}
 
@@ -72,7 +71,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			(long)(tIn > 0 || tOut > 0 ? 1 : 0),
 			tIn, tOut, tIn + tOut,
 			ac->EstimateCost());
-		_Append(info.String(), kColDim);
+		_Append(info.String(), ui_color(B_DOCUMENT_TEXT_COLOR));
 		return true;
 	}
 
@@ -80,10 +79,10 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		auto* ac = _ActiveConv();
 		if (!ac) return true;
 		if (ac->GetMessageCount() <= 2) {
-			_Append("(nothing to compact)\n\n", kColDim);
+			_Append("(nothing to compact)\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			return true;
 		}
-		_Append("Compacting conversation...\n", kColDim);
+		_Append("Compacting conversation...\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		// Trigger compaction on the next turn - the agent loop checks
 		// cumulative tokens and compacts when >90% of context window.
 		// For manual /compact, we inject a system message asking for summary.
@@ -103,12 +102,12 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			break;
 		}
 		if (body.empty()) {
-			_Append("(nothing to copy)\n\n", kColDim);
+			_Append("(nothing to copy)\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			return true;
 		}
 		BClipboard clipboard("system");
 		if (!clipboard.Lock()) {
-			_Append("[copy] cannot lock clipboard\n\n", kColDim);
+			_Append("[copy] cannot lock clipboard\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			return true;
 		}
 		clipboard.Clear();
@@ -121,7 +120,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		clipboard.Unlock();
 		BString info;
 		info.SetToFormat("copied %zu bytes to clipboard\n\n", body.size());
-		_Append(info.String(), kColDim);
+		_Append(info.String(), ui_color(B_DOCUMENT_TEXT_COLOR));
 		return true;
 	}
 
@@ -143,7 +142,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			"  Enter              send message\n"
 			"  Shift+Enter        newline in input\n"
 			"  Escape             cancel mid-stream\n\n",
-			kColDim);
+			ui_color(B_DOCUMENT_TEXT_COLOR));
 		return true;
 	}
 
@@ -151,7 +150,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		if (text.size() <= 7) {
 			std::string m = _ActiveConv()
 				? _ActiveConv()->GetModel() : fConfig->model;
-			_Append("Model: " + m + "\n\n", kColDim);
+			_Append("Model: " + m + "\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		} else {
 			std::string newModel = text.substr(7);
 			while (!newModel.empty() && newModel.front() == ' ')
@@ -180,7 +179,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 				fConfig->context_window = tc.context_window;
 				pluto::SaveConfig(*fConfig);
 			}
-			_Append("Model switched to: " + newModel + "\n\n", kColDim);
+			_Append("Model switched to: " + newModel + "\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			_UpdateTitle();
 			_UpdateStatus();
 		}
@@ -197,21 +196,21 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			(fConfig->active_mode == "plan"
 				? " — read-only analysis, no file writes\n\n"
 				: " — full tool access restored\n\n"),
-			kColDim);
+			ui_color(B_DOCUMENT_TEXT_COLOR));
 		_UpdateStatus();
 		return true;
 	}
 
 	if (text == "/modes") {
 		if (fConfig->modes.empty()) {
-			_Append("No modes available.\n\n", kColDim);
+			_Append("No modes available.\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		} else {
-			_Append("Available modes:\n", kColDim, B_BOLD_FACE);
+			_Append("Available modes:\n", ui_color(B_DOCUMENT_TEXT_COLOR), B_BOLD_FACE);
 			for (const auto& m : fConfig->modes) {
 				std::string mark = (m.name == fConfig->active_mode) ? "* " : "  ";
-				_Append(mark + m.name + " — " + m.description + "\n", kColDim);
+				_Append(mark + m.name + " — " + m.description + "\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			}
-			_Append("\n", kColDim);
+			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
 		return true;
 	}
@@ -224,11 +223,11 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 
 		if (arg.empty()) {
 			if (fConfig->active_mode.empty()) {
-				_Append("No mode active — full tool access.\n\n", kColDim);
+				_Append("No mode active — full tool access.\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			} else {
 				const pluto::ModeEntry* m = pluto::FindMode(*fConfig, fConfig->active_mode);
 				_Append("Mode: " + fConfig->active_mode + " — "
-					+ (m ? m->description : "unknown") + "\n\n", kColDim);
+					+ (m ? m->description : "unknown") + "\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			}
 		} else if (arg == "off" || arg == "none" || arg == "default") {
 			// Restore global model if the mode had overridden it.
@@ -241,11 +240,11 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 				auto p = pluto::CreateProvider(tc);
 				if (p) _ActiveConv()->SetProvider(std::move(p));
 			}
-			_Append("Mode cleared — full tool access.\n\n", kColDim);
+			_Append("Mode cleared — full tool access.\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		} else {
 			const pluto::ModeEntry* m = pluto::FindMode(*fConfig, arg);
 			if (!m) {
-				_Append("Unknown mode \"" + arg + "\" — use /modes to list.\n\n", kColDim);
+				_Append("Unknown mode \"" + arg + "\" — use /modes to list.\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			} else if (fConfig->active_mode == arg) {
 				// Restore global model if the mode had overridden it.
 				if (!m->model.empty() && _ActiveConv()) {
@@ -256,10 +255,10 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 					if (p) _ActiveConv()->SetProvider(std::move(p));
 				}
 				fConfig->active_mode.clear();
-				_Append("Mode " + arg + " OFF — full tool access.\n\n", kColDim);
+				_Append("Mode " + arg + " OFF — full tool access.\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			} else {
 				fConfig->active_mode = arg;
-				_Append("Mode: " + m->name + " — " + m->description + "\n", kColDim);
+				_Append("Mode: " + m->name + " — " + m->description + "\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 				if (!m->model.empty() && _ActiveConv()) {
 					pluto::Config& tc = _ActiveConv()->MutableConfig();
 					tc.model = m->model;
@@ -273,9 +272,9 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 						tc.max_tokens = std::max(4096, cap);
 					auto p = pluto::CreateProvider(tc);
 					if (p) _ActiveConv()->SetProvider(std::move(p));
-					_Append("  model -> " + m->model + "\n", kColDim);
+					_Append("  model -> " + m->model + "\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 				}
-				_Append("\n", kColDim);
+				_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			}
 		}
 		_UpdateStatus();
@@ -294,13 +293,13 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		struct stat init_st;
 		if (!force && ::stat(md_path.c_str(), &init_st) == 0) {
 			_Append("pluto.md already exists (" + md_path + ")\n",
-				kColDim, B_BOLD_FACE);
-			_Append("Use /init --force to overwrite.\n\n", kColDim);
+				ui_color(B_DOCUMENT_TEXT_COLOR), B_BOLD_FACE);
+			_Append("Use /init --force to overwrite.\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			return true;
 		}
 
 		// Scan the project.
-		_Append("Scanning project…\n", kColDim);
+		_Append("Scanning project…\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		pluto::ProjectInfo info = pluto::DetectProject(root);
 
 		// Show scan results in chat.
@@ -308,9 +307,9 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			char buf[64];
 			snprintf(buf, sizeof(buf), "  Scanned %d files, %d lines\n",
 				info.total_files, info.total_lines);
-			_Append(buf, kColDim);
+			_Append(buf, ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
-		_Append("Generating pluto.md with AI analysis…\n\n", kColDim);
+		_Append("Generating pluto.md with AI analysis…\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 
 		// Show scan results in the side panel.
 		{
@@ -424,7 +423,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		fInitMsgCount = _ActiveConv()->Messages().size();
 
 		// Send as a user message to the active conversation.
-		_ActiveConv()->AppendText("You\n", kColUserRole, B_BOLD_FACE);
+		_ActiveConv()->AppendText("You\n", ui_color(B_CONTROL_TEXT_COLOR), B_BOLD_FACE);
 		_Append("/init — AI project analysis\n\n", kColUserBody);
 
 		std::vector<ContentBlock> blocks;
@@ -441,13 +440,13 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		if (text.size() <= 7) {
 			std::string st = _ActiveConv()->GetSessionTitle();
 			_Append("Title: " + (st.empty()
-				? std::string("(none)") : st) + "\n\n", kColDim);
+				? std::string("(none)") : st) + "\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		} else {
 			std::string newTitle = text.substr(7);
 			while (!newTitle.empty() && newTitle.front() == ' ')
 				newTitle.erase(0, 1);
 			_ActiveConv()->SetSessionTitle(newTitle);
-			_Append("Title: " + newTitle + "\n\n", kColDim);
+			_Append("Title: " + newTitle + "\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			_UpdateTitle();
 		}
 		return true;
@@ -455,7 +454,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 
 	if (text.rfind("/tag", 0) == 0 && (text.size() == 4 || text[4] == ' ')) {
 		if (_ActiveConv()->GetSessionPath().empty()) {
-			_Append("(no session — save first with Cmd+S)\n\n", kColDim);
+			_Append("(no session — save first with Cmd+S)\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			return true;
 		}
 		std::string tag;
@@ -466,28 +465,28 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		if (tag.empty()) {
 			auto tags = pluto::SessionStore::get_tags(_ActiveConv()->GetSessionPath());
 			if (tags.empty()) {
-				_Append("(no tags)\n\n", kColDim);
+				_Append("(no tags)\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			} else {
 				std::string line = "Tags: ";
 				for (size_t i = 0; i < tags.size(); ++i) {
 					if (i > 0) line += ", ";
 					line += tags[i];
 				}
-				_Append(line + "\n\n", kColDim);
+				_Append(line + "\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			}
 			return true;
 		}
 		std::string err;
 		if (!pluto::SessionStore::add_tag(_ActiveConv()->GetSessionPath(), tag, err))
-			_Append("[tag] " + err + "\n\n", kColErr);
+			_Append("[tag] " + err + "\n\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 		else
-			_Append("Tagged: " + tag + "\n\n", kColDim);
+			_Append("Tagged: " + tag + "\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		return true;
 	}
 
 	if (text.rfind("/untag ", 0) == 0) {
 		if (_ActiveConv()->GetSessionPath().empty()) {
-			_Append("(no session loaded)\n\n", kColDim);
+			_Append("(no session loaded)\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			return true;
 		}
 		std::string tag = text.substr(7);
@@ -495,9 +494,9 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		if (tag.empty()) return true;
 		std::string err;
 		if (!pluto::SessionStore::remove_tag(_ActiveConv()->GetSessionPath(), tag, err))
-			_Append("[untag] " + err + "\n\n", kColErr);
+			_Append("[untag] " + err + "\n\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 		else
-			_Append("Untagged: " + tag + "\n\n", kColDim);
+			_Append("Untagged: " + tag + "\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		return true;
 	}
 
@@ -547,7 +546,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			"*End of test.*\n";
 		fSideTitle->SetText("\xF0\x9F\xA7\xAA Test — Markdown Rendering");
 		_RenderMarkdown(md);
-		_Append("Side panel test rendered. Check the detail panel.\n\n", kColDim);
+		_Append("Side panel test rendered. Check the detail panel.\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		return true;
 	}
 
@@ -561,13 +560,13 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			// Show wiki stats + list.
 			std::string dir = pluto::WikiDefaultDir();
 			if (dir.empty()) {
-				_Append("Wiki empty. Use /wiki <url-or-file> to ingest.\n\n", kColDim);
+				_Append("Wiki empty. Use /wiki <url-or-file> to ingest.\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			} else {
 				pluto::WikiInit(dir);
 				int n = pluto::WikiEntryCount();
 				char buf[128];
 				snprintf(buf, sizeof(buf), "Wiki: %d entries in %s/\n", n, dir.c_str());
-				_Append(buf, kColDim, B_BOLD_FACE);
+				_Append(buf, ui_color(B_DOCUMENT_TEXT_COLOR), B_BOLD_FACE);
 				for (const auto& e : pluto::WikiEntries()) {
 					std::string line = "  " + e.topic;
 					if (!e.tags.empty()) {
@@ -579,13 +578,13 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 						line += "]";
 					}
 					line += "\n";
-					_Append(line, kColDim);
+					_Append(line, ui_color(B_DOCUMENT_TEXT_COLOR));
 				}
-				_Append("\n", kColDim);
+				_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			}
 		} else {
 			// Ingest URL or file in background.
-			_Append("Wiki ingest: " + arg + "\n", kColDim);
+			_Append("Wiki ingest: " + arg + "\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			std::string input_arg = arg;
 			// Run ingest in a background thread to avoid blocking the GUI.
 			std::thread([this, input_arg]() {
@@ -634,7 +633,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 
 		if (arg.empty()) {
 			// Scan workspace and open graph viewer with progress updates.
-			_Append("Scanning workspace...\n", kColDim);
+			_Append("Scanning workspace...\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			BMessenger winMsgr(this);
 			std::thread([winMsgr, root, graph_path]() {
 				auto graph = map::ScanWorkspace(root,
@@ -659,14 +658,14 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		} else if (arg.rfind("path ", 0) == 0) {
 			auto graph = map::Graph::LoadFromFile(graph_path);
 			if (graph.Nodes().empty()) {
-				_Append("No graph found. Run /map first.\n\n", kColToolRole);
+				_Append("No graph found. Run /map first.\n\n", ui_color(B_CONTROL_TEXT_COLOR));
 				return true;
 			}
 			std::string rest = arg.substr(5);
 			while (!rest.empty() && rest.front() == ' ') rest.erase(0, 1);
 			auto sp = rest.find(' ');
 			if (sp == std::string::npos) {
-				_Append("Usage: /map path <from> <to>\n\n", kColDim);
+				_Append("Usage: /map path <from> <to>\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 				return true;
 			}
 			std::string from_pat = rest.substr(0, sp);
@@ -674,12 +673,12 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			auto from_nodes = graph.FindNodes(from_pat);
 			auto to_nodes = graph.FindNodes(to_pat);
 			if (from_nodes.empty() || to_nodes.empty()) {
-				_Append("Node not found.\n\n", kColToolRole);
+				_Append("Node not found.\n\n", ui_color(B_CONTROL_TEXT_COLOR));
 				return true;
 			}
 			auto path = graph.PathBetween(from_nodes[0]->id, to_nodes[0]->id);
 			if (path.empty()) {
-				_Append("No path found.\n\n", kColDim);
+				_Append("No path found.\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 				return true;
 			}
 			std::string out = "Path (" + std::to_string(path.size() - 1) + " hops):\n";
@@ -694,7 +693,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			// /map query ... or /map view — pass as user message for LLM
 			auto graph = map::Graph::LoadFromFile(graph_path);
 			if (graph.Nodes().empty()) {
-				_Append("No graph found. Run /map first.\n\n", kColToolRole);
+				_Append("No graph found. Run /map first.\n\n", ui_color(B_CONTROL_TEXT_COLOR));
 				return true;
 			}
 			// Fall through as false to let the prompt be sent to the LLM.
@@ -727,28 +726,28 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			" /systemone show System One (Laya) status and tools\n"
 			"Custom commands from ~/config/settings/pluto/commands/\n"
 			"are also available as /<name> [args].\n\n",
-			kColDim);
+			ui_color(B_DOCUMENT_TEXT_COLOR));
 		return true;
 	}
 
 	if (text == "/systemone") {
-		_Append("System One (Laya-based Decision Model)\n", kColDim, B_BOLD_FACE);
-		_Append("====================================\n\n", kColDim);
-		_Append("MCP Server: systemone_server (stdio transport)\n", kColDim);
-		_Append("Auto-discovered and connected as built-in MCP.\n\n", kColDim);
-		_Append("Available tools (9):\n", kColDim, B_BOLD_FACE);
-		_Append("  systemone_classify        - single-label classification\n", kColDim);
-		_Append("  systemone_classify_multi  - multi-label classification\n", kColDim);
-		_Append("  systemone_verify          - entailment check (ground RAG)\n", kColDim);
-		_Append("  systemone_guard           - safety gate (injection/PII/toxic/spam)\n", kColDim);
-		_Append("  systemone_select_relevant - context pruning (90% recall)\n", kColDim);
-		_Append("  systemone_same_intent     - semantic dedup (94% accuracy)\n", kColDim);
-		_Append("  systemone_triage          - guard + route + tags + urgency\n", kColDim);
-		_Append("  systemone_answerable      - RAG gate (threshold 0.3)\n", kColDim);
-		_Append("  systemone_consult         - decisions with persistent memory\n", kColDim);
-		_Append("  systemone_decide_program  - full pipeline (token-efficient)\n\n", kColDim);
-		_Append("Token savings: 5-10x fewer tokens by delegating to System One\n", kColDim);
-		_Append("Memory: persistent topic memory (remember/recall/consult)\n\n", kColDim);
+		_Append("System One (Laya-based Decision Model)\n", ui_color(B_DOCUMENT_TEXT_COLOR), B_BOLD_FACE);
+		_Append("====================================\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("MCP Server: systemone_server (stdio transport)\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("Auto-discovered and connected as built-in MCP.\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("Available tools (9):\n", ui_color(B_DOCUMENT_TEXT_COLOR), B_BOLD_FACE);
+		_Append("  systemone_classify        - single-label classification\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("  systemone_classify_multi  - multi-label classification\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("  systemone_verify          - entailment check (ground RAG)\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("  systemone_guard           - safety gate (injection/PII/toxic/spam)\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("  systemone_select_relevant - context pruning (90% recall)\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("  systemone_same_intent     - semantic dedup (94% accuracy)\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("  systemone_triage          - guard + route + tags + urgency\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("  systemone_answerable      - RAG gate (threshold 0.3)\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("  systemone_consult         - decisions with persistent memory\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("  systemone_decide_program  - full pipeline (token-efficient)\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("Token savings: 5-10x fewer tokens by delegating to System One\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("Memory: persistent topic memory (remember/recall/consult)\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		return true;
 	}
 
@@ -756,16 +755,16 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 
 	if (text == "/commands") {
 		if (fCustomCommands.empty()) {
-			_Append("(no custom commands)\n\n", kColDim);
+			_Append("(no custom commands)\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		} else {
-			_Append("Custom commands:\n", kColDim, B_BOLD_FACE);
+			_Append("Custom commands:\n", ui_color(B_DOCUMENT_TEXT_COLOR), B_BOLD_FACE);
 			for (const auto& c : fCustomCommands) {
 				std::string line = "  /" + c.name;
 				if (!c.description.empty()) line += " — " + c.description;
 				line += "\n";
-				_Append(line, kColDim);
+				_Append(line, ui_color(B_DOCUMENT_TEXT_COLOR));
 			}
-			_Append("\n", kColDim);
+			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
 		return true;
 	}
@@ -774,17 +773,17 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 	if (text == "/routines") {
 		auto routines = pluto::ListRoutines();
 		if (routines.empty()) {
-			_Append("(no routines)\n\n", kColDim);
+			_Append("(no routines)\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		} else {
-			_Append("Routines:\n", kColDim, B_BOLD_FACE);
+			_Append("Routines:\n", ui_color(B_DOCUMENT_TEXT_COLOR), B_BOLD_FACE);
 			for (const auto& r : routines) {
 				std::string line = "  " + r.name;
 				line += "  [" + r.schedule + "]";
 				if (!r.enabled) line += "  (paused)";
 				line += "\n";
-				_Append(line, kColDim);
+				_Append(line, ui_color(B_DOCUMENT_TEXT_COLOR));
 			}
-			_Append("\nUse /routine <name> to run one.\n\n", kColDim);
+			_Append("\nUse /routine <name> to run one.\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
 		return true;
 	}
@@ -795,7 +794,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		while (!name.empty() && name.front() == ' ') name.erase(0, 1);
 		while (!name.empty() && name.back() == ' ') name.pop_back();
 		if (name.empty()) {
-			_Append("Usage: /routine <name>\n\n", kColDim);
+			_Append("Usage: /routine <name>\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			return true;
 		}
 		auto routines = pluto::ListRoutines();
@@ -806,8 +805,8 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 				return false;  // re-sent as normal prompt
 			}
 		}
-		_Append("Routine not found: " + name + "\n", kColDim);
-		_Append("Use /routines to see available routines.\n\n", kColDim);
+		_Append("Routine not found: " + name + "\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("Use /routines to see available routines.\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		return true;
 	}
 

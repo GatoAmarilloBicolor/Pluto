@@ -101,7 +101,6 @@ const uint32 kMsgSaveSession  = 'plSv';
 const uint32 kMsgResumeLast   = 'plRl';
 const uint32 kMsgLoadSession  = 'plLd';
 const uint32 kMsgStop         = 'plSt';
-// kMsgApproval now in ChatColors.h.
 const uint32 kMsgZoomIn       = 'plZi';
 const uint32 kMsgZoomOut      = 'plZo';
 const uint32 kMsgZoomReset    = 'plZr';
@@ -113,7 +112,6 @@ const uint32 kMsgFindNext     = 'plF>';
 const uint32 kMsgFindHide     = 'plFh';
 const uint32 kMsgMcpDiscover  = 'plMd';
 const uint32 kMsgUserGuide   = 'plUg';
-// kMsgWorker*, kMsgCursorTick, kMsgApproval, kMsgToolToggle now in ChatColors.h.
 const uint32 kMsgSideLink     = 'plSl';
 const uint32 kMsgDeskbarInstall = 'plDi';
 const uint32 kMsgDeskbarRemove  = 'plDr';
@@ -124,7 +122,6 @@ const uint32 kMsgRoutineDialog       = 'plRd';
 const uint32 kMsgAgentDialog         = 'plAg';
 const uint32 kMsgImageClear          = 'plIc';
 const uint32 kMsgImageRemove         = 'plIr';
-// kMsgWorkerImage, kMsgWorkerStatus, kMsgWorkerRag in ChatColors.h.
 const uint32 kMsgSessionBrowser      = 'plSb';
 const uint32 kMsgModelQuickSwitch    = 'plMq';
 const uint32 kMsgRunRoutine          = 'plRr';
@@ -189,12 +186,6 @@ bool is_dark_theme() {
 	return (bg.red + bg.green + bg.blue) < 384;
 }
 
-// Fixed background/foreground for forced color schemes.
-const rgb_color kDarkBg   = {  30,  30,  30, 255 };
-const rgb_color kDarkFg   = { 220, 220, 220, 255 };
-const rgb_color kLightBg  = { 255, 255, 255, 255 };
-const rgb_color kLightFg  = {  20,  20,  20, 255 };
-
 rgb_color brighten(rgb_color c, int by) {
 	auto clamp = [](int v) -> uint8 {
 		return static_cast<uint8>(std::max(0, std::min(255, v)));
@@ -204,7 +195,6 @@ rgb_color brighten(rgb_color c, int by) {
 }
 
 
-// Arrow/cursor constants now in ChatColors.h.
 
 std::string trim(const std::string& s) {
 	size_t a = 0, b = s.size();
@@ -642,7 +632,6 @@ private:
 	std::string fHistorySaved;
 };
 
-// ChatOutput class is now in ChatColors.h.
 
 // Side panel text view with clickable links.
 class ClickableTextView : public BTextView {
@@ -1374,7 +1363,7 @@ MainWindow::MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
 	BFont sf = *be_plain_font;
 	sf.SetSize(sf.Size() - 1);
 	fStatus->SetFont(&sf);
-	fStatus->SetHighColor(kColDim);
+	fStatus->SetHighColor(ui_color(B_DOCUMENT_TEXT_COLOR));
 	fStatus->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 	fStatus->SetToolTip("Click to switch model");
 
@@ -1448,32 +1437,32 @@ MainWindow::MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
 		auto pad_to = [&](size_t cur_len) {
 			if (cur_len < kLeftCol) {
 				std::string sp(kLeftCol - cur_len, ' ');
-				_Append(sp, kColDim, 0, true);
+				_Append(sp, ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			}
 		};
 
 		// Helper: append art for a given line index.
 		auto emit_art = [&](int line) {
 			if (line < kArtLines) {
-				_Append(kArt[line], kColDim, 0, true);
+				_Append(kArt[line], ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			}
 		};
 
 		// Line 0: Title + art[0]
-		_Append("  Pluto", kColAsstRole, B_BOLD_FACE, true);
-		_Append("  Haiku-native AI assistant", kColDim, 0, true);
+		_Append("  Pluto", ui_color(B_CONTROL_TEXT_COLOR), B_BOLD_FACE, true);
+		_Append("  Haiku-native AI assistant", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 		pad_to(34);  // "  Pluto" (7) + "  Haiku..." (27) = 34
 		emit_art(0);
-		_Append("\n", kColDim);
+		_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 
 		// Line 1: blank + art[1]
 		pad_to(0);
 		emit_art(1);
-		_Append("\n", kColDim);
+		_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 
 		// Line 2: Provider + art[2]
 		{
-			_Append("  Provider   ", kColDim, 0, true);
+			_Append("  Provider   ", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			const Config& bc = _ActiveConv()
 				? _ActiveConv()->GetConfig() : *fConfig;
 			std::string prov = friendly_provider(bc);
@@ -1485,12 +1474,12 @@ MainWindow::MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
 			_Append(prov, kColAsstBody, 0, true);
 			pad_to(13 + prov.size());
 			emit_art(2);
-			_Append("\n", kColDim);
+			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
 
 		// Line 3: Model + art[3]
 		{
-			_Append("  Model      ", kColDim, 0, true);
+			_Append("  Model      ", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			std::string model = _ActiveConv()
 				? _ActiveConv()->GetModel() : fConfig->model;
 			const size_t kMaxModel = kLeftCol - 14;  // 13 prefix + 1 space
@@ -1499,12 +1488,12 @@ MainWindow::MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
 			_Append(model, kColAsstBody, 0, true);
 			pad_to(13 + model.size());
 			emit_art(3);
-			_Append("\n", kColDim);
+			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
 
 		// Line 4: Tools + art[4]
 		{
-			_Append("  Tools      ", kColDim, 0, true);
+			_Append("  Tools      ", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			char buf[64];
 			std::snprintf(buf, sizeof(buf), "%ld built-in", builtin);
 			std::string tools_val = buf;
@@ -1515,20 +1504,20 @@ MainWindow::MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
 			_Append(tools_val, kColAsstBody, 0, true);
 			pad_to(13 + tools_val.size());
 			emit_art(4);
-			_Append("\n", kColDim);
+			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
 
 		// Line 5: MCP or Routines + art[5]
 		if (!mcp_str.empty()) {
-			_Append("  MCP        ", kColDim, 0, true);
+			_Append("  MCP        ", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			_Append(mcp_str, kColAsstBody, 0, true);
 			pad_to(13 + mcp_str.size());
 			emit_art(5);
-			_Append("\n", kColDim);
+			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		} else {
 			pad_to(0);
 			emit_art(5);
-			_Append("\n", kColDim);
+			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
 
 		// Remaining info lines (no art).
@@ -1536,31 +1525,31 @@ MainWindow::MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
 			char buf[64];
 			std::snprintf(buf, sizeof(buf), "%ld routine%s",
 				(long)routines.size(), routines.size() == 1 ? "" : "s");
-			_Append("  Routines   ", kColDim, 0, true);
+			_Append("  Routines   ", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			_Append(buf, kColAsstBody, 0, true);
-			_Append("\n", kColDim);
+			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
 		if (mcp_str.empty() && !routines.empty()) {
 			char buf[64];
 			std::snprintf(buf, sizeof(buf), "%ld routine%s",
 				(long)routines.size(), routines.size() == 1 ? "" : "s");
-			_Append("  Routines   ", kColDim, 0, true);
+			_Append("  Routines   ", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			_Append(buf, kColAsstBody, 0, true);
-			_Append("\n", kColDim);
+			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
 		if (!ws.empty()) {
-			_Append("  Workspace  ", kColDim, 0, true);
+			_Append("  Workspace  ", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 			_Append(ws, kColAsstBody, 0, true);
-			_Append("\n", kColDim);
+			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
 
-		_Append("\n", kColDim);
+		_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		_Append("  Enter", kColAsstBody, B_BOLD_FACE, true);
-		_Append(" send  ", kColDim, 0, true);
+		_Append(" send  ", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 		_Append("Shift+Enter", kColAsstBody, B_BOLD_FACE, true);
-		_Append(" newline  ", kColDim, 0, true);
+		_Append(" newline  ", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 		_Append("/", kColAsstBody, B_BOLD_FACE, true);
-		_Append(" commands\n\n", kColDim, 0, true);
+		_Append(" commands\n\n", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 	}
 
 	_ResetSidePanel();
@@ -1722,7 +1711,7 @@ void MainWindow::OnToolOutput(const std::string& tool_name,
 	}
 	if (fImagePreview->HasBitmap() && !fImagePreview->IsHidden()) {
 		_Append("\xf0\x9f\x96\xbc [image preview in side panel]\n",
-			kColDim, B_ITALIC_FACE);
+			ui_color(B_DOCUMENT_TEXT_COLOR), B_ITALIC_FACE);
 	}
 }
 
@@ -1772,8 +1761,8 @@ void MainWindow::OnTurnDone(const std::string& preview) {
 						std::ofstream f(path, std::ios::trunc);
 						if (f) {
 							f << content;
-							_Append("\nSaved " + path + "\n", kColAsstRole, B_BOLD_FACE);
-							_Append("It will be loaded automatically on the next session.\n\n", kColDim);
+							_Append("\nSaved " + path + "\n", ui_color(B_CONTROL_TEXT_COLOR), B_BOLD_FACE);
+							_Append("It will be loaded automatically on the next session.\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 							pluto::ApplyProjectMemory(*fConfig);
 
 							// Show content in side panel.
@@ -1783,7 +1772,7 @@ void MainWindow::OnTurnDone(const std::string& preview) {
 							BFont mono = *be_fixed_font;
 							fSideView->SetFontAndColor(0, n, &mono, B_FONT_ALL, nullptr);
 						} else {
-							_Append("\nFailed to write " + path + "\n", kColErr);
+							_Append("\nFailed to write " + path + "\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 						}
 					}
 					break;
@@ -1791,7 +1780,7 @@ void MainWindow::OnTurnDone(const std::string& preview) {
 			}
 		} else {
 			_Append("\n/init failed — no response from model. "
-				"Try switching to a different model and run /init --force\n\n", kColErr);
+				"Try switching to a different model and run /init --force\n\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 		}
 	}
 
@@ -2065,7 +2054,7 @@ void MainWindow::_ResetSidePanel() {
 	int32 n = fSideView->TextLength();
 	BFont f = *be_plain_font;
 	f.SetSize(f.Size() + fFontDelta);
-	rgb_color c = kColDim;
+	rgb_color c = ui_color(B_DOCUMENT_TEXT_COLOR);
 	fSideView->SetFontAndColor(0, n, &f, B_FONT_ALL, &c);
 }
 
@@ -2174,12 +2163,12 @@ void MainWindow::_UpdateSidePanel(const std::string& title,
 		BFont bold_f = *be_plain_font;
 		bold_f.SetFace(B_BOLD_FACE);
 		bold_f.SetSize(bold_f.Size() + fFontDelta + 2);
-		fSideView->SetFontAndColor(0, header_end, &bold_f, B_FONT_ALL, &kColErr);
+		fSideView->SetFontAndColor(0, header_end, &bold_f, B_FONT_ALL, &ui_color(B_ALERT_BACKGROUND_COLOR));
 		// Style the body.
 		int32 n = fSideView->TextLength();
 		BFont mono_f = *be_fixed_font;
 		mono_f.SetSize(mono_f.Size() + fFontDelta);
-		fSideView->SetFontAndColor(header_end, n, &mono_f, B_FONT_ALL, &kColErr);
+		fSideView->SetFontAndColor(header_end, n, &mono_f, B_FONT_ALL, &ui_color(B_ALERT_BACKGROUND_COLOR));
 		fSideView->ScrollToOffset(0);
 	} else {
 		// Render as markdown — tool output often contains structured text.
@@ -2273,7 +2262,7 @@ void MainWindow::_UpdateStatus() {
 		fCtxWarningShown = 90;
 		_Append("\xe2\x9a\xa0 Context window 90% full — "
 			"consider starting a new conversation (/reset)\n\n",
-			kColErr, B_BOLD_FACE);
+			ui_color(B_ALERT_BACKGROUND_COLOR), B_BOLD_FACE);
 		BNotification n(B_IMPORTANT_NOTIFICATION);
 		n.SetGroup("Pluto");
 		n.SetTitle("Context almost full");
@@ -2359,7 +2348,7 @@ void MainWindow::MessageReceived(BMessage* msg) {
 						clean += *p++;
 					}
 				}
-				_Append(clean + "\n", kColDim);
+				_Append(clean + "\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			}
 			break;
 		}
@@ -2524,7 +2513,7 @@ void MainWindow::MessageReceived(BMessage* msg) {
 					std::string note = "  \xe2\x9c\x93 Graph: "
 						+ std::to_string(graph.Nodes().size()) + " nodes, "
 						+ std::to_string(graph.Edges().size()) + " edges\n\n";
-					_Append(note, kColDim, 0, true);
+					_Append(note, ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 					_UpdateStatus();
 				}
 			}
@@ -2601,7 +2590,7 @@ void MainWindow::MessageReceived(BMessage* msg) {
 					if (!tc.model.empty())
 						note += " / " + tc.model;
 					note += "\n\n";
-					_Append(note, kColDim, 0, true);
+					_Append(note, ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 				}
 			}
 			_UpdateTitle();
@@ -2883,16 +2872,16 @@ void MainWindow::MessageReceived(BMessage* msg) {
 
 		case kMsgDeskbarInstall:
 			if (InstallDeskbarReplicant())
-				_Append("Deskbar icon installed.\n", kColDim);
+				_Append("Deskbar icon installed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			else
-				_Append("Could not install Deskbar icon.\n", kColErr);
+				_Append("Could not install Deskbar icon.\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 			break;
 
 		case kMsgDeskbarRemove:
 			if (RemoveDeskbarReplicant())
-				_Append("Deskbar icon removed.\n", kColDim);
+				_Append("Deskbar icon removed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			else
-				_Append("Could not remove Deskbar icon.\n", kColErr);
+				_Append("Could not remove Deskbar icon.\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 			break;
 
 		case kMsgTrackerAddonInstall: {
@@ -2916,11 +2905,11 @@ void MainWindow::MessageReceived(BMessage* msg) {
 			std::string cmd = "mkdir -p '" + dst_dir + "' && cp '"
 				+ src + "' '" + dst_dir + "/'";
 			if (std::system(cmd.c_str()) == 0) {
-				_Append("Tracker add-on \"Ask Pluto\" installed.\n", kColDim);
-				_Append("Right-click files in Tracker to use it.\n", kColDim);
+				_Append("Tracker add-on \"Ask Pluto\" installed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+				_Append("Right-click files in Tracker to use it.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			} else {
-				_Append("Could not install Tracker add-on.\n", kColErr);
-				_Append("Build it first: make 'Ask Pluto'\n", kColErr);
+				_Append("Could not install Tracker add-on.\n", ui_color(B_ALERT_BACKGROUND_COLOR));
+				_Append("Build it first: make 'Ask Pluto'\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 			}
 			break;
 		}
@@ -2929,9 +2918,9 @@ void MainWindow::MessageReceived(BMessage* msg) {
 			std::string path = HomeDir()
 				+ "/config/non-packaged/add-ons/Tracker/Ask Pluto";
 			if (std::remove(path.c_str()) == 0)
-				_Append("Tracker add-on removed.\n", kColDim);
+				_Append("Tracker add-on removed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			else
-				_Append("Tracker add-on not found.\n", kColErr);
+				_Append("Tracker add-on not found.\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 			break;
 		}
 
@@ -2991,7 +2980,7 @@ void MainWindow::MessageReceived(BMessage* msg) {
 
 		case kMsgOAuthLogin: {
 			// Disable the menu item and start OAuth in a background thread.
-			_Append("Opening browser for Claude login…\n", kColDim);
+			_Append("Opening browser for Claude login…\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			thread_id tid = spawn_thread(
 				[](void* data) -> int32 {
 					auto* self = static_cast<MainWindow*>(data);
@@ -3008,7 +2997,7 @@ void MainWindow::MessageReceived(BMessage* msg) {
 		case kMsgOAuthLogout: {
 			pluto::DeleteOAuthTokens();
 			_Append("Logged out from Claude account.\n"
-				"Restart Pluto to use API key.\n\n", kColDim);
+				"Restart Pluto to use API key.\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			break;
 		}
 
@@ -3035,13 +3024,13 @@ void MainWindow::MessageReceived(BMessage* msg) {
 					_Append("\xe2\x9c\x93 Login successful! "
 						"Switched to Claude (Sonnet 4.6).\n"
 						"Click the status bar to change model.\n\n",
-						kColAsstRole);
+						ui_color(B_CONTROL_TEXT_COLOR));
 					_UpdateTitle();
 					_UpdateStatus();
 				}
 			} else {
 				_Append("Login failed — check browser or network.\n\n",
-					kColErr);
+					ui_color(B_ALERT_BACKGROUND_COLOR));
 			}
 			break;
 		}
@@ -3090,7 +3079,7 @@ void MainWindow::MessageReceived(BMessage* msg) {
 				pluto::SaveConfig(*fConfig);
 
 				_Append("Model switched to: "
-					+ std::string(picked_id) + "\n\n", kColDim);
+					+ std::string(picked_id) + "\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 				_UpdateTitle();
 				_UpdateStatus();
 				break;
@@ -3210,20 +3199,20 @@ void MainWindow::_SendCurrentInput() {
 		return;
 	}
 
-	_ActiveConv()->AppendText("You\n", kColUserRole, B_BOLD_FACE);
+	_ActiveConv()->AppendText("You\n", ui_color(B_CONTROL_TEXT_COLOR), B_BOLD_FACE);
 	if (!text.empty())
 		_Append(text + "\n", kColUserBody);
 	// Show attached images inline in the chat.
 	for (const auto& img : fPendingImages) {
 		if (img.kind == "audio") {
-			_Append("\xf0\x9f\x94\x8a [" + img.filename + "]", kColDim);
-			_Append("  (audio not processed by model)\n", kColWarn);
+			_Append("\xf0\x9f\x94\x8a [" + img.filename + "]", ui_color(B_DOCUMENT_TEXT_COLOR));
+			_Append("  (audio not processed by model)\n", {255, 180, 0, 255});
 		} else if (img.kind == "pdf") {
-			_Append("\xf0\x9f\x93\x84 [" + img.filename + "]\n", kColDim);
+			_Append("\xf0\x9f\x93\x84 [" + img.filename + "]\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		} else if (!img.base64_data.empty()) {
 			_ActiveConv()->InsertInlineImage(img.base64_data);
 		} else {
-			_Append("\xf0\x9f\x96\xbc [" + img.filename + "]\n", kColDim);
+			_Append("\xf0\x9f\x96\xbc [" + img.filename + "]\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		}
 	}
 	_Append("\n", kColUserBody);
@@ -3275,8 +3264,8 @@ void MainWindow::_ResetConversation() {
 	c->Reset();
 	_ClearPendingImages();
 	fCtxWarningShown = 0;
-	_Append("Pluto\n", kColAsstRole, B_BOLD_FACE);
-	_Append("(new conversation)\n\n", kColDim);
+	_Append("Pluto\n", ui_color(B_CONTROL_TEXT_COLOR), B_BOLD_FACE);
+	_Append("(new conversation)\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 	if (fTabView) {
 		int32 sel = fTabView->Selection();
 		if (sel >= 0 && fTabView->TabAt(sel)) {
@@ -3359,14 +3348,10 @@ ConversationView* MainWindow::_CreateTab() {
 	                                  fTools, this);
 	// Apply current color scheme to the new TextDocumentView.
 	if (conv->DocView()) {
-		if (gColorScheme == "dark") {
+		if (gColorScheme == "dark" || gColorScheme == "light") {
 			conv->DocView()->SetViewUIColor(B_NO_COLOR);
-			conv->DocView()->SetViewColor(kDarkBg);
-			conv->DocView()->SetLowColor(kDarkBg);
-		} else if (gColorScheme == "light") {
-			conv->DocView()->SetViewUIColor(B_NO_COLOR);
-			conv->DocView()->SetViewColor(kLightBg);
-			conv->DocView()->SetLowColor(kLightBg);
+			conv->DocView()->SetViewColor(ui_color(B_DOCUMENT_BACKGROUND_COLOR));
+			conv->DocView()->SetLowColor(ui_color(B_DOCUMENT_BACKGROUND_COLOR));
 		} else {
 			conv->DocView()->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
 			conv->DocView()->SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
@@ -3613,179 +3598,74 @@ void MainWindow::_InitPalette() {
 	gColorScheme = fConfig->color_scheme;
 	bool dark = is_dark_theme();
 
-	fprintf(stderr, "PALETTE: color_scheme='%s' dark=%d
-",
+	fprintf(stderr, "PALETTE: color_scheme='%s' dark=%d\n",
 		gColorScheme.c_str(), dark);
 
-	// Determine text color: forced scheme overrides system.
-	rgb_color body;
-	rgb_color code_bg;
-	rgb_color link_color;
-	if (gColorScheme == "dark") {
-		body = kDarkFg;
-		code_bg = kDarkCodeBg;
-		link_color = kColUserRole;
-	} else if (gColorScheme == "light") {
-		body = kLightFg;
-		code_bg = kLightCodeBg;
-		link_color = kLightUserRole;
-	} else {
-		body = ui_color(B_DOCUMENT_TEXT_COLOR);
-		code_bg = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
-		link_color = kColUserRole;
-	}
+	// Use system colors - let Haiku handle dark/light theme
+	rgb_color body = ui_color(B_DOCUMENT_TEXT_COLOR);
+	rgb_color code_bg = ui_color(B_PANEL_BACKGROUND_COLOR);
+	rgb_color link_color = ui_color(B_CONTROL_TEXT_COLOR);
 
-	fprintf(stderr, "PALETTE: body=(%d,%d,%d)
-", body.red, body.green, body.blue);
-
-	// Body text for user/assistant messages
-	kColUserBody = body;
-	kColAsstBody = body;
-
-	// Modern flat design role colors (from ChatColors.cpp)
-	if (dark) {
-		// Dark theme - calm, professional palette
-		kColUserRole = {  99, 179, 237, 255 };  // #63B3ED
-		kColAsstRole = {  72, 187, 120, 255 };  // #48BB78
-		kColToolRole = { 159, 122, 234, 255 };  // #9F7AE6
-		kColErr      = { 245, 101, 101, 255 };  // #F56565
-		kColWarn     = { 237, 137,  54, 255 };  // #ED8936
-		kColDim      = { 160, 174, 192, 255 };  // #A0AEB0
-		kColShimmer  = {  56, 178, 172, 255 };  // #38B2AC
-		// Syntax - dark
-		kColSynKeyword = { 129, 180, 255, 255 };
-		kColSynString  = { 238, 168, 120, 255 };
-		kColSynComment = { 113, 128, 150, 255 };
-		kColSynNumber  = { 100, 210, 210, 255 };
-		kColSynPreproc = { 224, 158, 102, 255 };
-		kColSynType    = { 100, 210, 180, 255 };
-	} else {
-		// Light theme - deep, readable
-		kColUserRole = {  30,  90, 170, 255 };
-		kColAsstRole = {  22, 120,  70, 255 };
-		kColToolRole = { 100,  70, 180, 255 };
-		kColErr      = { 180,  40,  40, 255 };
-		kColWarn     = { 170, 110,  20, 255 };
-		kColDim      = { 100, 110, 120, 255 };
-		kColShimmer  = {  30, 140, 130, 255 };
-		// Syntax - light
-		kColSynKeyword = {  40,  80, 180, 255 };
-		kColSynString  = { 160,  90,  30, 255 };
-		kColSynComment = { 100, 110, 120, 255 };
-		kColSynNumber  = {  30, 120, 120, 255 };
-		kColSynPreproc = { 140,  80,  30, 255 };
-		kColSynType    = {  30, 130, 100, 255 };
-	}
+	fprintf(stderr, "PALETTE: body=(%d,%d,%d)\n", body.red, body.green, body.blue);
 
 	// Apply background colors chat views.
 	_ApplyViewColors();
 }
 
 void MainWindow::_ApplyViewColors() {
-	// Guard: called from _InitPalette which may run before views exist.
+	// Guard: called from _InitPalette may run before views exist.
 	if (!fTabView || fTabView->CountTabs() == 0) return;
 
-	// Helper: apply colors to a single output view.
-	// Color application is now handled by TextDocumentView (fDocView)
-	// and MarkdownParser -- legacy BTextView color code removed.
+	// Use system colors - let Haiku handle dark/light theme
+	rgb_color bg = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
+	rgb_color fg = ui_color(B_DOCUMENT_TEXT_COLOR);
+	rgb_color code_bg = ui_color(B_PANEL_BACKGROUND_COLOR);
+	rgb_color link_color = ui_color(B_CONTROL_TEXT_COLOR);
 
-	if (gColorScheme == "dark" || gColorScheme == "light") {
-		rgb_color bg = (gColorScheme == "dark") ? kDarkBg : kLightBg;
-		rgb_color fg = (gColorScheme == "dark") ? kDarkFg : kLightFg;
-		rgb_color code_bg = (gColorScheme == "dark") ? kDarkCodeBg : kLightCodeBg;
-		rgb_color link_color = (gColorScheme == "dark") ? kColUserRole : kLightUserRole;
-
-		// Apply to ALL tabs.
-		for (int32 i = 0; i < fTabView->CountTabs(); ++i) {
-			auto* conv = static_cast<ConversationView*>(
-				fTabView->ViewForTab(i));
-			if (conv) {
-				conv->UpdateParserColors(false, fg, code_bg, link_color);
-				if (conv->DocView()) {
-					conv->DocView()->SetViewUIColor(B_NO_COLOR);
-					conv->DocView()->SetViewColor(bg);
-					conv->DocView()->SetLowColor(bg);
-					conv->DocView()->Invalidate();
-				}
+	// Apply to ALL tabs.
+	for (int32 i = 0; i < fTabView->CountTabs(); ++i) {
+		auto* conv = static_cast<ConversationView*>(
+			fTabView->ViewForTab(i));
+		if (conv) {
+			conv->UpdateParserColors(true, fg, code_bg, link_color);
+			if (conv->DocView()) {
+				conv->DocView()->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+				conv->DocView()->SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+				conv->DocView()->Invalidate();
 			}
 		}
-
-		if (fSideView) {
-			fSideView->SetViewUIColor(B_NO_COLOR);
-			fSideView->SetViewColor(bg);
-			fSideView->SetLowColor(bg);
-			fSideView->SetHighColor(fg);
-		}
-		if (fInput) {
-			fInput->SetViewUIColor(B_NO_COLOR);
-			fInput->SetViewColor(bg);
-			fInput->SetLowColor(bg);
-			BFont font;
-			fInput->GetFontAndColor(0, &font);
-			fInput->SetFontAndColor(&font, B_FONT_ALL, &fg);
-		}
-		if (fStatus)
-			fStatus->SetHighColor(kColDim);
-	} else {
-		// Auto: follow system document colors.
-		rgb_color sysFg = ui_color(B_DOCUMENT_TEXT_COLOR);
-		rgb_color sysBg = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
-		rgb_color link_color = kColUserRole;
-
-		for (int32 i = 0; i < fTabView->CountTabs(); ++i) {
-			auto* conv = static_cast<ConversationView*>(
-				fTabView->ViewForTab(i));
-			if (conv) {
-				conv->UpdateParserColors(true, sysFg, sysBg, link_color);
-				if (conv->DocView()) {
-					conv->DocView()->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
-					conv->DocView()->SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
-					conv->DocView()->Invalidate();
-				}
-			}
-		}
-
-		if (fSideView) {
-			fSideView->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
-			fSideView->SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
-			fSideView->SetHighColor(sysFg);
-		}
-		if (fInput) {
-			fInput->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
-			fInput->SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
-			BFont font;
-			fInput->GetFontAndColor(0, &font);
-			fInput->SetFontAndColor(&font, B_FONT_ALL, &sysFg);
-		}
-		if (fStatus)
-			fStatus->SetHighColor(kColDim);
 	}
-	if (auto* v = _Output()) v->Invalidate();
-	if (fSideView) fSideView->Invalidate();
-	if (fInput) fInput->Invalidate();
-	if (fStatus) fStatus->Invalidate();
+
+	if (fSideView) {
+		fSideView->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+		fSideView->SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+		fSideView->SetHighColor(fg);
+	}
+	if (fInput) {
+		fInput->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+		fInput->SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+		BFont font;
+		fInput->GetFontAndColor(0, &font);
+		fInput->SetFontAndColor(&font, B_FONT_ALL, &fg);
+	}
+	if (fStatus)
+		fStatus->SetHighColor(ui_color(B_DOCUMENT_TEXT_COLOR));
 }
 
-// Markdown renderer into a stylable BTextView. Handles:
-//   # headings (bold, scaled)         | tables (aligned, bordered)
-//   **bold**, *italic*                | [links](url) (underlined blue)
-//   `inline code`, ```fenced blocks```| ![images](path) (placeholder)
-//   - bullet / 1. numbered lists      | > blockquotes (indented, dim)
-//   --- horizontal rules              | task lists - [ ] / - [x]
 void MainWindow::_RenderMarkdown(const std::string& text) {
 	fSideView->SetText("");
 	fSideLinks.clear();
 	fSideAnchors.clear();
 
 	// Use forced text color in dark/light mode, system color in auto.
-	rgb_color body_col    = (gColorScheme == "dark")  ? kDarkFg
-	                      : (gColorScheme == "light") ? kLightFg
+	rgb_color body_col    = (gColorScheme == "dark")  ? ui_color(B_DOCUMENT_TEXT_COLOR)
+	                      : (gColorScheme == "light") ? ui_color(B_DOCUMENT_TEXT_COLOR)
 	                      : ui_color(B_DOCUMENT_TEXT_COLOR);
-	rgb_color dim_col     = kColDim;
-	rgb_color code_col    = kColToolBody;
-	rgb_color heading_col = kColAsstRole;
-	rgb_color link_col    = kColUserRole;
-	rgb_color check_col   = kColAsstRole;
+	rgb_color dim_col     = ui_color(B_DOCUMENT_TEXT_COLOR);
+	rgb_color code_col    = ui_color(B_PANEL_BACKGROUND_COLOR);
+	rgb_color heading_col = ui_color(B_CONTROL_TEXT_COLOR);
+	rgb_color link_col    = ui_color(B_CONTROL_TEXT_COLOR);
+	rgb_color check_col   = ui_color(B_CONTROL_TEXT_COLOR);
 
 	auto append = [this](const std::string& s, rgb_color c,
 	                      uint16 face, bool mono, int size_delta) {
@@ -4007,17 +3887,17 @@ void MainWindow::_RenderMarkdown(const std::string& text) {
 					rgb_color tc = code_col;
 					switch (tok.type) {
 						case pluto::gui::TokenType::Keyword:
-							tc = kColSynKeyword; break;
+							tc = ui_color(B_CONTROL_TEXT_COLOR); break;
 						case pluto::gui::TokenType::String:
-							tc = kColSynString; break;
+							tc = ui_color(B_CONTROL_TEXT_COLOR); break;
 						case pluto::gui::TokenType::Comment:
-							tc = kColSynComment; break;
+							tc = ui_color(B_DOCUMENT_TEXT_COLOR); break;
 						case pluto::gui::TokenType::Number:
-							tc = kColSynNumber; break;
+							tc = ui_color(B_CONTROL_TEXT_COLOR); break;
 						case pluto::gui::TokenType::Preprocessor:
-							tc = kColSynPreproc; break;
+							tc = ui_color(B_CONTROL_TEXT_COLOR); break;
 						case pluto::gui::TokenType::Type:
-							tc = kColSynType; break;
+							tc = ui_color(B_CONTROL_TEXT_COLOR); break;
 						default: break;
 					}
 					append(tok.text, tc, 0, true, 0);
@@ -4191,17 +4071,17 @@ void MainWindow::_RenderMarkdown(const std::string& text) {
 			rgb_color tc = code_col;
 			switch (tok.type) {
 				case pluto::gui::TokenType::Keyword:
-					tc = kColSynKeyword; break;
+					tc = ui_color(B_CONTROL_TEXT_COLOR); break;
 				case pluto::gui::TokenType::String:
-					tc = kColSynString; break;
+					tc = ui_color(B_CONTROL_TEXT_COLOR); break;
 				case pluto::gui::TokenType::Comment:
-					tc = kColSynComment; break;
+					tc = ui_color(B_DOCUMENT_TEXT_COLOR); break;
 				case pluto::gui::TokenType::Number:
-					tc = kColSynNumber; break;
+					tc = ui_color(B_CONTROL_TEXT_COLOR); break;
 				case pluto::gui::TokenType::Preprocessor:
-					tc = kColSynPreproc; break;
+					tc = ui_color(B_CONTROL_TEXT_COLOR); break;
 				case pluto::gui::TokenType::Type:
-					tc = kColSynType; break;
+					tc = ui_color(B_CONTROL_TEXT_COLOR); break;
 				default: break;
 			}
 			append(tok.text, tc, 0, true, 0);
@@ -4329,7 +4209,7 @@ void MainWindow::_SaveImageToFile(const entry_ref* dir, const char* name) {
 	BDirectory d(dir);
 	BFile file(&d, name, B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
 	if (file.InitCheck() != B_OK) {
-		_Append("[error] Could not create file.\n", kColErr);
+		_Append("[error] Could not create file.\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 		return;
 	}
 
@@ -4347,9 +4227,9 @@ void MainWindow::_SaveImageToFile(const entry_ref* dir, const char* name) {
 		std::string msg = "  \xe2\x9c\x93 Image saved to ";
 		msg += path.Path();
 		msg += "\n";
-		_Append(msg, kColDim, 0, true);
+		_Append(msg, ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
 	} else {
-		_Append("[error] Failed to save image.\n", kColErr);
+		_Append("[error] Failed to save image.\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 	}
 }
 
@@ -4401,7 +4281,7 @@ void MainWindow::_SaveBitmapAndAttach(BBitmap* bmp) {
 	if (roster->Translate(&stream, nullptr, nullptr,
 	    &pngIO, B_PNG_FORMAT) != B_OK) {
 		stream.DetachBitmap(&bmp);  // reclaim ownership
-		_Append("[error: could not encode bitmap as PNG]\n", kColErr);
+		_Append("[error: could not encode bitmap as PNG]\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 		return;
 	}
 	stream.DetachBitmap(&bmp);  // reclaim so caller can delete
@@ -4411,7 +4291,7 @@ void MainWindow::_SaveBitmapAndAttach(BBitmap* bmp) {
 	char tmp[] = "/tmp/pluto-clip-XXXXXX";
 	int fd = mkstemp(tmp);
 	if (fd < 0) {
-		_Append("[error: could not create temp file for bitmap]\n", kColErr);
+		_Append("[error: could not create temp file for bitmap]\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 		return;
 	}
 	::write(fd, pngIO.Buffer(), pngIO.BufferLength());
@@ -4453,12 +4333,12 @@ void MainWindow::_AttachImageToInput(const std::string& path,
 	// Read binary data and encode as base64.
 	struct stat st;
 	if (stat(path.c_str(), &st) != 0 || st.st_size > 20 * 1024 * 1024) {
-		_Append("Image too large or unreadable: " + path + "\n", kColErr);
+		_Append("Image too large or unreadable: " + path + "\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 		return;
 	}
 	std::ifstream f(path, std::ios::binary);
 	if (!f) {
-		_Append("Cannot read image: " + path + "\n", kColErr);
+		_Append("Cannot read image: " + path + "\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 		return;
 	}
 	std::string raw(static_cast<size_t>(st.st_size), '\0');
@@ -4633,12 +4513,12 @@ void MainWindow::_AttachMediaToInput(const std::string& path,
                                      const std::string& kind) {
 	struct stat st;
 	if (stat(path.c_str(), &st) != 0 || st.st_size > 20 * 1024 * 1024) {
-		_Append("File too large or unreadable: " + path + "\n", kColErr);
+		_Append("File too large or unreadable: " + path + "\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 		return;
 	}
 	std::ifstream f(path, std::ios::binary);
 	if (!f) {
-		_Append("Cannot read file: " + path + "\n", kColErr);
+		_Append("Cannot read file: " + path + "\n", ui_color(B_ALERT_BACKGROUND_COLOR));
 		return;
 	}
 	std::string raw(static_cast<size_t>(st.st_size), '\0');
