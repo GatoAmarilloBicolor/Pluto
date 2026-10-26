@@ -39,10 +39,6 @@ std::string shq(const std::string& s) {
 std::string g_trusted_file_override;
 std::string g_log_file_override;
 
-std::string home_dir() {
-	return HomeDir();
-}
-
 std::string settings_dir() {
 	return SettingsDir();
 }

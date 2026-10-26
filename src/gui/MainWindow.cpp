@@ -2948,17 +2948,6 @@ void MainWindow::MessageReceived(BMessage* msg) {
 					}
 				}
 			}
-			std::string dst_dir = HomeDir() + "/config/non-packaged/add-ons/Tracker";
-			std::string cmd = "mkdir -p '" + dst_dir + "' && cp '"
-				+ src + "' '" + dst_dir + "/'";
-			if (std::system(cmd.c_str()) == 0) {
-				_Append("Tracker add-on \"Ask Pluto\" installed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
-				_Append("Right-click files in Tracker to use it.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
-			} else {
-				_Append("Could not install Tracker add-on.\n", rgb_color{245, 101, 101, 255});
-				_Append("Build it first: make 'Ask Pluto'\n", rgb_color{245, 101, 101, 255});
-			}
-			break;
 		}
 
 		case kMsgTrackerAddonRemove: {

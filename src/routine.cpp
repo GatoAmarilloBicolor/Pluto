@@ -191,26 +191,38 @@ std::vector<Routine> ListRoutines() {
 
 std::string DetectChangedFiles() {
 	// Run git status --porcelain to get modified/added files.
-	FILE* fp = popen("git status --porcelain 2>/dev/null", "r");
-	if (!fp) return "(no git changes)";
-
+	// Use fork/exec instead of popen for security
+	int pipefd[2];
+	if (pipe(pipefd) != 0) return "(no git changes)";
+	pid_t pid = fork();
+	if (pid < 0) { close(pipefd[0]); close(pipefd[1]); return "(no git changes)"; }
+	if (pid == 0) {
+		close(pipefd[0]);
+		dup2(pipefd[1], STDOUT_FILENO);
+		close(pipefd[1]);
+		execl("/bin/sh", "sh", "-c", "git status --porcelain 2>/dev/null", nullptr);
+		_exit(127);
+	}
+	close(pipefd[1]);
 	std::string result;
 	char buf[512];
-	while (std::fgets(buf, sizeof(buf), fp)) {
-		std::string line = buf;
-		// git status --porcelain format: XY filename
-		// Skip the 2-char status + space prefix.
-		if (line.size() > 3) {
-			std::string file = trim(line.substr(3));
-			if (!file.empty()) {
-				if (!result.empty()) result += "\n";
-				result += file;
+	FILE* fp = fdopen(pipefd[0], "r");
+	if (fp) {
+		while (std::fgets(buf, sizeof(buf), fp)) {
+			std::string line = buf;
+			if (line.size() > 3) {
+				std::string file = trim(line.substr(3));
+				if (!file.empty()) {
+					if (!result.empty()) result += "\n";
+					result += file;
+				}
 			}
 		}
+		fclose(fp);
 	}
-	pclose(fp);
+	int status = 0;
+	waitpid(pid, &status, 0);
 	return result.empty() ? "(no git changes)" : result;
-}
 
 std::string ExpandTemplate(const std::string& body,
                             const std::string& changed_files) {
@@ -586,7 +598,16 @@ int RunRoutineCli(int argc, char** argv) {
 			run_cmd += " --model " + shq(found->model);
 
 		std::printf("Running routine '%s'…\n", name.c_str());
-		int rc = std::system(run_cmd.c_str());
+		// Use fork/exec instead of system for security
+		pid_t pid = fork();
+		if (pid < 0) return -1;
+		if (pid == 0) {
+			execl("/bin/sh", "sh", "-c", run_cmd.c_str(), nullptr);
+			_exit(127);
+		}
+		int status = 0;
+		waitpid(pid, &status, 0);
+		int rc = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 
 		// TODO: capture output for logging (currently goes to stdout).
 		return rc;
