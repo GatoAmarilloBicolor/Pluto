@@ -1361,11 +1361,38 @@ void ConversationView::SaveSession() {
 
 double ConversationView::EstimateCost() const {
 	const std::string& m = fConfig->model;
-	double in_per_mtok = 3.0, out_per_mtok = 15.0;  // sonnet default
-	if (m.find("opus") != std::string::npos) {
+	double in_per_mtok = 3.0, out_per_mtok = 15.0;
+	std::string ml = m;
+	for (auto& c : ml) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+	if (ml.find("opus") != std::string::npos) {
 		in_per_mtok = 15.0; out_per_mtok = 75.0;
-	} else if (m.find("haiku") != std::string::npos) {
+	} else if (ml.find("sonnet") != std::string::npos) {
+		in_per_mtok = 3.0; out_per_mtok = 15.0;
+	} else if (ml.find("haiku") != std::string::npos) {
 		in_per_mtok = 0.80; out_per_mtok = 4.0;
+	} else if (ml.find("gpt-4o") != std::string::npos) {
+		in_per_mtok = 5.0; out_per_mtok = 15.0;
+	} else if (ml.find("gpt-4") != std::string::npos) {
+		in_per_mtok = 30.0; out_per_mtok = 60.0;
+	} else if (ml.find("gpt-3.5") != std::string::npos) {
+		in_per_mtok = 0.50; out_per_mtok = 1.50;
+	} else if (ml.find("llama") != std::string::npos
+	         || ml.find("mistral") != std::string::npos
+	         || ml.find("qwen") != std::string::npos
+	         || ml.find("gemma") != std::string::npos
+	         || ml.find("phi") != std::string::npos) {
+		in_per_mtok = 0.0; out_per_mtok = 0.0;
+	} else if (ml.find("deepseek") != std::string::npos) {
+		in_per_mtok = 0.14; out_per_mtok = 0.28;
+	} else if (ml.find("groq") != std::string::npos) {
+		in_per_mtok = 0.0; out_per_mtok = 0.0;
+	} else if (ml.find("gemini") != std::string::npos) {
+		in_per_mtok = 0.075; out_per_mtok = 0.30;
+	} else if (ml.find("command") != std::string::npos) {
+		in_per_mtok = 2.50; out_per_mtok = 10.0;
+	} else if (ml.find("grok") != std::string::npos) {
+		in_per_mtok = 3.0; out_per_mtok = 15.0;
 	}
 	return (fTokensIn  * in_per_mtok / 1e6)
 	     + (fTokensOut * out_per_mtok / 1e6);
@@ -1374,6 +1401,35 @@ double ConversationView::EstimateCost() const {
 void ConversationView::SetSessionTitle(const std::string& title) {
 	fSessionTitle = title;
 	if (fDelegate) fDelegate->OnTitleChanged(title);
+}
+
+void ConversationView::RequestCompaction() {
+	// Inject a system message asking the model to compact the conversation.
+	// This will be processed on the next turn.
+	if (fBusy) return;
+	
+	Message sys;
+	sys.role = "user";
+	ContentBlock sb;
+	sb.type = ContentBlock::TEXT;
+	sb.text = "<system-reminder>\n"
+		"The user has requested conversation compaction. "
+		"Please provide a concise summary of the conversation so far, "
+		"preserving key decisions, code changes, file paths, and important context. "
+		"Be factual and brief.\n"
+		"</system-reminder>";
+	sys.content.push_back(std::move(sb));
+	fMessages.push_back(std::move(sys));
+	
+	// Also trigger the built-in MaybeCompact logic by setting a flag
+	// that will be checked on the next turn. For now, just inject the
+	// request as a system message - the model will respond with a summary
+	// and we'll handle it in the next turn.
+	
+	// Start a turn to process the compaction request.
+	PrepareTurn({});
+	if (fDelegate) fDelegate->OnTurnStarted();
+	_StartTurn();
 }
 
 void ConversationView::SetProvider(std::unique_ptr<Provider> provider) {

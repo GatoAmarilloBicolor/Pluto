@@ -406,8 +406,14 @@ void AutoDetectProvider(Config& cfg) {
 	        || m.find("deepseek") != std::string::npos) {
 		// Open-weight models could be Ollama, OpenRouter, Groq, etc.
 		// Only auto-switch if currently on Anthropic (clearly wrong).
+		// Don't override if user has explicitly set a remote base_url.
 		if (cfg.provider == "anthropic") {
 			cfg.provider = "openai-compat";
+			cfg.base_url = "http://localhost:11434";
+			cfg.api_key_env.clear();
+		} else if (cfg.provider == "openai-compat" && cfg.base_url.empty()) {
+			// User selected openai-compat but didn't set a base_url —
+			// default to local Ollama for open-weight models.
 			cfg.base_url = "http://localhost:11434";
 			cfg.api_key_env.clear();
 		}
@@ -419,8 +425,16 @@ void AutoDetectProvider(Config& cfg) {
 std::unique_ptr<Provider> CreateProvider(const Config& cfg) {
 	std::string key = ResolveApiKey(cfg);
 
-	if (cfg.provider == "openai-compat" && !cfg.base_url.empty())
+	if (cfg.provider == "openai-compat" && !cfg.base_url.empty()) {
+		// For local servers (Ollama, LM Studio) empty key is valid.
+		// For remote servers (OpenRouter, OpenAI, etc.) warn if missing.
+		if (key.empty() && cfg.base_url.find("localhost") == std::string::npos
+			&& cfg.base_url.find("127.0.0.1") == std::string::npos) {
+			std::fprintf(stderr, "[warn] %s set but no key found (env or ~/config/settings/pluto/keys/%s)\n",
+				cfg.api_key_env.c_str(), cfg.api_key_env.c_str());
+		}
 		return std::make_unique<OpenAICompatProvider>(key, cfg.base_url);
+	}
 
 	// Anthropic: check for OAuth tokens first.
 	AuthType auth = AuthType::API_KEY;
@@ -431,7 +445,12 @@ std::unique_ptr<Provider> CreateProvider(const Config& cfg) {
 			key  = oauth_key;
 			auth = AuthType::OAUTH;
 		}
-		// If refresh failed, fall back to API key auth.
+	}
+	// Validate Anthropic API key (unless OAuth).
+	if (auth == AuthType::API_KEY && key.empty()) {
+		std::fprintf(stderr, "[error] Anthropic provider requires API key. "
+			"Set %s env var or run 'pluto login' for OAuth.\n", cfg.api_key_env.c_str());
+		// Still create provider; it will fail at request time with clear error.
 	}
 	return std::make_unique<AnthropicProvider>(key, auth);
 }
@@ -852,18 +871,17 @@ Credentials ResolveCredentials(Config& cfg) {
 	// 1. Check for OAuth tokens (only relevant for Anthropic provider).
 	if (cfg.provider == "anthropic") {
 		OAuthTokens tokens = LoadOAuthTokens();
-		if (!tokens.empty()) {
-			std::string at = OAuthEnsureValidToken(tokens);
-			if (!at.empty())
-				return { Credentials::OAUTH, at };
-			// OAuth tokens exist but refresh failed — do NOT fall through to
-			// API key silently. The user intended to use their subscription.
-			std::fprintf(stderr,
-				"[auth] OAuth token refresh failed. "
-				"Run 'pluto login' to re-authenticate.\n"
-				"       (Not falling back to API key to avoid unexpected billing.)\n");
-			return {};
-		}
+if (!tokens.empty()) {
+		std::string at = OAuthEnsureValidToken(tokens);
+		if (!at.empty())
+			return { Credentials::OAUTH, at };
+		// OAuth tokens exist but refresh failed — fall back to API key
+		// if available, with warning. User can still run 'pluto login'.
+		std::fprintf(stderr,
+			"[auth] OAuth token refresh failed. "
+			"Run 'pluto login' to re-authenticate.\n"
+			"       Falling back to API key if configured...\n");
+	}
 	}
 
 	// 2. API key (for any provider). Local servers (empty api_key_env)

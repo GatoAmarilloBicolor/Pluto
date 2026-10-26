@@ -413,14 +413,17 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
 		st.cb = cb;
 		retry_after_secs = 0;
 
-		HeadersGuard hg;
-		struct curl_slist*& headers = hg.headers;
-		std::string auth;
-		if (fAuthType == AuthType::OAUTH)
-			auth = "Authorization: Bearer " + fToken;
-		else
-			auth = "x-api-key: " + fToken;
+HeadersGuard hg;
+	struct curl_slist*& headers = hg.headers;
+	if (fAuthType == AuthType::OAUTH) {
+		if (!fToken.empty()) {
+			std::string auth = "Authorization: Bearer " + fToken;
+			headers = curl_slist_append(headers, auth.c_str());
+		}
+	} else if (!fToken.empty()) {
+		std::string auth = "x-api-key: " + fToken;
 		headers = curl_slist_append(headers, auth.c_str());
+	}
 		// Beta features: prompt caching is always requested; OAuth adds its
 		// own beta flag.  Multiple betas are comma-separated in one header.
 		if (fAuthType == AuthType::OAUTH)

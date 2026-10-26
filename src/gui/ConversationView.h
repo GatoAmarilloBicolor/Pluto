@@ -121,8 +121,12 @@ public:
 	long        GetLastCacheRead() const   { return fLastCacheRead; }
 	long        GetLastCacheCreate() const { return fLastCacheCreate; }
 	int         GetTurnCount() const    { return fTurnCount; }
+	size_t      GetMessageCount() const { return fMessages.size(); }
 	bigtime_t   GetTurnStartedAt() const { return fTurnStartedAt; }
 	double      EstimateCost() const;
+
+	// Request conversation compaction (manual /compact command).
+	void RequestCompaction();
 
 	// Per-tab config access (model, max_tokens, context_window, etc.).
 	const Config& GetConfig() const { return fTabConfig; }
@@ -172,6 +176,9 @@ public:
 	// Find text in the conversation output (called by MainWindow on behalf
 	// of the find bar, since ConversationView does not own fFindBar).
 	void FindInConversation(const std::string& query, bool forward);
+
+	// Request conversation compaction (manual /compact command).
+	void RequestCompaction();
 
 	// --- Worker event handlers (called by MainWindow message handlers) ---
 	// These perform all rendering and state updates internally.

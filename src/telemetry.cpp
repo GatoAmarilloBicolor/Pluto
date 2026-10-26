@@ -39,12 +39,57 @@ void ensure_parent(const std::string& path) {
 }
 
 double estimate_cost(const std::string& model, int64_t in, int64_t out) {
-	double in_rate = 3.0, out_rate = 15.0;  // sonnet default
-	if (model.find("opus") != std::string::npos) {
+	// Default to Sonnet pricing (Anthropic)
+	double in_rate = 3.0, out_rate = 15.0;
+	std::string m = model;
+	for (auto& c : m) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+	// Anthropic
+	if (m.find("opus") != std::string::npos) {
 		in_rate = 15.0; out_rate = 75.0;
-	} else if (model.find("haiku") != std::string::npos) {
+	} else if (m.find("sonnet") != std::string::npos) {
+		in_rate = 3.0; out_rate = 15.0;
+	} else if (m.find("haiku") != std::string::npos) {
 		in_rate = 0.80; out_rate = 4.0;
 	}
+	// OpenAI
+	else if (m.find("gpt-4o") != std::string::npos) {
+		in_rate = 5.0; out_rate = 15.0;
+	} else if (m.find("gpt-4") != std::string::npos) {
+		in_rate = 30.0; out_rate = 60.0;
+	} else if (m.find("gpt-3.5") != std::string::npos) {
+		in_rate = 0.50; out_rate = 1.50;
+	}
+	// OpenRouter - varies by model, use Sonnet as default
+	// Local models (Ollama, LM Studio) - free
+	else if (m.find("llama") != std::string::npos
+	         || m.find("mistral") != std::string::npos
+	         || m.find("qwen") != std::string::npos
+	         || m.find("gemma") != std::string::npos
+	         || m.find("phi") != std::string::npos) {
+		in_rate = 0.0; out_rate = 0.0;
+	}
+	// DeepSeek
+	else if (m.find("deepseek") != std::string::npos) {
+		in_rate = 0.14; out_rate = 0.28;
+	}
+	// Groq
+	else if (m.find("groq") != std::string::npos) {
+		in_rate = 0.0; out_rate = 0.0;  // free tier
+	}
+	// Google Gemini
+	else if (m.find("gemini") != std::string::npos) {
+		in_rate = 0.075; out_rate = 0.30;
+	}
+	// Cohere
+	else if (m.find("command") != std::string::npos) {
+		in_rate = 2.50; out_rate = 10.0;
+	}
+	// XAI Grok
+	else if (m.find("grok") != std::string::npos) {
+		in_rate = 3.0; out_rate = 15.0;
+	}
+
 	return (in * in_rate / 1e6) + (out * out_rate / 1e6);
 }
 

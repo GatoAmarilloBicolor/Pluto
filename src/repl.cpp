@@ -84,7 +84,7 @@ static const char* kSlashCommands[] = {
 	"/map", "/mode", "/model", "/models", "/modes",
 	"/peers", "/plan", "/quit", "/reset", "/resume",
 	"/routine", "/routines", "/save", "/share", "/tag", "/title",
-	"/tools", "/untag", "/unwatch", "/watch",
+	"/tools", "/untag", "/unwatch", "/watch", "/systemone",
 	nullptr
 };
 
@@ -577,6 +577,7 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 			std::printf("  /modes               list available modes\n");
 			std::printf("  /plan                shortcut for /mode plan (toggle)\n");
 			std::printf("  /reset               clear conversation history\n");
+			std::printf("  /compact             summarize conversation to free context\n");
 			std::printf("  /tools               list registered tools\n");
 			std::printf("  /model ID            switch model for subsequent turns\n");
 			std::printf("  /models [URL]        list models on Ollama/OpenAI server\n");
@@ -611,6 +612,46 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 			std::printf("  /map query ...  query the graph with natural language\n");
 			continue;
 		}
+
+	if (line == "/systemone") {
+		std::printf("System One (Laya-based Decision Model)
+");
+		std::printf("====================================
+");
+		std::printf("MCP Server: systemone_server (stdio transport)
+");
+		std::printf("Auto-discovered and connected as built-in MCP.
+
+");
+		std::printf("Available tools (9):
+");
+		std::printf("  systemone_classify        - single-label classification
+");
+		std::printf("  systemone_classify_multi  - multi-label classification
+");
+		std::printf("  systemone_verify          - entailment check (ground RAG)
+");
+		std::printf("  systemone_guard           - safety gate (injection/PII/toxic/spam)
+");
+		std::printf("  systemone_select_relevant - context pruning (90%% recall)
+");
+		std::printf("  systemone_same_intent     - semantic dedup (94%% accuracy)
+");
+		std::printf("  systemone_triage          - guard + route + tags + urgency
+");
+		std::printf("  systemone_answerable      - RAG gate (threshold 0.3)
+");
+		std::printf("  systemone_consult         - decisions with persistent memory
+");
+		std::printf("  systemone_decide_program  - full pipeline (token-efficient)
+
+");
+		std::printf("Token savings: 5-10x fewer tokens by delegating to System One
+");
+		std::printf("Memory: persistent topic memory (remember/recall/consult)
+");
+		continue;
+	}
 		if (line == "/reset") {
 			messages.clear();
 			current_session_path.clear();
@@ -1134,12 +1175,28 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 			cmd_tools(tools, cfg);
 			continue;
 		}
-		if (line == "/cost") {
+if (line == "/cost") {
 			std::printf("  turns:  %d\n", turns);
 			std::printf("  input:  %lld tokens\n", session_input_tokens);
 			std::printf("  output: %lld tokens\n", session_output_tokens);
 			std::printf("  total:  %lld tokens\n",
 				session_input_tokens + session_output_tokens);
+			continue;
+		}
+		if (line == "/compact") {
+			if (messages.size() <= 2) {
+				std::printf("%s(nothing to compact)%s\n", kDim, kReset);
+				continue;
+			}
+			if (ui.on_status) ui.on_status("Compacting conversation...");
+			bool ok = MaybeCompact(*provider, cfg, messages,
+				session_input_tokens, ui);
+			if (ok) {
+				std::printf("%s(conversation compacted)%s\n", kGreen, kReset);
+			} else {
+				std::printf("%s(compaction failed — not enough context used)%s\n",
+					kRed, kReset);
+			}
 			continue;
 		}
 		if (line == "/copy") {

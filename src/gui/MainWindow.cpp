@@ -700,8 +700,8 @@ class TokenGauge : public BView {
 public:
 	TokenGauge()
 		: BView("tokenGauge", B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE) {
-		SetExplicitMinSize(BSize(B_SIZE_UNSET, 10));
-		SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 10));
+		SetExplicitMinSize(BSize(B_SIZE_UNSET, 8));
+		SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 8));
 		SetViewColor(B_TRANSPARENT_COLOR);
 	}
 
@@ -713,7 +713,13 @@ public:
 
 	void Draw(BRect /*updateRect*/) override {
 		BRect r = Bounds();
-		SetHighColor(215, 215, 215);
+		if (r.Width() < 4 || r.Height() < 4) return;
+
+		// Background track - subtle
+		rgb_color track = gColorScheme == "dark" 
+			? (rgb_color){ 55, 65, 81, 255 }   // #374151
+			: (rgb_color){ 229, 231, 235, 255 }; // #E5E7EB
+		SetHighColor(track);
 		FillRect(r);
 
 		float frac = std::min(1.0f,
@@ -721,16 +727,34 @@ public:
 		if (frac > 0.0f) {
 			BRect fill = r;
 			fill.right = fill.left + r.Width() * frac;
+			// Modern gradient-like colors
 			rgb_color c;
-			if      (frac < 0.50f) c = {  60, 180,  90, 255 };
-			else if (frac < 0.75f) c = { 215, 180,  40, 255 };
-			else if (frac < 0.90f) c = { 230, 140,  40, 255 };
-			else                   c = { 220,  60,  60, 255 };
+			if (frac < 0.50f) {
+				c = gColorScheme == "dark" 
+					? (rgb_color){  34, 197,  94, 255 }  // #22C55E - green
+					: (rgb_color){  22, 163,  74, 255 };   // #16A34A
+			} else if (frac < 0.75f) {
+				c = gColorScheme == "dark"
+					? (rgb_color){ 250, 204,  21, 255 }  // #FACC15 - amber
+					: (rgb_color){ 217, 119,   6, 255 };   // #D97706
+			} else if (frac < 0.90f) {
+				c = gColorScheme == "dark"
+					? (rgb_color){ 249, 115,  22, 255 }  // #F97316 - orange
+					: (rgb_color){ 234,  88,  12, 255 };   // #EA580C
+			} else {
+				c = gColorScheme == "dark"
+					? (rgb_color){ 239,  68,  68, 255 }  // #EF4444 - red
+					: (rgb_color){ 220,  38,  38, 255 };   // #DC2626
+			}
 			SetHighColor(c);
 			FillRect(fill);
 		}
 
-		SetHighColor(150, 150, 150);
+		// Subtle border
+		rgb_color border = gColorScheme == "dark" 
+			? (rgb_color){ 75, 85, 99, 255 }   // #4B5563
+			: (rgb_color){ 209, 213, 219, 255 }; // #D1D5DB
+		SetHighColor(border);
 		StrokeRect(r);
 	}
 
@@ -3589,65 +3613,71 @@ void MainWindow::_InitPalette() {
 	gColorScheme = fConfig->color_scheme;
 	bool dark = is_dark_theme();
 
-	fprintf(stderr, "PALETTE: color_scheme='%s' dark=%d\n",
+	fprintf(stderr, "PALETTE: color_scheme='%s' dark=%d
+",
 		gColorScheme.c_str(), dark);
 
 	// Determine text color: forced scheme overrides system.
 	rgb_color body;
-	if (gColorScheme == "dark")
+	rgb_color code_bg;
+	rgb_color link_color;
+	if (gColorScheme == "dark") {
 		body = kDarkFg;
-	else if (gColorScheme == "light")
+		code_bg = kDarkCodeBg;
+		link_color = kColUserRole;
+	} else if (gColorScheme == "light") {
 		body = kLightFg;
-	else
+		code_bg = kLightCodeBg;
+		link_color = kLightUserRole;
+	} else {
 		body = ui_color(B_DOCUMENT_TEXT_COLOR);
+		code_bg = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
+		link_color = kColUserRole;
+	}
 
-	fprintf(stderr, "PALETTE: body=(%d,%d,%d)\n", body.red, body.green, body.blue);
+	fprintf(stderr, "PALETTE: body=(%d,%d,%d)
+", body.red, body.green, body.blue);
 
+	// Body text for user/assistant messages
 	kColUserBody = body;
 	kColAsstBody = body;
 
-	// Role colors: bright on dark, deep on light.
-	// Hues chosen to be distinct: blue / green / purple / red / gray.
-	rgb_color blue   = { 40,  95, 200, 255 };
-	rgb_color green  = { 30, 140,  70, 255 };
-	rgb_color purple = {140,  60, 160, 255 };
-	rgb_color red    = {200,  50,  50, 255 };
-
+	// Modern flat design role colors (from ChatColors.cpp)
 	if (dark) {
-		// Role labels: vivid, high-contrast on dark bg.
-		kColUserRole = { 130, 170, 255, 255 };  // cornflower blue
-		kColAsstRole = { 110, 220, 150, 255 };  // mint green
-		kColToolRole = { 190, 150, 230, 255 };  // soft lavender
-		kColErr      = { 245, 100, 100, 255 };  // coral red
-		kColWarn     = { 240, 190,  80, 255 };  // warm amber
-		kColToolBody = brighten(body, -30);      // readable tool output
-		kColDim      = brighten(body, -50);      // legible secondary text
-		kColShimmer  = { 130, 235, 170, 255 };  // bright green accent
-		// Syntax: tuned for dark backgrounds.
-		kColSynKeyword = { 130, 160, 255, 255 };
-		kColSynString  = { 240, 150, 110, 255 };
-		kColSynComment = { 130, 170, 130, 255 };
+		// Dark theme - calm, professional palette
+		kColUserRole = {  99, 179, 237, 255 };  // #63B3ED
+		kColAsstRole = {  72, 187, 120, 255 };  // #48BB78
+		kColToolRole = { 159, 122, 234, 255 };  // #9F7AE6
+		kColErr      = { 245, 101, 101, 255 };  // #F56565
+		kColWarn     = { 237, 137,  54, 255 };  // #ED8936
+		kColDim      = { 160, 174, 192, 255 };  // #A0AEB0
+		kColShimmer  = {  56, 178, 172, 255 };  // #38B2AC
+		// Syntax - dark
+		kColSynKeyword = { 129, 180, 255, 255 };
+		kColSynString  = { 238, 168, 120, 255 };
+		kColSynComment = { 113, 128, 150, 255 };
 		kColSynNumber  = { 100, 210, 210, 255 };
-		kColSynPreproc = { 210, 170,  90, 255 };
+		kColSynPreproc = { 224, 158, 102, 255 };
 		kColSynType    = { 100, 210, 180, 255 };
 	} else {
-		kColUserRole = blue;
-		kColAsstRole = green;
-		kColToolRole = purple;
-		kColErr      = red;
-		kColToolBody = brighten(body, 60);   // slightly lighter than body
-		kColDim      = brighten(body, 90);
-		kColShimmer  = brighten(green,  30);  // subtle green tint on light
-		// Syntax: defaults are fine for light theme.
-		kColSynKeyword = {   0,   0, 180, 255 };
-		kColSynString  = { 180,  50,  20, 255 };
-		kColSynComment = { 100, 130, 100, 255 };
-		kColSynNumber  = {   0, 130, 130, 255 };
-		kColSynPreproc = { 130,  70,   0, 255 };
-		kColSynType    = {   0, 120, 100, 255 };
+		// Light theme - deep, readable
+		kColUserRole = {  30,  90, 170, 255 };
+		kColAsstRole = {  22, 120,  70, 255 };
+		kColToolRole = { 100,  70, 180, 255 };
+		kColErr      = { 180,  40,  40, 255 };
+		kColWarn     = { 170, 110,  20, 255 };
+		kColDim      = { 100, 110, 120, 255 };
+		kColShimmer  = {  30, 140, 130, 255 };
+		// Syntax - light
+		kColSynKeyword = {  40,  80, 180, 255 };
+		kColSynString  = { 160,  90,  30, 255 };
+		kColSynComment = { 100, 110, 120, 255 };
+		kColSynNumber  = {  30, 120, 120, 255 };
+		kColSynPreproc = { 140,  80,  30, 255 };
+		kColSynType    = {  30, 130, 100, 255 };
 	}
 
-	// Apply background colors to chat views.
+	// Apply background colors chat views.
 	_ApplyViewColors();
 }
 
@@ -3657,27 +3687,20 @@ void MainWindow::_ApplyViewColors() {
 
 	// Helper: apply colors to a single output view.
 	// Color application is now handled by TextDocumentView (fDocView)
-	// and MarkdownParser — legacy BTextView color code removed.
+	// and MarkdownParser -- legacy BTextView color code removed.
 
 	if (gColorScheme == "dark" || gColorScheme == "light") {
 		rgb_color bg = (gColorScheme == "dark") ? kDarkBg : kLightBg;
 		rgb_color fg = (gColorScheme == "dark") ? kDarkFg : kLightFg;
-
-		// Code/link colors for forced scheme.
-		rgb_color codeFg = fg;
-		rgb_color codeBg = (gColorScheme == "dark")
-			? (rgb_color){ 45, 45, 45, 255 }
-			: (rgb_color){ 240, 240, 240, 255 };
-		rgb_color linkColor = (gColorScheme == "dark")
-			? (rgb_color){ 100, 160, 255, 255 }
-			: (rgb_color){  30,  90, 200, 255 };
+		rgb_color code_bg = (gColorScheme == "dark") ? kDarkCodeBg : kLightCodeBg;
+		rgb_color link_color = (gColorScheme == "dark") ? kColUserRole : kLightUserRole;
 
 		// Apply to ALL tabs.
 		for (int32 i = 0; i < fTabView->CountTabs(); ++i) {
 			auto* conv = static_cast<ConversationView*>(
 				fTabView->ViewForTab(i));
 			if (conv) {
-conv->UpdateParserColors(false, codeFg, codeBg, linkColor);
+				conv->UpdateParserColors(false, fg, code_bg, link_color);
 				if (conv->DocView()) {
 					conv->DocView()->SetViewUIColor(B_NO_COLOR);
 					conv->DocView()->SetViewColor(bg);
@@ -3697,24 +3720,23 @@ conv->UpdateParserColors(false, codeFg, codeBg, linkColor);
 			fInput->SetViewUIColor(B_NO_COLOR);
 			fInput->SetViewColor(bg);
 			fInput->SetLowColor(bg);
-			// Set input text color via font+color so new typing is visible.
 			BFont font;
 			fInput->GetFontAndColor(0, &font);
 			fInput->SetFontAndColor(&font, B_FONT_ALL, &fg);
 		}
-		// Status bar text
 		if (fStatus)
 			fStatus->SetHighColor(kColDim);
 	} else {
 		// Auto: follow system document colors.
 		rgb_color sysFg = ui_color(B_DOCUMENT_TEXT_COLOR);
 		rgb_color sysBg = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
+		rgb_color link_color = kColUserRole;
 
 		for (int32 i = 0; i < fTabView->CountTabs(); ++i) {
 			auto* conv = static_cast<ConversationView*>(
 				fTabView->ViewForTab(i));
 			if (conv) {
-conv->UpdateParserColors(true, sysFg, sysBg, sysFg);
+				conv->UpdateParserColors(true, sysFg, sysBg, link_color);
 				if (conv->DocView()) {
 					conv->DocView()->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
 					conv->DocView()->SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
@@ -3744,15 +3766,6 @@ conv->UpdateParserColors(true, sysFg, sysBg, sysFg);
 	if (fStatus) fStatus->Invalidate();
 }
 
-// Simple markdown renderer into a stylable BTextView. Handles:
-//   # headings (bold, larger)
-//   **bold**
-//   `inline code` (mono, tinted)
-//   ```fenced code blocks``` (mono, tinted background)
-//   - bullet lists (indented)
-//   > blockquotes (indented, dim)
-//   --- horizontal rule (dim dashes)
-// Does NOT handle links, images, nested formatting, or tables.
 // Markdown renderer into a stylable BTextView. Handles:
 //   # headings (bold, scaled)         | tables (aligned, bordered)
 //   **bold**, *italic*                | [links](url) (underlined blue)

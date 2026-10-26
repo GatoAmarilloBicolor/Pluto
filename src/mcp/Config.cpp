@@ -217,6 +217,16 @@ std::vector<McpServerSpec> LoadMcpSpecs() {
 	take(local,   "local");
 	take(project, "project");
 	take(user,    "user");
+	// Built-in System One (Laya-based decision model) - stdio transport
+	if (seen.insert("systemone").second) {
+		McpServerSpec sys;
+		sys.name = "systemone";
+		sys.scope = McpServerSpec::USER;
+		sys.source_path = "<built-in>";
+		sys.type = "stdio";
+		sys.command = "systemone_server";
+		out.push_back(std::move(sys));
+	}
 	return out;
 }
 

@@ -76,6 +76,21 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		return true;
 	}
 
+	if (text == "/compact") {
+		auto* ac = _ActiveConv();
+		if (!ac) return true;
+		if (ac->GetMessageCount() <= 2) {
+			_Append("(nothing to compact)\n\n", kColDim);
+			return true;
+		}
+		_Append("Compacting conversation...\n", kColDim);
+		// Trigger compaction on the next turn - the agent loop checks
+		// cumulative tokens and compacts when >90% of context window.
+		// For manual /compact, we inject a system message asking for summary.
+		ac->RequestCompaction();
+		return true;
+	}
+
 	if (text == "/copy") {
 		auto* ac = _ActiveConv();
 		if (!ac) return true;
@@ -694,6 +709,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			"  /tools             list registered tools\n"
 			"  /model [ID]        show or switch model\n"
 			"  /cost              show session token totals\n"
+			"  /compact           summarize conversation to free context\n"
 			"  /copy              copy last assistant reply to clipboard\n"
 			"  /hotkeys           list keyboard shortcuts\n"
 			"  /init [--force]    create pluto.md project memory\n"
@@ -708,7 +724,8 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			"  /commands          list custom slash commands\n"
 			"  /help              show this help\n"
 			"\n"
-			"Custom commands from ~/config/settings/pluto/commands/\n"
+			" /systemone show System One (Laya) status and tools
+"			"Custom commands from ~/config/settings/pluto/commands/\n"
 			"are also available as /<name> [args].\n\n",
 			kColDim);
 		return true;

@@ -110,7 +110,7 @@ CORE_OBJS = $(CORE_SRCS:.cpp=.o)
 CLI_OBJS  = $(CLI_SRCS:.cpp=.o)
 GUI_OBJS  = $(GUI_SRCS:.cpp=.o)
 
-all: Pluto_cli Pluto build-addon
+all: Pluto_cli Pluto build-addon systemone_server
 
 # Compile resource definition (icon + app metadata).
 pluto.rsrc: pluto.rdef pluto.hvif
@@ -293,7 +293,7 @@ ci: clean Pluto_cli Pluto check
 
 # --- Packaging ---
 
-package: Pluto_cli Pluto build-addon
+package: Pluto_cli Pluto build-addon systemone_server
 	rm -rf pkgroot
 	mkdir -p pkgroot/apps pkgroot/bin \
 	         pkgroot/add-ons/Tracker \
@@ -301,6 +301,7 @@ package: Pluto_cli Pluto build-addon
 	         pkgroot/documentation/packages/$(PKG_NAME)/examples
 	cp Pluto_cli  pkgroot/bin/Pluto_cli
 	cp Pluto      pkgroot/apps/Pluto
+	cp systemone_server pkgroot/bin/systemone_server
 	cp pluto.hvif pkgroot/apps/Pluto.hvif
 	cp '$(TRACKER_ADDON)' 'pkgroot/add-ons/Tracker/$(TRACKER_ADDON)'
 	cp docs/pluto.1 pkgroot/documentation/man/man1/pluto.1
@@ -319,9 +320,14 @@ package: Pluto_cli Pluto build-addon
 	@echo "built $(PKG_NAME)-$(PKG_VERSION)-1-$(PKG_ARCH).hpkg"
 
 clean:
-	rm -f Pluto_cli Pluto $(TEST_BINS) bench pluto.rsrc 'Ask pluto' \
+	rm -f Pluto_cli Pluto systemone_server $(TEST_BINS) bench pluto.rsrc 'Ask pluto' \
 	      $(CORE_OBJS) $(CLI_OBJS) $(GUI_OBJS) $(MD4C_OBJ) \
 	      $(CORE_OBJS:.o=.d) $(CLI_OBJS:.o=.d) $(GUI_OBJS:.o=.d)
 	rm -rf pkgroot $(PKG_NAME)-$(PKG_VERSION)-1-$(PKG_ARCH).hpkg
 
 .PHONY: all clean check ci package install-addon uninstall-addon
+
+# System One MCP server (stdio transport)
+systemone_server: src/mcp/systemone_server.cpp
+	$(CXX) $(CXXFLAGS) -o $@ $<
+
