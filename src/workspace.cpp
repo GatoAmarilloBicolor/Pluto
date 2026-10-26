@@ -1,6 +1,6 @@
 #include "workspace.h"
+#include "../util.h"
 #include "filelock.h"
-#include "util.h"
 
 #include <Path.h>
 
