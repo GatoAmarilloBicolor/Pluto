@@ -75,4 +75,9 @@ int RunHookSafe(const char* cmd, const char* env_name, const std::string& env_va
 // Execute multiple hook commands safely.
 void RunHooksSafe(const std::vector<std::string>& hooks, const char* phase, const std::string& env_value);
 
+// Run a command via fork/exec and capture stdout/stderr.
+// Returns exit code, fills output with combined stdout+stderr.
+// Returns -1 on fork/exec failure.
+int RunCommandCapture(const char* cmd, std::string& output);
+
 }  // namespace pluto

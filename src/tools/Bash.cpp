@@ -2,6 +2,7 @@
 #include "Tool.h"
 #include "../json.h"
 #include "../workspace.h"
+#include "../util.h"
 
 #include <signal.h>
 #include <sys/wait.h>
@@ -91,19 +92,13 @@ public:
 			     + " sh -c " + shq(cmd) + " 2>&1";
 		else
 			full = prefix + "sh -c " + shq(cmd) + " 2>&1";
-		FILE* p = popen(full.c_str(), "r");
-		if (!p) { r.is_error = true; r.output = "popen failed"; return r; }
-		std::array<char, 4096> buf;
-		size_t n;
-		while ((n = std::fread(buf.data(), 1, buf.size(), p)) > 0) {
-			r.output.append(buf.data(), n);
-		}
-		int rc = pclose(p);
+		int rc = pluto::RunCommandCapture(full.c_str(), r.output);
 		if (rc == -1) {
-			// pclose itself failed (e.g. waitpid interrupted).
 			r.is_error = true;
-			r.output += "\n[pclose failed: " + std::string(std::strerror(errno)) + "]";
-		} else if (WIFEXITED(rc) && WEXITSTATUS(rc) == 124) {
+			r.output = "fork/exec failed";
+			return r;
+		}
+		if (WIFEXITED(rc) && WEXITSTATUS(rc) == 124) {
 			// timeout(1) returns 124 on timeout.
 			r.is_error = true;
 			r.output += "\n[timed out after " + std::to_string(timeout_secs) + "s]";
@@ -112,7 +107,7 @@ public:
 			r.output += "\n[exit " + std::to_string(code) + "]";
 		}
 		if (!has_timeout && timeout_secs < 120)
-			r.output += "\n[note: timeout not enforced — /bin/timeout not found]";
+			r.output += "\n[note: timeout not enforced â /bin/timeout not found]";
 		const size_t kMax = 64 * 1024;
 		if (r.output.size() > kMax) {
 			r.output.resize(kMax);

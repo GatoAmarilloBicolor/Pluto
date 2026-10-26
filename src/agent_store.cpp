@@ -3,6 +3,11 @@
 
 #include <dirent.h>
 #include <sys/stat.h>
+#if defined(__HAIKU__)
+#include <Entry.h>
+#include <Directory.h>
+#include <Path.h>
+#endif
 #include <unistd.h>
 
 #include <algorithm>
@@ -13,6 +18,16 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+
+
+		}
+	}
+	entry.Remove();
+#else
+	std::string cmd = "rm -rf " + shq(path);
+	std::system(cmd.c_str());
+#endif
+}
 
 namespace pluto {
 
@@ -69,7 +84,13 @@ std::vector<std::string> split_csv(const std::string& s) {
 	return out;
 }
 
+
+
+
+
 // Copy a file from src to dst.
+
+
 bool copy_file(const std::string& src, const std::string& dst) {
 	std::ifstream in(src, std::ios::binary);
 	if (!in) return false;
@@ -107,15 +128,22 @@ bool copy_dir(const std::string& src, const std::string& dst) {
 	return true;
 }
 
-void rm_rf(const std::string& path) {
-	// Use native Haiku APIs instead of system() for security
-	BEntry entry(path.c_str());
-	if (entry.InitCheck() != B_OK) return;
-	if (entry.IsDirectory()) {
-		BDirectory dir(&entry);
-		BEntry child;
-		while (dir.GetNextEntry(&child) == B_OK) {
-			rm_rf(child.Path());
+
+		}
+	}
+	entry.Remove();
+#else
+	(void)path;
+#endif
+}
+		}
+	}
+	entry.Remove();
+#else
+	std::string cmd = "rm -rf " + shq(path);
+	std::system(cmd.c_str());
+#endif
+}
 		}
 	}
 	entry.Remove();
@@ -792,8 +820,6 @@ int RunAgentStoreCli(int argc, char** argv) {
            WEXITSTATUS(status));
        rm_rf(tmp);
        return false;
-   }
-			}
 			preview_dir = tmp;
 			// Check for subdir agent.
 			struct stat st;
@@ -817,6 +843,7 @@ int RunAgentStoreCli(int argc, char** argv) {
 			preview_dir = source;
 		}
 
+		// Security review: show prompt before installing.
 		// Security review: show prompt before installing.
 		if (!trust) {
 			Agent preview_a;

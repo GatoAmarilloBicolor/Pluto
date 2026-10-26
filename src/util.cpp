@@ -12,7 +12,6 @@
 
 namespace pluto {
 
-
 std::string
 HomeDir()
 {
@@ -81,9 +80,6 @@ PipeGuard::close()
 	return rc;
 }
 
-
-} // namespace pluto
-
 // Execute a hook command safely using fork/exec (no shell injection).
 // Sets the given environment variable in the child process before exec.
 // Returns the exit code, or -1 on fork failure.
@@ -110,6 +106,44 @@ void RunHooksSafe(const std::vector<std::string>& hooks, const char* phase, cons
 		if (rc != 0)
 			std::fprintf(stderr, "[hook %s] exit %d\n", phase, rc);
 	}
+}
+
+// Run a command via fork/exec and capture stdout/stderr.
+// Returns exit code, fills output with combined stdout+stderr.
+// Returns -1 on fork/exec failure.
+int RunCommandCapture(const char* cmd, std::string& output) {
+    int pipefd[2];
+    if (pipe(pipefd) != 0) return -1;
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return -1;
+    }
+
+    if (pid == 0) {
+        // Child: redirect stdout and stderr to pipe
+        close(pipefd[0]);
+        dup2(pipefd[1], STDOUT_FILENO);
+        dup2(pipefd[1], STDERR_FILENO);
+        close(pipefd[1]);
+        execl("/bin/sh", "sh", "-c", cmd, nullptr);
+        _exit(127);
+    }
+
+    // Parent: read from pipe
+    close(pipefd[1]);
+    char buf[4096];
+    ssize_t n;
+    while ((n = read(pipefd[0], buf, sizeof(buf))) > 0) {
+        output.append(buf, n);
+    }
+    close(pipefd[0]);
+
+    int status = 0;
+    waitpid(pid, &status, 0);
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
 } // namespace pluto

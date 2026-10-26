@@ -1,5 +1,6 @@
 #include "Builtin.h"
 #include "Tool.h"
+#include "../util.h"
 #include "../json.h"
 #include "../workspace.h"
 
@@ -160,24 +161,12 @@ public:
 		                    + " 2>&1";
 		std::string dry_out;
 		{
-			FILE* p = popen(dry_cmd.c_str(), "r");
-			if (!p) {
-				::unlink(tmp);
-				r.is_error = true;
-				r.output = "popen failed";
-				return r;
-			}
-			std::array<char, 4096> buf;
-			size_t n;
-			while ((n = std::fread(buf.data(), 1, buf.size(), p)) > 0)
-				dry_out.append(buf.data(), n);
-			int rc = pclose(p);
-			if (rc != 0) {
-				::unlink(tmp);
-				r.is_error = true;
-				r.output = "patch --dry-run failed:\n" + dry_out;
-				return r;
-			}
+		int rc = pluto::RunCommandCapture(dry_cmd.c_str(), dry_out);
+		if (rc != 0) {
+			::unlink(tmp);
+			r.is_error = true;
+			r.output = "patch --dry-run failed:\n" + dry_out;
+			return r;
 		}
 
 		// Apply for real.
@@ -185,33 +174,18 @@ public:
 		                      + std::to_string(strip) + " < " + shq(tmp)
 		                      + " 2>&1";
 		std::string apply_out;
-		{
-			FILE* p = popen(apply_cmd.c_str(), "r");
-			if (!p) {
-				::unlink(tmp);
-				r.is_error = true;
-				r.output = "popen failed";
-				return r;
-			}
-			std::array<char, 4096> buf;
-			size_t n;
-			while ((n = std::fread(buf.data(), 1, buf.size(), p)) > 0)
-				apply_out.append(buf.data(), n);
-			int rc = pclose(p);
-			::unlink(tmp);
-			if (rc != 0) {
-				r.is_error = true;
-				r.output = "patch failed:\n" + apply_out;
-				return r;
-			}
+		rc = pluto::RunCommandCapture(apply_cmd.c_str(), apply_out);
+		::unlink(tmp);
+		if (rc != 0) {
+			r.is_error = true;
+			r.output = "patch failed:\n" + apply_out;
+			return r;
 		}
 
 		r.output = apply_out;
 		return r;
-	}
-};
+}; // class ApplyPatchTool
 
-}  // namespace
 
 std::unique_ptr<Tool> MakeApplyPatchTool() {
 	return std::make_unique<ApplyPatchTool>();

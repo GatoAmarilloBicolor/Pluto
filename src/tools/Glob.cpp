@@ -2,6 +2,7 @@
 #include "Tool.h"
 #include "../json.h"
 #include "../workspace.h"
+#include "../util.h"
 
 #include <sys/wait.h>
 
@@ -67,17 +68,10 @@ public:
 		}
 
 		std::string cmd = "find " + shq(path) + " -type f -name " + shq(pattern) + " 2>&1";
-		FILE* p = popen(cmd.c_str(), "r");
-		if (!p) { r.is_error = true; r.output = "popen failed"; return r; }
-		std::array<char, 4096> buf;
-		size_t n;
-		while ((n = std::fread(buf.data(), 1, buf.size(), p)) > 0) {
-			r.output.append(buf.data(), n);
-		}
-		int rc = pclose(p);
-		if (r.output.empty()) {
-			r.output = "(no matches)";
-		} else if (rc != 0 && WIFEXITED(rc) && WEXITSTATUS(rc) != 0) {
+		int rc = pluto::RunCommandCapture(cmd.c_str(), r.output);
+		if (rc == -1) { r.is_error = true; r.output = "fork/exec failed"; return r; }
+		if (r.output.empty()) r.output = "(no matches)";
+		else if (rc != 0 && WIFEXITED(rc) && WEXITSTATUS(rc) != 0) {
 			r.output += "\n[exit " + std::to_string(WEXITSTATUS(rc)) + "]";
 		}
 		return r;

@@ -1,5 +1,5 @@
 CXX      = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -Isrc -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -MMD -MP
+CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -Isrc -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
 LDLIBS   = -lcurl -lbe -lcrypto -lnetwork -ledit
 
 PKG_NAME    = pluto
