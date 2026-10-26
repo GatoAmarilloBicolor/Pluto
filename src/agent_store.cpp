@@ -417,15 +417,6 @@ bool InstallAgentFromUrl(const std::string& url, std::string& error) {
         rm_rf(tmp);
         return false;
     }
-	char buf[256];
-	std::string clone_out;
-	while (fgets(buf, sizeof(buf), pipe))
-		clone_out += buf;
-	if (rc != 0) {
-		error = "git clone failed: " + clone_out;
-		rm_rf(tmp);
-		return false;
-	}
 
 	// Check if AGENT.md is at root or in a subdirectory.
 	struct stat st;
@@ -572,15 +563,6 @@ bool UpdateAgent(const std::string& name, std::string& error) {
         rm_rf(tmp);
         return false;
     }
-	char buf[256];
-	std::string clone_out;
-	while (fgets(buf, sizeof(buf), pipe))
-		clone_out += buf;
-	if (rc != 0) {
-		error = "git clone failed: " + clone_out;
-		rm_rf(tmp);
-		return false;
-	}
 
 	// Find the AGENT.md in the cloned repo (root or subdir).
 	std::string new_agent_dir = tmp;
@@ -819,15 +801,6 @@ int RunAgentStoreCli(int argc, char** argv) {
         rm_rf(tmp);
         return 1;
     }
-			char buf[256];
-			std::string clone_out;
-			while (fgets(buf, sizeof(buf), pipe)) clone_out += buf;
-			if (rc != 0) {
-				std::fprintf(stderr, "install failed: git clone: %s\n",
-					clone_out.c_str());
-				rm_rf(tmp);
-				return 1;
-			}
 			preview_dir = tmp;
 			// Check for subdir agent.
 			struct stat st;
@@ -1144,14 +1117,6 @@ bool InstallAgentFromRegistry(const std::string& name, std::string& error) {
         rm_rf(tmp);
         return false;
     }
-	char buf[256];
-	std::string clone_out;
-	while (fgets(buf, sizeof(buf), pipe)) clone_out += buf;
-	if (rc != 0) {
-		error = "registry clone failed: " + clone_out;
-		rm_rf(tmp);
-		return false;
-	}
 
 	// Look for the agent in agents/<name>/ or <name>/
 	std::string agent_dir;
