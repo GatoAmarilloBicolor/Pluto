@@ -7,6 +7,7 @@
 #include "rag.h"
 #include "util.h"
 #include "haiku/ModelCaps.h"
+#include "systemone/SystemOneConfig.h"
 
 #ifdef __HAIKU__
 #include <Directory.h>
@@ -891,6 +892,61 @@ Credentials ResolveCredentials(Config& cfg) {
 		return { Credentials::API_KEY, key };
 
 	return {};
+	}
+
+// ---- System One Decision Engine config functions ----
+
+SystemOneConfig LoadSystemOneConfig() {
+    auto sc = systemone::LoadSystemOneConfig();
+    SystemOneConfig cfg;
+    cfg.enabled = sc.enabled;
+    cfg.model = systemone::DecisionModelTypeToString(sc.model);
+    cfg.api_key = sc.api_key;
+    cfg.base_url = sc.base_url;
+    cfg.kev_url = sc.kev_url;
+    cfg.laya_url = sc.laya_url;
+    cfg.jev_url = sc.jev_url;
+    cfg.threshold = sc.default_threshold;
+    cfg.timeout_secs = sc.timeout_secs;
+    cfg.prefer_local = sc.prefer_local;
+    cfg.fallback_to_local = sc.fallback_to_local;
+    return cfg;
+}
+
+bool SaveSystemOneConfig(const SystemOneConfig& cfg) {
+    systemone::SystemOneConfig sc;
+    sc.enabled = cfg.enabled;
+    sc.model = systemone::DecisionModelTypeFromString(cfg.model);
+    sc.api_key = cfg.api_key;
+    sc.base_url = cfg.base_url;
+    sc.kev_url = cfg.kev_url;
+    sc.laya_url = cfg.laya_url;
+    sc.jev_url = cfg.jev_url;
+    sc.default_threshold = cfg.threshold;
+    sc.timeout_secs = cfg.timeout_secs;
+    sc.prefer_local = cfg.prefer_local;
+    sc.fallback_to_local = cfg.fallback_to_local;
+    return systemone::SaveSystemOneConfig(sc);
+}
+
+bool IsSystemOneEnabled() {
+    return systemone::IsSystemOneEnabled();
+}
+
+std::string ResolveSystemOneApiKey() {
+    return systemone::ResolveSystemOneApiKey();
+}
+
+std::string SystemOneModelTypeToString(const std::string& model) {
+    return model;
+}
+
+std::string SystemOneModelTypeFromString(const std::string& str) {
+    return str;
+}
+
+std::vector<std::string> ListSystemOneModels() {
+    return systemone::ListDecisionModels();
 }
 
 }  // namespace pluto

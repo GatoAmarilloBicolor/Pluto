@@ -26,6 +26,7 @@
 #include "../json.h"
 #include "../oauth.h"
 #include "../util.h"
+#include "../systemone/SystemOneConfig.h"
 
 namespace pluto {
 namespace gui {
@@ -316,6 +317,9 @@ SettingsDialog::SettingsDialog(BMessenger target, const Config& current)
 		.Add(fColorScheme)
 	.End();
 
+	// ---- System One Decision Engine box ----
+	_BuildSystemOneBox();
+
 	BGroupView* root = new BGroupView(B_VERTICAL, B_USE_HALF_ITEM_SPACING);
 	root->SetExplicitMinSize(BSize(560, B_SIZE_UNSET));
 	root->SetExplicitMaxSize(BSize(560, B_SIZE_UNLIMITED));
@@ -325,6 +329,7 @@ SettingsDialog::SettingsDialog(BMessenger target, const Config& current)
 		.Add(providerBox)
 		.Add(modelBox)
 		.Add(appearBox)
+		.Add(fSystemOneBox)
 		.Add(fAdvancedToggle)
 		.Add(fAdvancedBox)
 		.AddGlue()
@@ -336,6 +341,9 @@ SettingsDialog::SettingsDialog(BMessenger target, const Config& current)
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL)
 		.Add(root);
+
+	// Load System One settings into controls.
+	_LoadSystemOne(current);
 
 	// Select matching profile and populate presets.
 	int32 idx = find_profile_for_config(current, fUserProfiles);
@@ -351,6 +359,146 @@ SettingsDialog::SettingsDialog(BMessenger target, const Config& current)
 	CenterOnScreen();
 	// Focus on the model preset menu rather than the hidden text field.
 	fModelPresets->MakeFocus(true);
+}
+
+void SettingsDialog::_BuildSystemOneBox() {
+	auto* sysOneCfg = new SystemOneConfig();  // default, will be overwritten by _LoadSystemOne
+	(void)sysOneCfg;
+
+	fSystemOneBox = new BBox("systemOneBox");
+	fSystemOneBox->SetLabel("System One — Decision Engine");
+	fSystemOneBox->SetToolTip(
+		"System One provides fast decision models for classification,\n"
+		"verification, safety guards, context pruning, and triage.\n"
+		"Saves 5-10x tokens by delegating routing/guard tasks to\n"
+		"smaller decision models instead of the main LLM.\n"
+		"Models: kev (fast routing), laya (ModernBERT), jev (general),\n"
+		"or local (offline heuristic fallback).");
+
+	// Enabled checkbox
+	fSystemOneEnabled = new BCheckBox("sys1_enabled",
+		"Enable System One decision engine", nullptr);
+	fSystemOneEnabled->SetToolTip(
+		"When enabled, Pluto uses System One for routing, triage,\n"
+		"guard checks, and context pruning to save tokens.");
+
+	// Model dropdown
+	auto* modelMenu = new BPopUpMenu("sys1_model");
+	for (const auto& m : ListSystemOneModels()) {
+		modelMenu->AddItem(new BMenuItem(m.c_str(), nullptr));
+	}
+	fSystemOneModel = new BMenuField("Decision model:", modelMenu);
+
+	// API key field
+	fSystemOneApiKey = new BTextControl("sys1_api_key",
+		"API key:", "", nullptr);
+	fSystemOneApiKey->SetToolTip(
+		"API key for remote decision servers (kev/laya/jev).\n"
+		"Can also be set via SYSTEMONE_API_KEY env var.");
+
+	// Server URLs
+	fSystemOneKevUrl = new BTextControl("sys1_kev_url",
+		"Kev URL:", "", nullptr);
+	fSystemOneLayaUrl = new BTextControl("sys1_laya_url",
+		"Laya URL:", "", nullptr);
+	fSystemOneJevUrl = new BTextControl("sys1_jev_url",
+		"Jev URL:", "", nullptr);
+	fSystemOneBaseUrl = new BTextControl("sys1_base_url",
+		"Base URL override:", "", nullptr);
+
+	// Threshold
+	fSystemOneThreshold = new BTextControl("sys1_threshold",
+		"Default threshold:", "", nullptr);
+	fSystemOneThreshold->SetToolTip(
+		"Default confidence threshold for classification (0.0-1.0).");
+
+	// Timeout
+	fSystemOneTimeout = new BTextControl("sys1_timeout",
+		"Timeout (secs):", "", nullptr);
+
+	// Checkboxes
+	fSystemOnePreferLocal = new BCheckBox("sys1_prefer_local",
+		"Prefer local model", nullptr);
+	fSystemOneFallbackLocal = new BCheckBox("sys1_fallback_local",
+		"Fallback to local if remote fails", nullptr);
+
+	// Layout
+	BLayoutBuilder::Group<>(fSystemOneBox, B_VERTICAL, B_USE_SMALL_SPACING)
+		.SetInsets(B_USE_DEFAULT_SPACING, B_USE_BIG_SPACING,
+		           B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING)
+		.Add(fSystemOneEnabled)
+		.Add(fSystemOneModel)
+		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
+			.Add(fSystemOneApiKey)
+			.AddGlue()
+		.End()
+		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
+			.Add(fSystemOneKevUrl)
+			.Add(fSystemOneLayaUrl)
+			.Add(fSystemOneJevUrl)
+		.End()
+		.Add(fSystemOneBaseUrl)
+		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
+			.Add(fSystemOneThreshold)
+			.Add(fSystemOneTimeout)
+		.End()
+		.Add(fSystemOnePreferLocal)
+		.Add(fSystemOneFallbackLocal)
+	.End();
+}
+
+void SettingsDialog::_LoadSystemOne(const Config& cfg) {
+	fSystemOneEnabled->SetValue(cfg.systemone_enabled ? B_CONTROL_ON : B_CONTROL_OFF);
+
+	// Set model in dropdown
+	BMenu* menu = fSystemOneModel->Menu();
+	for (int32 i = 0; i < menu->CountItems(); i++) {
+		BMenuItem* item = menu->ItemAt(i);
+		if (item && item->Label() == cfg.systemone_model) {
+			item->SetMarked(true);
+			break;
+		}
+	}
+
+	fSystemOneApiKey->SetText(cfg.systemone_api_key.c_str());
+	fSystemOneKevUrl->SetText(cfg.systemone_kev_url.c_str());
+	fSystemOneLayaUrl->SetText(cfg.systemone_laya_url.c_str());
+	fSystemOneJevUrl->SetText(cfg.systemone_jev_url.c_str());
+	fSystemOneBaseUrl->SetText(cfg.systemone_base_url.c_str());
+
+	char buf[32];
+	snprintf(buf, sizeof(buf), "%g", cfg.systemone_threshold);
+	fSystemOneThreshold->SetText(buf);
+	snprintf(buf, sizeof(buf), "%d", cfg.systemone_timeout_secs);
+	fSystemOneTimeout->SetText(buf);
+
+	fSystemOnePreferLocal->SetValue(cfg.systemone_prefer_local ? B_CONTROL_ON : B_CONTROL_OFF);
+	fSystemOneFallbackLocal->SetValue(cfg.systemone_fallback_to_local ? B_CONTROL_ON : B_CONTROL_OFF);
+}
+
+void SettingsDialog::_SaveSystemOne() {
+	fResult.systemone_enabled = (fSystemOneEnabled->Value() == B_CONTROL_ON);
+
+	// Get selected model
+	BMenu* menu = fSystemOneModel->Menu();
+	for (int32 i = 0; i < menu->CountItems(); i++) {
+		BMenuItem* item = menu->ItemAt(i);
+		if (item && item->IsMarked()) {
+			fResult.systemone_model = item->Label();
+			break;
+		}
+	}
+
+	fResult.systemone_api_key = fSystemOneApiKey->Text() ? fSystemOneApiKey->Text() : "";
+	fResult.systemone_kev_url = fSystemOneKevUrl->Text() ? fSystemOneKevUrl->Text() : "";
+	fResult.systemone_laya_url = fSystemOneLayaUrl->Text() ? fSystemOneLayaUrl->Text() : "";
+	fResult.systemone_jev_url = fSystemOneJevUrl->Text() ? fSystemOneJevUrl->Text() : "";
+	fResult.systemone_base_url = fSystemOneBaseUrl->Text() ? fSystemOneBaseUrl->Text() : "";
+
+	fResult.systemone_threshold = atof(fSystemOneThreshold->Text() ? fSystemOneThreshold->Text() : "0.5");
+	fResult.systemone_timeout_secs = atoi(fSystemOneTimeout->Text() ? fSystemOneTimeout->Text() : "30");
+	fResult.systemone_prefer_local = (fSystemOnePreferLocal->Value() == B_CONTROL_ON);
+	fResult.systemone_fallback_to_local = (fSystemOneFallbackLocal->Value() == B_CONTROL_ON);
 }
 
 void SettingsDialog::_SelectProfile(int32 index) {
@@ -563,6 +711,21 @@ void SettingsDialog::MessageReceived(BMessage* msg) {
 					marked->Message()->FindString("scheme", &scheme);
 				out.AddString("color_scheme", scheme);
 			}
+
+			// Save System One settings.
+			_SaveSystemOne();
+			out.AddBool("systemone_enabled", fResult.systemone_enabled);
+			out.AddString("systemone_model", fResult.systemone_model);
+			out.AddString("systemone_api_key", fResult.systemone_api_key);
+			out.AddString("systemone_base_url", fResult.systemone_base_url);
+			out.AddString("systemone_kev_url", fResult.systemone_kev_url);
+			out.AddString("systemone_laya_url", fResult.systemone_laya_url);
+			out.AddString("systemone_jev_url", fResult.systemone_jev_url);
+			out.AddDouble("systemone_threshold", fResult.systemone_threshold);
+			out.AddInt32("systemone_timeout_secs", fResult.systemone_timeout_secs);
+			out.AddBool("systemone_prefer_local", fResult.systemone_prefer_local);
+			out.AddBool("systemone_fallback_to_local", fResult.systemone_fallback_to_local);
+
 			fTarget.SendMessage(&out);
 			fAccepted = true;
 			Quit();

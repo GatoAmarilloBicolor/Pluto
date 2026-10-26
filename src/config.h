@@ -65,6 +65,19 @@ int max_iterations = 25; // max agent loop iterations per turn
 	// Triggered skills: loaded on demand when user message matches keywords.
 	std::vector<SkillEntry> triggered_skills;
 
+	// System One decision engine configuration.
+	bool systemone_enabled = true;
+	std::string systemone_model = "auto";  // kev, laya, jev, local, auto
+	std::string systemone_api_key;         // API key for remote decision servers
+	std::string systemone_base_url;        // optional base URL override
+	std::string systemone_kev_url = "http://localhost:8080/mcp";
+	std::string systemone_laya_url = "http://localhost:8081/mcp";
+	std::string systemone_jev_url = "http://localhost:8082/mcp";
+	double systemone_threshold = 0.5;
+	int systemone_timeout_secs = 30;
+	bool systemone_prefer_local = false;
+	bool systemone_fallback_to_local = true;
+
 	// MCP server configuration lives in its own files (.mcp.json etc);
 	// see src/mcp/Config.h.
 };
@@ -194,5 +207,41 @@ void LoadModes(Config& cfg);
 
 // Find a mode by name. Returns nullptr if not found.
 const ModeEntry* FindMode(const Config& cfg, const std::string& name);
+
+// ---- System One Decision Engine ----
+
+// System One configuration (loaded from ~/config/settings/pluto/systemone.conf).
+struct SystemOneConfig {
+    bool enabled = true;
+    std::string model = "auto";        // kev, laya, jev, local, auto
+    std::string api_key;
+    std::string base_url;
+    std::string kev_url = "http://localhost:8080/mcp";
+    std::string laya_url = "http://localhost:8081/mcp";
+    std::string jev_url = "http://localhost:8082/mcp";
+    double threshold = 0.5;
+    int timeout_secs = 30;
+    bool prefer_local = false;
+    bool fallback_to_local = true;
+};
+
+// Load System One config.
+SystemOneConfig LoadSystemOneConfig();
+
+// Save System One config.
+bool SaveSystemOneConfig(const SystemOneConfig& cfg);
+
+// Check if System One is enabled.
+bool IsSystemOneEnabled();
+
+// Resolve System One API key (env var → config file → key file).
+std::string ResolveSystemOneApiKey();
+
+// String <-> DecisionModelType conversion.
+std::string SystemOneModelTypeToString(const std::string& model);
+std::string SystemOneModelTypeFromString(const std::string& str);
+
+// List available decision models for UI dropdown.
+std::vector<std::string> ListSystemOneModels();
 
 }  // namespace pluto

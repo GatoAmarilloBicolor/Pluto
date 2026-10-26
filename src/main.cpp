@@ -19,6 +19,7 @@
 #include "haiku/BfsTools.h"
 #include "haiku/DesktopTools.h"
 #include "haiku/PluginLoader.h"
+#include "systemone/SystemOneClient.h"
 #include "mcp/Cli.h"
 #include "mcp/Client.h"
 #include "mcp/Config.h"
@@ -512,6 +513,31 @@ int main(int argc, char** argv) {
 	std::string plugins_dir = SettingsDir() + "/plugins";
 	pluto::LoadAndRegisterPlugins(plugins_dir, tools);
 #endif
+
+	// ---- System One Decision Engine ----
+	// Load System One config and register decision tools if enabled.
+	pluto::systemone::SystemOneConfig sys1_cfg = pluto::systemone::LoadSystemOneConfig();
+	// Override with config from main Config if available
+	sys1_cfg.enabled = cfg.systemone_enabled;
+	sys1_cfg.model = pluto::systemone::DecisionModelTypeFromString(cfg.systemone_model);
+	sys1_cfg.api_key = cfg.systemone_api_key;
+	sys1_cfg.base_url = cfg.systemone_base_url;
+	sys1_cfg.kev_url = cfg.systemone_kev_url;
+	sys1_cfg.laya_url = cfg.systemone_laya_url;
+	sys1_cfg.jev_url = cfg.systemone_jev_url;
+	sys1_cfg.default_threshold = cfg.systemone_threshold;
+	sys1_cfg.timeout_secs = cfg.systemone_timeout_secs;
+	sys1_cfg.prefer_local = cfg.systemone_prefer_local;
+	sys1_cfg.fallback_to_local = cfg.systemone_fallback_to_local;
+
+	std::unique_ptr<pluto::systemone::SystemOneClient> systemone_client;
+	if (pluto::IsSystemOneEnabled()) {
+		systemone_client = pluto::systemone::CreateSystemOneClient(sys1_cfg, tools);
+		if (systemone_client) {
+			fprintf(stderr, "[systemone] enabled with model: %s\n",
+				systemone_client->model_name().c_str());
+		}
+	}
 
 	// MCP bootstrap.
 	pluto::McpManager mcp(tools, prompt_project_approval);
