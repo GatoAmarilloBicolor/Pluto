@@ -30,6 +30,11 @@ echo "  GUI        -> $BIN_DIR/Pluto"
 cp "$SCRIPT_DIR/Pluto" "$BIN_DIR/Pluto"
 chmod 755 "$BIN_DIR/Pluto"
 
+# System One MCP server
+echo "  System One -> $BIN_DIR/systemone_server"
+cp "$SCRIPT_DIR/systemone_server" "$BIN_DIR/systemone_server"
+chmod 755 "$BIN_DIR/systemone_server"
+
 # Tracker add-on
 echo "  Tracker    -> $ADDON_DIR/Ask pluto"
 cp "$SCRIPT_DIR/Ask pluto" "$ADDON_DIR/Ask pluto"
