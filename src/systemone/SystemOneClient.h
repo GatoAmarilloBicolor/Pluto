@@ -37,6 +37,9 @@ public:
     // Returns the name of the active decision model.
     std::string model_name() const;
 
+    // Returns the underlying DecisionModel pointer (for advanced use).
+    DecisionModel* model() const;
+
 private:
     std::unique_ptr<DecisionModel> fModel;
 

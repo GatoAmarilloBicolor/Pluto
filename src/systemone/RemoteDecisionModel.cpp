@@ -244,8 +244,7 @@ std::string RemoteDecisionModel::post_jsonrpc(const std::string& method, const s
             }
             return response.data.substr(start, i - start);
         } else if (response.data[start] == '"') {
-            pos: // string
-            pos++;
+            size_t pos = start + 1;
             size_t end = response.data.find('"', pos);
             if (end == std::string::npos) return {};
             return response.data.substr(pos, end - pos);

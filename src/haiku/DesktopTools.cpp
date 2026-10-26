@@ -17,6 +17,8 @@
 #include <PropertyInfo.h>
 #include <Rect.h>
 #include <Statable.h>
+#include <Looper.h>
+#include <Messenger.h>
 #endif
 
 #include <cstdint>

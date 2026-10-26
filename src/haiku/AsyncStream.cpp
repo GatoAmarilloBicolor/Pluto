@@ -189,6 +189,7 @@ int AsyncStreamManager::Perform(int timeout_ms) {
 	struct timeval timeout = { timeout_ms / 1000, (timeout_ms % 1000) * 1000 };
 	int numfds = 0;
 	curl_multi_wait(fMulti, nullptr, 0, timeout_ms, &numfds);
+	(void)numfds;
 
 	return (int)fHandles.size();
 }

@@ -16,6 +16,8 @@
 #include <Path.h>
 #include <Volume.h>
 #include <VolumeRoster.h>
+#include <Query.h>
+#include <fs_attr.h>
 #endif
 
 #include <cstdint>

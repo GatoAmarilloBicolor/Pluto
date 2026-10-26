@@ -1,5 +1,5 @@
 CXX      = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -Isrc -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
+CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -O2 -Isrc -Imock_headers/haiku -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
 LDLIBS   = -lcurl -lbe -lcrypto -lnetwork -ledit
 
 PKG_NAME    = pluto
@@ -50,6 +50,11 @@ CORE_SRCS = src/lsp/LspClient.cpp \
             src/haiku/ModelCaps.cpp \
             src/haiku/Notifications.cpp \
             src/haiku/PluginLoader.cpp \
+            src/systemone/SystemOneConfig.cpp \
+            src/systemone/DecisionModel.cpp \
+            src/systemone/RemoteDecisionModel.cpp \
+            src/systemone/LocalDecisionModel.cpp \
+            src/systemone/SystemOneClient.cpp \
             src/mcp/Client.cpp \
             src/mcp/Config.cpp \
             src/mcp/Manager.cpp \

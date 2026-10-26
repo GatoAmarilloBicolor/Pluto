@@ -8,6 +8,8 @@
 #include <Path.h>
 #endif
 
+#include <sys/stat.h>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 
@@ -16,8 +18,13 @@ namespace systemone {
 
 namespace {
 
+std::string my_home_dir() {
+    const char* h = std::getenv("HOME");
+    return h ? std::string(h) : std::string("/");
+}
+
 std::string settings_dir() {
-    return home_dir() + "/config/settings/pluto";
+    return my_home_dir() + "/config/settings/pluto";
 }
 
 std::string config_path() {
@@ -131,7 +138,7 @@ std::string ResolveSystemOneApiKey() {
     if (!cfg.api_key.empty()) return cfg.api_key;
 
     // 3. Check per-provider key file
-    std::string key_path = home_dir() + "/config/settings/pluto/keys/SYSTEMONE_API_KEY";
+    std::string key_path = my_home_dir() + "/config/settings/pluto/keys/SYSTEMONE_API_KEY";
     std::ifstream kf(key_path);
     if (kf) {
         std::string key;
