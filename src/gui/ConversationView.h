@@ -71,6 +71,9 @@ struct ConversationDelegate {
 	virtual int RequestToolApproval(const std::string& tool_name,
 	                                const std::string& input_preview) = 0;
 
+	// Error from provider or tool — show alert/notification.
+	virtual void OnError(const std::string& error) = 0;
+
 	// RAG injection occurred — show topics in side panel.
 	virtual void OnRagInject(const std::vector<std::string>& topics) = 0;
 

@@ -873,6 +873,7 @@ void ConversationView::HandleError(const std::string& error) {
 	line += error;
 	line += "\n";
 	_Append(line, rgb_color{245, 101, 101, 255}, B_BOLD_FACE);
+	if (fDelegate) fDelegate->OnError(error);
 }
 
 void ConversationView::HandleUsage(long in, long out,

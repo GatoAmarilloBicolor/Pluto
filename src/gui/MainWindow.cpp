@@ -65,6 +65,7 @@
 #include "../util.h"
 #include "../workspace.h"
 #include "../storage/SessionStore.h"
+#include "../haiku/Notifications.h"
 #include "DeskbarReplicant.h"
 #include "AgentStoreDialog.h"
 #include "RoutineDialog.h"
@@ -1700,6 +1701,24 @@ void MainWindow::OnTitleChanged(const std::string& /*title*/) {
 	}
 }
 
+void MainWindow::OnError(const std::string& error) {
+	// Show native Haiku notification for errors.
+	BNotification n(B_WARNING_NOTIFICATION);
+	n.SetGroup("Pluto");
+	n.SetTitle("Pluto — error");
+	std::string text = error;
+	if (text.size() > 200)
+		text = text.substr(0, 200) + "\xe2\x80\xa6";
+	n.SetContent(text.c_str());
+	n.SetMessageID("pluto-error");
+	n.SetOnClickApp("application/x-vnd.Hay-pluto");
+	n.Send(static_cast<bigtime_t>(10) * 1000000LL);
+
+	// Also append to active conversation.
+	auto* conv = _ActiveConv();
+	if (conv) conv->HandleError(error);
+}
+
 void MainWindow::OnToolOutput(const std::string& tool_name,
                                const std::string& body,
                                const std::string& input_json,
@@ -3220,8 +3239,117 @@ void MainWindow::MessageReceived(BMessage* msg) {
 	}
 }
 
+void MainWindow::KeyDown(const char* bytes, int32 numBytes) {
+	if (numBytes != 1) {
+		BWindow::KeyDown(bytes, numBytes);
+		return;
+	}
 
-void MainWindow::_SendCurrentInput() {
+	uint32 modifiers = 0;
+	if (CurrentMessage())
+		CurrentMessage()->FindInt32("modifiers", (int32*)&modifiers);
+	bool cmd = (modifiers & B_COMMAND_KEY) != 0;
+	bool ctrl = (modifiers & B_CONTROL_KEY) != 0;
+	bool shift = (modifiers & B_SHIFT_KEY) != 0;
+
+	// Global shortcuts (work regardless of focused view).
+	if (cmd || ctrl) {
+		switch (bytes[0]) {
+			case 'n':  // Cmd/Ctrl+N — new tab
+				if (!shift) _CreateTab();
+				else _CreateTab();  // always new tab
+				return;
+			case 'w':  // Cmd/Ctrl+W — close tab
+				_CloseTab();
+				return;
+			case 't':  // Cmd/Ctrl+T — new tab (alias)
+				_CreateTab();
+				return;
+			case '1': case '2': case '3': case '4': case '5':
+			case '6': case '7': case '8': case '9': {
+				// Cmd/Ctrl+1-9 — select tab by number.
+				int32 tab = bytes[0] - '1';
+				if (fTabView && tab < fTabView->CountTabs()) {
+					fTabView->Select(tab);
+				}
+				return;
+			}
+			case '/':  // Cmd/Ctrl+/ — focus input
+				if (fInput) {
+					fInput->MakeFocus(true);
+					// Select all if shift held.
+					if (shift) fInput->SelectAll();
+				}
+				return;
+			case ',':  // Cmd/Ctrl+, — settings
+				BMessenger(this).SendMessage(static_cast<uint32>('plPr'));
+				return;
+			case 'q':  // Cmd/Ctrl+Q — quit
+				PostMessage(B_QUIT_REQUESTED);
+				return;
+			case 'p':  // Cmd/Ctrl+P — print/export
+				_ExportMarkdown();
+				return;
+			case 'f':  // Cmd/Ctrl+F — find
+				_ShowFindBar();
+				return;
+			case 'l':  // Cmd/Ctrl+L — clear conversation
+				if (_ActiveConv()) _ActiveConv()->Reset();
+				return;
+			case 'r':  // Cmd/Ctrl+R — reset session
+				if (!shift) _ResetConversation();
+				return;
+			case 'm':  // Cmd/Ctrl+M — model picker
+				_OpenModelPicker();
+				return;
+			case 'f':  // Cmd/Ctrl+F — find (already handled above)
+				return;
+			case '+':  // Cmd/Ctrl++ — zoom in
+				fFontDelta += 1;
+				fConfig->font_delta = fFontDelta;
+				pluto::SaveConfig(*fConfig);
+				_ApplyFontZoom();
+				return;
+			case '-':  // Cmd/Ctrl+- — zoom out
+				fFontDelta -= 1;
+				fConfig->font_delta = fFontDelta;
+				pluto::SaveConfig(*fConfig);
+				_ApplyFontZoom();
+				return;
+			case '0':  // Cmd/Ctrl+0 — zoom reset
+				fFontDelta = 0;
+				fConfig->font_delta = fFontDelta;
+				pluto::SaveConfig(*fConfig);
+				_ApplyFontZoom();
+				return;
+			case 's':  // Cmd/Ctrl+S — save session
+				if (_ActiveConv()) _ActiveConv()->SaveSession();
+				return;
+		}
+	}
+
+	// F11 — full screen toggle.
+	if (bytes[0] == B_FUNCTION_KEY) {
+		// B_FUNCTION_KEY is a prefix; check the actual function key in
+		// the message's "key" field or just toggle fullscreen.
+		// For simplicity, toggle fullscreen on any F-key.
+		if (IsHidden() || !IsActive()) return;
+		BRect frame = Frame();
+		BRect screen = BScreen().Frame();
+		if (frame == screen) {
+			// Restore to windowed.
+			ResizeTo(1020, 720);
+			MoveTo((screen.Width() - 1020) / 2, (screen.Height() - 720) / 2);
+		} else {
+			// Go full screen.
+			MoveTo(0, 0);
+			ResizeTo(screen.Width(), screen.Height());
+		}
+		return;
+	}
+
+	BWindow::KeyDown(bytes, numBytes);
+}
 	if (_ActiveConv()->IsBusy()) return;
 	std::string text = trim(fInput->Text() ? fInput->Text() : "");
 	if (text.empty() && fPendingImages.empty()) return;
@@ -3633,14 +3761,10 @@ void MainWindow::_InitPalette() {
 	fprintf(stderr, "PALETTE: color_scheme='%s' dark=%d\n",
 		gColorScheme.c_str(), dark);
 
-	// Use system colors - let Haiku handle dark/light theme
-	rgb_color body = ui_color(B_DOCUMENT_TEXT_COLOR);
-	rgb_color code_bg = ui_color(B_PANEL_BACKGROUND_COLOR);
-	rgb_color link_color = ui_color(B_CONTROL_TEXT_COLOR);
+	// Initialize native Haiku palette from system ui_color().
+	pluto::gui::InitNativePalette();
 
-	fprintf(stderr, "PALETTE: body=(%d,%d,%d)\n", body.red, body.green, body.blue);
-
-	// Apply background colors chat views.
+	// Apply background colors chat views using the native palette.
 	_ApplyViewColors();
 }
 
@@ -3648,11 +3772,11 @@ void MainWindow::_ApplyViewColors() {
 	// Guard: called from _InitPalette may run before views exist.
 	if (!fTabView || fTabView->CountTabs() == 0) return;
 
-	// Use system colors - let Haiku handle dark/light theme
-	rgb_color bg = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
-	rgb_color fg = ui_color(B_DOCUMENT_TEXT_COLOR);
-	rgb_color code_bg = ui_color(B_PANEL_BACKGROUND_COLOR);
-	rgb_color link_color = ui_color(B_CONTROL_TEXT_COLOR);
+	// Use native Haiku palette.
+	rgb_color bg = gPalette.window_bg;
+	rgb_color fg = gPalette.text_fg;
+	rgb_color code_bg = gPalette.panel_bg;
+	rgb_color link_color = gPalette.link_color;
 
 	// Apply to ALL tabs.
 	for (int32 i = 0; i < fTabView->CountTabs(); ++i) {
@@ -3661,27 +3785,29 @@ void MainWindow::_ApplyViewColors() {
 		if (conv) {
 			conv->UpdateParserColors(true, fg, code_bg, link_color);
 			if (conv->DocView()) {
-				conv->DocView()->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
-				conv->DocView()->SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+				conv->DocView()->SetViewUIColor(gPalette.window_bg);
+				conv->DocView()->SetLowUIColor(gPalette.window_bg);
 				conv->DocView()->Invalidate();
 			}
 		}
 	}
 
 	if (fSideView) {
-		fSideView->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
-		fSideView->SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+		fSideView->SetViewUIColor(gPalette.window_bg);
+		fSideView->SetLowUIColor(gPalette.window_bg);
 		fSideView->SetHighColor(fg);
 	}
 	if (fInput) {
-		fInput->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
-		fInput->SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+		fInput->SetViewUIColor(gPalette.window_bg);
+		fInput->SetLowUIColor(gPalette.window_bg);
 		BFont font;
 		fInput->GetFontAndColor(0, &font);
 		fInput->SetFontAndColor(&font, B_FONT_ALL, &fg);
 	}
 	if (fStatus)
-		fStatus->SetHighColor(ui_color(B_DOCUMENT_TEXT_COLOR));
+		fStatus->SetHighColor(gPalette.text_fg);
+	if (fSideTitle)
+		fSideTitle->SetHighColor(gPalette.text_fg);
 }
 
 void MainWindow::_RenderMarkdown(const std::string& text) {
