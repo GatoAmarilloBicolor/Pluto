@@ -177,9 +177,6 @@ public:
 	// of the find bar, since ConversationView does not own fFindBar).
 	void FindInConversation(const std::string& query, bool forward);
 
-	// Request conversation compaction (manual /compact command).
-	void RequestCompaction();
-
 	// --- Worker event handlers (called by MainWindow message handlers) ---
 	// These perform all rendering and state updates internally.
 

@@ -10,20 +10,20 @@ namespace pluto {
 struct ContentBlock {
 	enum Type { TEXT, TOOL_USE, TOOL_RESULT, IMAGE, AUDIO, DOCUMENT };
 	Type type = TEXT;
-	std::string text;         // TEXT, or TOOL_RESULT content payload
-	std::string tool_id;      // TOOL_USE (call id) or TOOL_RESULT (refers to tool_use id)
-	std::string tool_name;    // TOOL_USE
-	std::string tool_input;   // TOOL_USE: raw JSON object string
+	std::string text = "";         // TEXT, or TOOL_RESULT content payload
+	std::string tool_id = "";      // TOOL_USE (call id) or TOOL_RESULT (refers to tool_use id)
+	std::string tool_name = "";    // TOOL_USE
+	std::string tool_input = "";   // TOOL_USE: raw JSON object string
 	bool is_error = false;    // TOOL_RESULT
-	std::string image_data;       // IMAGE: base64-encoded image data
-	std::string image_media_type; // IMAGE: e.g. "image/png", "image/jpeg"
+	std::string image_data = "";       // IMAGE: base64-encoded image data
+	std::string image_media_type = ""; // IMAGE: e.g. "image/png", "image/jpeg"
 	// AUDIO: base64-encoded audio data + format ("mp3" or "wav").
 	// Supported by OpenAI gpt-4o-audio models. Claude does not support audio.
-	std::string audio_data;
-	std::string audio_format;     // "mp3" or "wav"
+	std::string audio_data = "";
+	std::string audio_format = "";     // "mp3" or "wav"
 	// DOCUMENT: base64-encoded PDF data. Claude converts pages to images.
-	std::string doc_data;
-	std::string doc_media_type;   // "application/pdf"
+	std::string doc_data = "";
+	std::string doc_media_type = "";   // "application/pdf"
 };
 
 struct Message {
