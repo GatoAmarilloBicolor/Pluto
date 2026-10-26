@@ -16,9 +16,11 @@
 #include "cancel.h"
 #include "json.h"
 #include "config.h"
+#ifdef __HAIKU__
 #include "haiku/BfsTools.h"
 #include "haiku/DesktopTools.h"
 #include "haiku/PluginLoader.h"
+#endif
 #include "systemone/SystemOneClient.h"
 #include "mcp/Cli.h"
 #include "mcp/Client.h"
@@ -494,6 +496,7 @@ int main(int argc, char** argv) {
 	tools.add(pluto::MakeListAttrsTool());
 	tools.add(pluto::MakeRemoveAttrTool());
 	tools.add(pluto::MakeQueryFsTool());
+#ifdef __HAIKU__
 	tools.add(pluto::MakeDesktopScriptTool());
 	tools.add(pluto::MakeLaunchAppTool());
 	tools.add(pluto::MakeLiveQueryTool());
@@ -501,6 +504,7 @@ int main(int argc, char** argv) {
 	tools.add(pluto::MakeNodeMonitorTool());
 	if (pluto::RagEntryCount() > 0)
 		tools.add(pluto::MakeBeapiLookupTool());
+#endif
 	if (wiki_count > 0)
 		tools.add(pluto::MakeWikiLookupTool());
 	tools.add(pluto::MakeWebFetchTool());

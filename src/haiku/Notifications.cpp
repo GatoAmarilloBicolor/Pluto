@@ -4,6 +4,7 @@
 
 #ifdef __HAIKU__
 #include <Application.h>
+#include <Notification.h>
 #include <String.h>
 #endif
 
@@ -15,7 +16,7 @@ namespace pluto {
 
 void Notify(const std::string& title, const std::string& body,
             const std::string& /*icon*/) {
-	BNotification notification(B_NOTIFICATION_TYPE_INFO,
+	BNotification notification(static_cast<uint32>(1),
 	                           BString(title.c_str()),
 	                           BString(body.c_str()));
 	notification.Send();
@@ -39,7 +40,7 @@ void NotificationCenter::Post(const std::string& title,
                                const std::string& icon) {
 	if (!fLooper) return;
 
-	BMessage msg(B_NOTIFICATION_TYPE_INFO);
+	BMessage msg(static_cast<uint32>(1));
 	msg.AddString("title", title.c_str());
 	msg.AddString("body", body.c_str());
 	if (!icon.empty()) msg.AddString("icon", icon.c_str());
@@ -48,12 +49,12 @@ void NotificationCenter::Post(const std::string& title,
 }
 
 void NotificationCenter::NotificationLooper::MessageReceived(BMessage* msg) {
-	if (msg->what == B_NOTIFICATION_TYPE_INFO) {
+	if (msg->what == static_cast<uint32>(1)) {
 		BString title, body;
 		msg->FindString("title", &title);
 		msg->FindString("body", &body);
 
-		BNotification notification(B_NOTIFICATION_TYPE_INFO, title, body);
+		BNotification notification(static_cast<uint32>(1), title, body);
 		notification.Send();
 	} else {
 		BLooper::MessageReceived(msg);

@@ -51,15 +51,6 @@ PermissionFn InteractivePrompt() {
 }
 
 namespace {
-// Hard cap on a single tool_result payload to protect the context window.
-// ~48 KB ≈ 12k tokens, enough for most diagnostic output, small enough that
-void cap_tool_output(std::string& out, const Config& cfg) {
-	size_t kMaxToolOutput = cfg.max_tool_output;
-	if (out.size() <= kMaxToolOutput) return;
-	size_t dropped = out.size() - kMaxToolOutput;
-	out.resize(kMaxToolOutput);
-	out += "\n... [truncated " + std::to_string(dropped) + " bytes]";
-}
 
 
 
@@ -83,39 +74,11 @@ size_t estimate_tokens(const std::vector<Message>& msgs) {
 // that reference a deleted tool_use id (which the API would reject).
 // Returns the number of messages in the first complete round, or 0
 // if no safe boundary was found.
-size_t first_round_end(const std::vector<Message>& msgs) {
-	size_t i = 0;
-	if (i >= msgs.size() || msgs[i].role != "user") return 0;
-	++i;  // skip opening user
-	while (i < msgs.size()) {
-		if (i >= msgs.size() || msgs[i].role != "assistant") return 0;
-		// Check if this assistant message contains tool_use blocks.
-		bool has_tool_use = false;
-		for (const auto& b : msgs[i].content)
-			if (b.type == ContentBlock::TOOL_USE) { has_tool_use = true; break; }
-		++i;  // past assistant
-		if (!has_tool_use) return i;  // clean boundary — no pending tool calls
-		// Assistant used tools → next must be user(tool_result).
-		if (i >= msgs.size() || msgs[i].role != "user") return 0;
-		++i;  // past user(tool_result), loop back to expect assistant
-	}
-	return 0;  // ran out of messages without finding a clean boundary
-}
 
 // Drop the oldest complete rounds until estimated tokens fit under
 // `target`. Never drops the most recent user turn. Preserves
 // tool_use/tool_result pairs as atomic units to avoid API errors.
 // Returns the number of rounds dropped.
-int prune_to_fit(std::vector<Message>& msgs, size_t target) {
-	int dropped = 0;
-	while (estimate_tokens(msgs) > target && msgs.size() > 2) {
-		size_t boundary = first_round_end(msgs);
-		if (boundary == 0 || boundary >= msgs.size()) break;
-		msgs.erase(msgs.begin(), msgs.begin() + boundary);
-		++dropped;
-	}
-	return dropped;
-}
 
 // Run a hook command in a child process with env vars set safely.
 // This avoids shell injection: env var values are passed via setenv()

@@ -6,6 +6,7 @@
 
 #ifdef __HAIKU__
 #include <image.h>
+#include <OS.h>
 #endif
 
 #include <errno.h>
@@ -96,13 +97,14 @@ LspClient::Start(const std::string& command,
 	close(inPipe[0]);
 	close(outPipe[1]);
 
-	// Build argv array for load_image().
+	// Build argv array.
 	std::vector<const char*> argv;
 	argv.push_back(command.c_str());
 	for (const auto& a : args)
 		argv.push_back(a.c_str());
 	argv.push_back(NULL);
 
+#ifdef __HAIKU__
 	// Spawn using Haiku's native load_image() API.
 	thread_id child = load_image(
 		static_cast<int32>(argv.size() - 1),
@@ -130,6 +132,47 @@ LspClient::Start(const std::string& command,
 	fWriteFd = inPipe[1];
 	fReadFd = outPipe[0];
 	fPid = child;
+#else
+	// POSIX: fork + execvp
+	pid_t pid = fork();
+	if (pid < 0) {
+		// Restore parent's stdin/stdout/stderr
+		dup2(savedStdin, STDIN_FILENO);
+		dup2(savedStdout, STDOUT_FILENO);
+		dup2(savedStderr, STDERR_FILENO);
+		close(savedStdin);
+		close(savedStdout);
+		close(savedStderr);
+		close(inPipe[1]);
+		close(outPipe[0]);
+		error = strerror(errno);
+		return false;
+	}
+
+	if (pid == 0) {
+		// Child process
+		close(savedStdin);
+		close(savedStdout);
+		close(savedStderr);
+		close(inPipe[1]);
+		close(outPipe[0]);
+
+		execvp(command.c_str(), const_cast<char* const*>(argv.data()));
+		_exit(127); // execvp failed
+	}
+
+	// Parent process
+	dup2(savedStdin, STDIN_FILENO);
+	dup2(savedStdout, STDOUT_FILENO);
+	dup2(savedStderr, STDERR_FILENO);
+	close(savedStdin);
+	close(savedStdout);
+	close(savedStderr);
+
+	fWriteFd = inPipe[1];
+	fReadFd = outPipe[0];
+	fPid = pid;
+#endif
 
 	// Non-blocking reads so poll() works properly.
 	int flags = fcntl(fReadFd, F_GETFL, 0);
@@ -310,9 +353,9 @@ LspClient::Shutdown()
 
 	if (fPid > 0) {
 		// Wait for the child to exit gracefully after shutdown/exit.
-		status_t dummy;
+		int status = 0;
 		for (int i = 0; i < 50; i++) {
-			pid_t result = waitpid(fPid, &dummy, WNOHANG);
+			pid_t result = waitpid(fPid, &status, WNOHANG);
 			if (result == fPid || result < 0) {
 				fPid = -1;
 				return;
@@ -321,7 +364,7 @@ LspClient::Shutdown()
 		}
 		// Force kill if still alive.
 		kill(fPid, SIGKILL);
-		waitpid(fPid, &dummy, 0);
+		waitpid(fPid, &status, 0);
 		fPid = -1;
 	}
 

@@ -8,7 +8,7 @@
 #include "routine.h"
 #include "telemetry.h"
 #include "util.h"
-#include "ipc/PlutoMessenger.h"
+
 #include "mcp/SseSubscriber.h"
 #include "storage/SessionStore.h"
 #include "workspace.h"
@@ -19,6 +19,7 @@
 #ifdef __HAIKU__
 #include <Clipboard.h>
 #include <Message.h>
+#include "ipc/PlutoMessenger.h"
 #endif
 
 #include <curl/curl.h>
@@ -485,20 +486,20 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 		std::printf("\n");
 	}
 
-	// Workspace collision detection: warn if another Pluto instance is
-	// already working in the same directory.
-	{
-		auto collision = ipc::check_workspace_collision(WorkspaceRoot());
-		if (collision.team_id >= 0) {
-			std::printf("%s\xe2\x9a\xa0 Another Pluto instance (PID %d) is already "
-				"working in %s%s\n",
-				kRed, (int)collision.team_id,
-				WorkspaceRoot().c_str(), kReset);
-			std::printf("  %smodel: %s, %s%s\n", kDim,
-				collision.model.empty() ? "?" : collision.model.c_str(),
-				collision.busy ? "busy" : "idle", kReset);
-		}
+// Workspace collision detection: warn if another Pluto instance is
+// already working in the same directory.
+#ifdef __HAIKU__
+	auto collision = ipc::check_workspace_collision(WorkspaceRoot());
+	if (collision.team_id >= 0) {
+		std::printf("%s\xe2\x9a\xa0 Another Pluto instance (PID %d) is already "
+			"working in %s%s\n",
+			kRed, (int)collision.team_id,
+			WorkspaceRoot().c_str(), kReset);
+		std::printf("  %smodel: %s, %s%s\n", kDim,
+			collision.model.empty() ? "?" : collision.model.c_str(),
+			collision.busy ? "busy" : "idle", kReset);
 	}
+#endif
 
 	std::vector<Message> messages;
 	std::string line;
@@ -1357,6 +1358,7 @@ if (line == "/cost") {
 			}
 			continue;
 		}
+#ifdef __HAIKU__
 		if (line == "/peers") {
 			auto peers = ipc::find_peers();
 			if (peers.empty()) {
@@ -1482,6 +1484,7 @@ if (line == "/cost") {
 			}
 			continue;
 		}
+#endif
 
 		if (line == "/routines") {
 			auto routines = ListRoutines();

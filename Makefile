@@ -6,7 +6,7 @@ ifeq ($(UNAME),Haiku)
     CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -O2 -Isrc -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
 else
     # On macOS/Linux, use mock headers for cross-compilation
-    CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -O2 -Isrc -Imock_headers/haiku -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
+    CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -O2 -Isrc -Imock_headers/haiku -I/opt/homebrew/include -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
 endif
 LDLIBS   = -lcurl -lbe -lcrypto -lnetwork -ledit
 
@@ -17,11 +17,9 @@ PKG_ARCH    = x86_64
 # Core sources (platform-independent)
 CORE_SRCS = src/lsp/LspClient.cpp \
             src/lsp/LspConfig.cpp \
-            src/ipc/PlutoMessenger.cpp \
             src/agent_store.cpp \
             src/cancel.cpp \
             src/markdown.cpp \
-            src/oauth.cpp \
             src/config.cpp \
             src/rag.cpp \
             src/wiki.cpp \
@@ -85,7 +83,9 @@ HAIKU_SRCS = src/haiku/BfsTools.cpp \
              src/haiku/PluginLoader.cpp \
              src/haiku/Notifications.cpp \
              src/haiku/ModelCaps.cpp \
-             src/haiku/AsyncStream.cpp
+             src/haiku/AsyncStream.cpp \
+             src/ipc/PlutoMessenger.cpp \
+             src/oauth.cpp
 
 CLI_SRCS = src/main.cpp \
            src/repl.cpp \
