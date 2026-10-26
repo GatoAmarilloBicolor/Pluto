@@ -731,6 +731,50 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		return true;
 	}
 
+	if (text == "/systemone") {
+		_Append("System One (Laya-based Decision Model)
+", kColDim, B_BOLD_FACE);
+		_Append("====================================
+
+", kColDim);
+		_Append("MCP Server: systemone_server (stdio transport)
+", kColDim);
+		_Append("Auto-discovered and connected as built-in MCP.
+
+", kColDim);
+		_Append("Available tools (9):
+", kColDim, B_BOLD_FACE);
+		_Append("  systemone_classify        - single-label classification
+", kColDim);
+		_Append("  systemone_classify_multi  - multi-label classification
+", kColDim);
+		_Append("  systemone_verify          - entailment check (ground RAG)
+", kColDim);
+		_Append("  systemone_guard           - safety gate (injection/PII/toxic/spam)
+", kColDim);
+		_Append("  systemone_select_relevant - context pruning (90% recall)
+", kColDim);
+		_Append("  systemone_same_intent     - semantic dedup (94% accuracy)
+", kColDim);
+		_Append("  systemone_triage          - guard + route + tags + urgency
+", kColDim);
+		_Append("  systemone_answerable      - RAG gate (threshold 0.3)
+", kColDim);
+		_Append("  systemone_consult         - decisions with persistent memory
+", kColDim);
+		_Append("  systemone_decide_program  - full pipeline (token-efficient)
+
+", kColDim);
+		_Append("Token savings: 5-10x fewer tokens by delegating to System One
+", kColDim);
+		_Append("Memory: persistent topic memory (remember/recall/consult)
+
+", kColDim);
+		return true;
+	}
+
+
+
 	if (text == "/commands") {
 		if (fCustomCommands.empty()) {
 			_Append("(no custom commands)\n\n", kColDim);
