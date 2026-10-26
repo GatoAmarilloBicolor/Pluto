@@ -2,6 +2,7 @@
 // This file implements MainWindow::_HandleSlashCommand().
 
 #include "MainWindow.h"
+#include "../util.h"
 
 #include <Clipboard.h>
 #include <Message.h>

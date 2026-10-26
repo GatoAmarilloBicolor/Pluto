@@ -4472,30 +4472,29 @@ static std::string _ProbeMediaInfo(const std::string& path,
 			else cmd += c;
 		}
 		cmd += "' 2>/dev/null";
-		FILE* p = popen(cmd.c_str(), "r");
-		if (p) {
-			char buf[512];
-			std::string duration, codec, sample_rate, channels, bit_rate;
-			while (fgets(buf, sizeof(buf), p)) {
-				std::string line(buf);
-				auto val = [&](const std::string& key) -> std::string {
-					size_t pos = line.find(key + "=");
-					if (pos == std::string::npos) return {};
-					size_t start = pos + key.size() + 1;
-					// Strip quotes and newline.
-					std::string v = line.substr(start);
-					while (!v.empty() && (v.back() == '\n' || v.back() == '"'))
-						v.pop_back();
-					if (!v.empty() && v.front() == '"') v.erase(0, 1);
-					return v;
-				};
+		std::string output;
+		int rc = pluto::RunCommandCapture(cmd.c_str(), output);
+		if (rc == 0 && !output.empty()) {
+			// Parse output
+			std::istringstream iss(output);
+			std::string line;
+			auto val = [&](const std::string& key) -> std::string {
+				size_t pos = line.find(key + "=");
+				if (pos == std::string::npos) return {};
+				size_t start = pos + key.size() + 1;
+				std::string v = line.substr(start);
+				while (!v.empty() && (v.back() == '\n' || v.back() == '\r' || v.back() == '"')) v.pop_back();
+				while (!v.empty() && v.front() == '"') v.erase(0, 1);
+				return v;
+			};
+			while (std::getline(iss, line)) {
 				if (duration.empty()) duration = val("format.duration");
 				if (codec.empty()) codec = val("streams.stream.0.codec_long_name");
 				if (sample_rate.empty()) sample_rate = val("streams.stream.0.sample_rate");
 				if (channels.empty()) channels = val("streams.stream.0.channels");
-				if (bit_rate.empty()) bit_rate = val("format.bit_rate");
+				if (bit_rate.empty()) bit_rate = val("streams.stream.0.bit_rate");
 			}
-			pclose(p);
+		}
 
 			if (!duration.empty()) {
 				double secs = std::atof(duration.c_str());

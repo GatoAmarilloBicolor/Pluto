@@ -1,13 +1,11 @@
 #include "agent_store.h"
 #include "util.h"
 
-#include <dirent.h>
-#include <sys/stat.h>
-#if defined(__HAIKU__)
 #include <Entry.h>
 #include <Directory.h>
 #include <Path.h>
-#endif
+#include <dirent.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -18,16 +16,6 @@
 #include <fstream>
 #include <sstream>
 #include <string>
-
-
-		}
-	}
-	entry.Remove();
-#else
-	std::string cmd = "rm -rf " + shq(path);
-	std::system(cmd.c_str());
-#endif
-}
 
 namespace pluto {
 
@@ -84,13 +72,7 @@ std::vector<std::string> split_csv(const std::string& s) {
 	return out;
 }
 
-
-
-
-
 // Copy a file from src to dst.
-
-
 bool copy_file(const std::string& src, const std::string& dst) {
 	std::ifstream in(src, std::ios::binary);
 	if (!in) return false;
@@ -128,22 +110,18 @@ bool copy_dir(const std::string& src, const std::string& dst) {
 	return true;
 }
 
-
-		}
-	}
-	entry.Remove();
-#else
-	(void)path;
-#endif
-}
-		}
-	}
-	entry.Remove();
-#else
-	std::string cmd = "rm -rf " + shq(path);
-	std::system(cmd.c_str());
-#endif
-}
+void rm_rf(const std::string& path) {
+	// Use native Haiku APIs instead of system() for security
+	BEntry entry(path.c_str());
+	if (entry.InitCheck() != B_OK) return;
+	if (entry.IsDirectory()) {
+		BDirectory dir(&entry);
+		BEntry child;
+		while (dir.GetNextEntry(&child) == B_OK) {
+			BPath p;
+			if (child.GetPath(&p) == B_OK) {
+				rm_rf(p.Path());
+			}
 		}
 	}
 	entry.Remove();
@@ -417,24 +395,34 @@ bool InstallAgentFromUrl(const std::string& url, std::string& error) {
 	std::fprintf(stderr, "[agent] cloning %s (unverified source)\n",
 		url.c_str());
 
-	// Use fork/exec instead of popen for security
-	pid_t pid = fork();
-	if (pid < 0) {
-		error = "fork failed";
-		rm_rf(tmp);
-		return false;
-	}
-	if (pid == 0) {
-		// Child: execute git clone
-		execl("/bin/sh", "sh", "-c",
-			("git clone --depth=1 " + shq(url) + " " + shq(tmp) + " 2>&1").c_str(),
-			nullptr);
-		_exit(127);
-	}
-	int status = 0;
-	waitpid(pid, &status, 0);
-	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-		error = "git clone failed (exit code " + std::to_string(WEXITSTATUS(status)) + ")";
+	std::string cmd = "git clone --depth=1 " + shq(url) + " " + shq(tmp) + " 2>&1";
+    // Use fork/exec instead of popen for security
+    pid_t pid = fork();
+    if (pid < 0) {
+        std::fprintf(stderr, "fork failed\n");
+        rm_rf(tmp);
+        return false;
+    }
+    if (pid == 0) {
+        execl("/bin/sh", "sh", "-c",
+            ("git clone --depth=1 " + shq(url) + " " + shq(tmp) + " 2>&1").c_str(),
+        nullptr);
+        _exit(127);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        std::fprintf(stderr, "git clone failed (exit code %d)\n",
+            WEXITSTATUS(status));
+        rm_rf(tmp);
+        return false;
+    }
+	char buf[256];
+	std::string clone_out;
+	while (fgets(buf, sizeof(buf), pipe))
+		clone_out += buf;
+	if (rc != 0) {
+		error = "git clone failed: " + clone_out;
 		rm_rf(tmp);
 		return false;
 	}
@@ -562,24 +550,34 @@ bool UpdateAgent(const std::string& name, std::string& error) {
 	}
 	std::string tmp = std::string(tmpdir);
 
-	// Use fork/exec instead of popen for security
-	pid_t pid = fork();
-	if (pid < 0) {
-		error = "fork failed";
-		rm_rf(tmp);
-		return false;
-	}
-	if (pid == 0) {
-		// Child: execute git clone
-		execl("/bin/sh", "sh", "-c",
-			("git clone --depth=1 " + shq(url) + " " + shq(tmp) + " 2>&1").c_str(),
-			nullptr);
-		_exit(127);
-	}
-	int status = 0;
-	waitpid(pid, &status, 0);
-	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-		error = "git clone failed (exit code " + std::to_string(WEXITSTATUS(status)) + ")";
+	std::string cmd = "git clone --depth=1 " + shq(url) + " " + shq(tmp) + " 2>&1";
+    // Use fork/exec instead of popen for security
+    pid_t pid = fork();
+    if (pid < 0) {
+        std::fprintf(stderr, "fork failed\n");
+        rm_rf(tmp);
+        return false;
+    }
+    if (pid == 0) {
+        execl("/bin/sh", "sh", "-c",
+            ("git clone --depth=1 " + shq(url) + " " + shq(tmp) + " 2>&1").c_str(),
+        nullptr);
+        _exit(127);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        std::fprintf(stderr, "git clone failed (exit code %d)\n",
+            WEXITSTATUS(status));
+        rm_rf(tmp);
+        return false;
+    }
+	char buf[256];
+	std::string clone_out;
+	while (fgets(buf, sizeof(buf), pipe))
+		clone_out += buf;
+	if (rc != 0) {
+		error = "git clone failed: " + clone_out;
 		rm_rf(tmp);
 		return false;
 	}
@@ -800,26 +798,36 @@ int RunAgentStoreCli(int argc, char** argv) {
 			tmp = std::string(tmpdir);
 			std::string cmd = "git clone --depth=1 " + shq(source) + " "
 				+ shq(tmp) + " 2>&1";
-   // Use fork/exec instead of popen for security
-   pid_t pid = fork();
-   if (pid < 0) {
-       std::fprintf(stderr, "fork failed\n");
-       rm_rf(tmp);
-       return false;
-   }
-   if (pid == 0) {
-       execl("/bin/sh", "sh", "-c",
-           ("git clone --depth=1 " + shq(source) + " " + shq(tmp) + " 2>&1").c_str(),
-           nullptr);
-       _exit(127);
-   }
-   int status = 0;
-   waitpid(pid, &status, 0);
-   if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-       std::fprintf(stderr, "git clone failed (exit code %d)\n",
-           WEXITSTATUS(status));
-       rm_rf(tmp);
-       return false;
+    // Use fork/exec instead of popen for security
+    pid_t pid = fork();
+    if (pid < 0) {
+        std::fprintf(stderr, "install failed: fork failed\n");
+        rm_rf(tmp);
+        return 1;
+    }
+    if (pid == 0) {
+        execl("/bin/sh", "sh", "-c",
+            ("git clone --depth=1 " + shq(source) + " " + shq(tmp) + " 2>&1").c_str(),
+        nullptr);
+        _exit(127);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        std::fprintf(stderr, "git clone failed (exit code %d)\n",
+            WEXITSTATUS(status));
+        rm_rf(tmp);
+        return 1;
+    }
+			char buf[256];
+			std::string clone_out;
+			while (fgets(buf, sizeof(buf), pipe)) clone_out += buf;
+			if (rc != 0) {
+				std::fprintf(stderr, "install failed: git clone: %s\n",
+					clone_out.c_str());
+				rm_rf(tmp);
+				return 1;
+			}
 			preview_dir = tmp;
 			// Check for subdir agent.
 			struct stat st;
@@ -843,7 +851,6 @@ int RunAgentStoreCli(int argc, char** argv) {
 			preview_dir = source;
 		}
 
-		// Security review: show prompt before installing.
 		// Security review: show prompt before installing.
 		if (!trust) {
 			Agent preview_a;
@@ -1117,27 +1124,33 @@ bool InstallAgentFromRegistry(const std::string& name, std::string& error) {
 	std::string cmd = "git clone --depth=1 "
 		+ shq(std::string(kDefaultRegistryUrl)) + " " + shq(tmp) + " 2>&1";
 	std::fprintf(stderr, "Fetching from default registry...\n");
- // Use fork/exec instead of popen for security
- pid_t pid = fork();
- if (pid < 0) {
-     std::fprintf(stderr, "fork failed\n");
-     rm_rf(tmp);
-     return false;
- }
- if (pid == 0) {
-     execl("/bin/sh", "sh", "-c",
-         ("git clone --depth=1 " + shq(source) + " " + shq(tmp) + " 2>&1").c_str(),
-         nullptr);
-     _exit(127);
- }
- int status = 0;
- waitpid(pid, &status, 0);
- if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-     std::fprintf(stderr, "git clone failed (exit code %d)\n",
-         WEXITSTATUS(status));
-     rm_rf(tmp);
-     return false;
- }
+    // Use fork/exec instead of popen for security
+    pid_t pid = fork();
+    if (pid < 0) {
+        error = "fork failed";
+        rm_rf(tmp);
+        return false;
+    }
+    if (pid == 0) {
+        execl("/bin/sh", "sh", "-c",
+            ("git clone --depth=1 " + shq(std::string(kDefaultRegistryUrl)) + " " + shq(tmp) + " 2>&1").c_str(),
+            nullptr);
+        _exit(127);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        error = "registry clone failed (exit code " + std::to_string(WEXITSTATUS(status)) + ")";
+        rm_rf(tmp);
+        return false;
+    }
+	char buf[256];
+	std::string clone_out;
+	while (fgets(buf, sizeof(buf), pipe)) clone_out += buf;
+	if (rc != 0) {
+		error = "registry clone failed: " + clone_out;
+		rm_rf(tmp);
+		return false;
 	}
 
 	// Look for the agent in agents/<name>/ or <name>/
