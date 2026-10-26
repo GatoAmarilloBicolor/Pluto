@@ -55,6 +55,14 @@ CORE_SRCS = src/lsp/LspClient.cpp \
             src/systemone/RemoteDecisionModel.cpp \
             src/systemone/LocalDecisionModel.cpp \
             src/systemone/SystemOneClient.cpp \
+            src/langchain/PromptTemplate.cpp \
+            src/langchain/Document.cpp \
+            src/langchain/TextSplitter.cpp \
+            src/langchain/Chain.cpp \
+            src/langchain/Memory.cpp \
+            src/langchain/VectorStore.cpp \
+            src/langchain/Agent.cpp \
+            src/langchain/Integration.cpp \
             src/mcp/Client.cpp \
             src/mcp/Config.cpp \
             src/mcp/Manager.cpp \
