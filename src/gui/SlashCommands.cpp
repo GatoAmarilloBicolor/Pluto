@@ -724,52 +724,31 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			"  /commands          list custom slash commands\n"
 			"  /help              show this help\n"
 			"\n"
-			" /systemone show System One (Laya) status and tools
-"			"Custom commands from ~/config/settings/pluto/commands/\n"
+			" /systemone show System One (Laya) status and tools\n"
+			"Custom commands from ~/config/settings/pluto/commands/\n"
 			"are also available as /<name> [args].\n\n",
 			kColDim);
 		return true;
 	}
 
 	if (text == "/systemone") {
-		_Append("System One (Laya-based Decision Model)
-", kColDim, B_BOLD_FACE);
-		_Append("====================================
-
-", kColDim);
-		_Append("MCP Server: systemone_server (stdio transport)
-", kColDim);
-		_Append("Auto-discovered and connected as built-in MCP.
-
-", kColDim);
-		_Append("Available tools (9):
-", kColDim, B_BOLD_FACE);
-		_Append("  systemone_classify        - single-label classification
-", kColDim);
-		_Append("  systemone_classify_multi  - multi-label classification
-", kColDim);
-		_Append("  systemone_verify          - entailment check (ground RAG)
-", kColDim);
-		_Append("  systemone_guard           - safety gate (injection/PII/toxic/spam)
-", kColDim);
-		_Append("  systemone_select_relevant - context pruning (90% recall)
-", kColDim);
-		_Append("  systemone_same_intent     - semantic dedup (94% accuracy)
-", kColDim);
-		_Append("  systemone_triage          - guard + route + tags + urgency
-", kColDim);
-		_Append("  systemone_answerable      - RAG gate (threshold 0.3)
-", kColDim);
-		_Append("  systemone_consult         - decisions with persistent memory
-", kColDim);
-		_Append("  systemone_decide_program  - full pipeline (token-efficient)
-
-", kColDim);
-		_Append("Token savings: 5-10x fewer tokens by delegating to System One
-", kColDim);
-		_Append("Memory: persistent topic memory (remember/recall/consult)
-
-", kColDim);
+		_Append("System One (Laya-based Decision Model)\n", kColDim, B_BOLD_FACE);
+		_Append("====================================\n\n", kColDim);
+		_Append("MCP Server: systemone_server (stdio transport)\n", kColDim);
+		_Append("Auto-discovered and connected as built-in MCP.\n\n", kColDim);
+		_Append("Available tools (9):\n", kColDim, B_BOLD_FACE);
+		_Append("  systemone_classify        - single-label classification\n", kColDim);
+		_Append("  systemone_classify_multi  - multi-label classification\n", kColDim);
+		_Append("  systemone_verify          - entailment check (ground RAG)\n", kColDim);
+		_Append("  systemone_guard           - safety gate (injection/PII/toxic/spam)\n", kColDim);
+		_Append("  systemone_select_relevant - context pruning (90% recall)\n", kColDim);
+		_Append("  systemone_same_intent     - semantic dedup (94% accuracy)\n", kColDim);
+		_Append("  systemone_triage          - guard + route + tags + urgency\n", kColDim);
+		_Append("  systemone_answerable      - RAG gate (threshold 0.3)\n", kColDim);
+		_Append("  systemone_consult         - decisions with persistent memory\n", kColDim);
+		_Append("  systemone_decide_program  - full pipeline (token-efficient)\n\n", kColDim);
+		_Append("Token savings: 5-10x fewer tokens by delegating to System One\n", kColDim);
+		_Append("Memory: persistent topic memory (remember/recall/consult)\n\n", kColDim);
 		return true;
 	}
 

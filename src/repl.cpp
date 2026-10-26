@@ -613,46 +613,26 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 			continue;
 		}
 
-	if (line == "/systemone") {
-		std::printf("System One (Laya-based Decision Model)
-");
-		std::printf("====================================
-");
-		std::printf("MCP Server: systemone_server (stdio transport)
-");
-		std::printf("Auto-discovered and connected as built-in MCP.
-
-");
-		std::printf("Available tools (9):
-");
-		std::printf("  systemone_classify        - single-label classification
-");
-		std::printf("  systemone_classify_multi  - multi-label classification
-");
-		std::printf("  systemone_verify          - entailment check (ground RAG)
-");
-		std::printf("  systemone_guard           - safety gate (injection/PII/toxic/spam)
-");
-		std::printf("  systemone_select_relevant - context pruning (90%% recall)
-");
-		std::printf("  systemone_same_intent     - semantic dedup (94%% accuracy)
-");
-		std::printf("  systemone_triage          - guard + route + tags + urgency
-");
-		std::printf("  systemone_answerable      - RAG gate (threshold 0.3)
-");
-		std::printf("  systemone_consult         - decisions with persistent memory
-");
-		std::printf("  systemone_decide_program  - full pipeline (token-efficient)
-
-");
-		std::printf("Token savings: 5-10x fewer tokens by delegating to System One
-");
-		std::printf("Memory: persistent topic memory (remember/recall/consult)
-");
+				if (line == "/systemone") {
+		std::printf("System One (Laya-based Decision Model)\n");
+		std::printf("====================================\n");
+		std::printf("MCP Server: systemone_server (stdio transport)\n");
+		std::printf("Auto-discovered and connected built-in MCP.\n\n");
+		std::printf("Available tools (9):\n");
+		std::printf("  systemone_classify        - single-label classification\n");
+		std::printf("  systemone_classify_multi  - multi-label classification\n");
+		std::printf("  systemone_verify          - entailment check (ground RAG)\n");
+		std::printf("  systemone_guard           - safety gate (injection/PII/toxic/spam)\n");
+		std::printf("  systemone_select_relevant - context pruning (90%% recall)\n");
+		std::printf("  systemone_same_intent     - semantic dedup (94%% accuracy)\n");
+		std::printf("  systemone_triage          - guard + route + tags + urgency\n");
+		std::printf("  systemone_answerable      - RAG gate (threshold 0.3)\n");
+		std::printf("  systemone_consult         - decisions with persistent memory\n");
+		std::printf("  systemone_decide_program  - full pipeline (token-efficient)\n\n");
+		std::printf("Token savings: 5-10x fewer tokens by delegating to System One\n");
+		std::printf("Memory: persistent topic memory (remember/recall/consult)\n");
 		continue;
-	}
-		if (line == "/reset") {
+	}		if (line == "/reset") {
 			messages.clear();
 			current_session_path.clear();
 			current_title.clear();
