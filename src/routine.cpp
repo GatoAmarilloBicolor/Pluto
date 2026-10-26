@@ -224,6 +224,8 @@ std::string DetectChangedFiles() {
 	waitpid(pid, &status, 0);
 	return result.empty() ? "(no git changes)" : result;
 
+}
+
 std::string ExpandTemplate(const std::string& body,
                             const std::string& changed_files) {
 	std::string out = body;
