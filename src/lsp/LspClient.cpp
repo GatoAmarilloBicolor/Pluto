@@ -4,7 +4,9 @@
  */
 #include "LspClient.h"
 
+#ifdef __HAIKU__
 #include <image.h>
+#endif
 
 #include <errno.h>
 #include <fcntl.h>
