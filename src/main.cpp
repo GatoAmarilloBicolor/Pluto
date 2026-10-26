@@ -25,6 +25,8 @@
 #include "mcp/Config.h"
 #include "mcp/Manager.h"
 #include "mcp/Transport.h"
+#include "mcp/builtin/builtin_servers.h"
+#include "mcp/builtin/mcp_builtin_manager.h"
 // Provider headers no longer needed here — CreateProvider() in config.cpp
 // handles instantiation.
 #include "provider/Provider.h"
@@ -510,7 +512,7 @@ int main(int argc, char** argv) {
 
 	// Load Haiku-native add-ons from the plugins directory.
 #ifdef __HAIKU__
-	std::string plugins_dir = SettingsDir() + "/plugins";
+	std::string plugins_dir = pluto::SettingsDir() + "/plugins";
 	pluto::LoadAndRegisterPlugins(plugins_dir, tools);
 #endif
 
@@ -567,6 +569,19 @@ int main(int argc, char** argv) {
 		if (!mcp_block.empty()) {
 			if (!cfg.system_prompt.empty()) cfg.system_prompt += "\n\n";
 			cfg.system_prompt += mcp_block;
+		}
+	}
+
+	// ---- Built-in MCP servers (Serena, Context7, DeepWiki, REA, Memory,
+	// Playwright, SQLite) ----
+	// Launch stdio servers and register their tools into the same registry.
+	pluto::mcp::BuiltinMcpManager builtin_mcp;
+	int builtin_count = builtin_mcp.init(tools);
+	if (builtin_count > 0) {
+		std::string builtin_block = builtin_mcp.system_prompt_block();
+		if (!builtin_block.empty()) {
+			if (!cfg.system_prompt.empty()) cfg.system_prompt += "\n\n";
+			cfg.system_prompt += builtin_block;
 		}
 	}
 

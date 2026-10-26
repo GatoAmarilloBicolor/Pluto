@@ -1,5 +1,13 @@
 CXX      = g++
-CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -O2 -Isrc -Imock_headers/haiku -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
+# Detect if we're on Haiku
+UNAME := $(shell uname -s)
+ifeq ($(UNAME),Haiku)
+    # On Haiku, use real SDK headers
+    CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -O2 -Isrc -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
+else
+    # On macOS/Linux, use mock headers for cross-compilation
+    CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -O2 -Isrc -Imock_headers/haiku -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
+endif
 LDLIBS   = -lcurl -lbe -lcrypto -lnetwork -ledit
 
 PKG_NAME    = pluto
@@ -63,6 +71,16 @@ CORE_SRCS = src/lsp/LspClient.cpp \
             src/langchain/VectorStore.cpp \
             src/langchain/Agent.cpp \
             src/langchain/Integration.cpp \
+            src/mcp/builtin/builtin_servers.cpp \
+            src/mcp/builtin/mcp_builtin_manager.cpp \
+            src/mcp/builtin/mcp_tool_wrapper.cpp \
+            src/tools/mcp_serena.cpp \
+            src/tools/mcp_context7.cpp \
+            src/tools/mcp_deepwiki.cpp \
+            src/tools/mcp_rea.cpp \
+            src/tools/mcp_memory.cpp \
+            src/tools/mcp_playwright.cpp \
+            src/tools/mcp_sqlite.cpp \
             src/mcp/Client.cpp \
             src/mcp/Config.cpp \
             src/mcp/Manager.cpp \
