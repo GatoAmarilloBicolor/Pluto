@@ -29,6 +29,14 @@ struct SystemOneConfig {
     int timeout_secs = 30;
     bool prefer_local = false;        // Prefer local model when available
     bool fallback_to_local = true;    // Fall back to local if remote fails
+
+    // Context window compression settings
+    double context_compaction_threshold = 0.85;  // Compact when >85% full
+    int context_target_tokens = 4000;            // Target tokens after compaction
+    bool auto_compact_enabled = true;            // Auto-compact context window
+    int max_context_tokens = 8000;               // Max context tokens before compaction
+    int max_summary_tokens = 200;                // Max tokens for summaries
+    int max_key_points = 5;                      // Max key points to extract
 };
 
 // Load System One config from ~/config/settings/pluto/systemone.conf

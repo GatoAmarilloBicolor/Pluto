@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include "LLM.h"
 #include <map>
 #include <vector>
 #include <memory>
@@ -65,7 +66,7 @@ private:
 // Summarizes older messages when the buffer exceeds max size.
 class ConversationSummaryMemory : public Memory {
 public:
-	ConversationSummaryMemory(std::shared_ptr<class LLM> llm,
+	ConversationSummaryMemory(std::shared_ptr<LLM> llm,
 	                          size_t max_messages = 10)
 		: fLLM(std::move(llm)), fMaxMessages(max_messages) {}
 
@@ -79,7 +80,7 @@ public:
 	void clear() override;
 
 private:
-	std::shared_ptr<class LLM> fLLM;
+	std::shared_ptr<LLM> fLLM;
 	size_t fMaxMessages;
 	std::string fSummary;
 	std::vector<std::pair<std::string, std::string>> fRecentMessages;

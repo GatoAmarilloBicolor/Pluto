@@ -14,6 +14,7 @@ PKG_NAME    = pluto
 PKG_VERSION = 0.7.1
 PKG_ARCH    = x86_64
 
+# Core sources (platform-independent)
 CORE_SRCS = src/lsp/LspClient.cpp \
             src/lsp/LspConfig.cpp \
             src/ipc/PlutoMessenger.cpp \
@@ -78,6 +79,14 @@ CORE_SRCS = src/lsp/LspClient.cpp \
             src/provider/Anthropic.cpp \
             src/provider/OpenAICompat.cpp
 
+# Haiku-specific sources (only on Haiku)
+HAIKU_SRCS = src/haiku/BfsTools.cpp \
+             src/haiku/DesktopTools.cpp \
+             src/haiku/PluginLoader.cpp \
+             src/haiku/Notifications.cpp \
+             src/haiku/ModelCaps.cpp \
+             src/haiku/AsyncStream.cpp
+
 CLI_SRCS = src/main.cpp \
            src/repl.cpp \
            src/mcp/Cli.cpp \
@@ -134,6 +143,10 @@ MD4C_OBJ = src/gui/textview/md4c.o
 CORE_OBJS = $(CORE_SRCS:.cpp=.o)
 CLI_OBJS  = $(CLI_SRCS:.cpp=.o)
 GUI_OBJS  = $(GUI_SRCS:.cpp=.o)
+
+ifeq ($(UNAME),Haiku)
+    CORE_OBJS += $(HAIKU_SRCS:.cpp=.o)
+endif
 
 all: Pluto_cli Pluto build-addon systemone_server
 

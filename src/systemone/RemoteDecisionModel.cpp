@@ -1,6 +1,7 @@
 #include "RemoteDecisionModel.h"
 #include "../json.h"
 #include "../util.h"
+#include "TokenSaver.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -75,14 +76,13 @@ std::string vector_int_to_json(const std::vector<int>& v) {
     return out;
 }
 
-// Extract a string value from simple JSON (no full parser needed for our use).
 std::string json_str_value(const std::string& json, const std::string& key) {
     std::string search = "\"" + key + "\"";
     size_t pos = json.find(search);
     if (pos == std::string::npos) return {};
     pos = json.find(':', pos);
     if (pos == std::string::npos) return {};
-    pos++; // skip ':'
+    pos++;
     while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t')) pos++;
     if (pos >= json.size()) return {};
     if (json[pos] == '"') {
@@ -91,7 +91,6 @@ std::string json_str_value(const std::string& json, const std::string& key) {
         if (end == std::string::npos) return {};
         return json.substr(pos, end - pos);
     }
-    // Number or boolean
     size_t end = pos;
     while (end < json.size() && json[end] != ',' && json[end] != '}' && json[end] != ']' && json[end] != ' ' && json[end] != '\t') end++;
     return json.substr(pos, end - pos);
@@ -124,11 +123,9 @@ std::string json_array_value(const std::string& json, const std::string& key) {
 std::vector<std::string> parse_string_array(const std::string& json_arr) {
     std::vector<std::string> out;
     if (json_arr.empty() || json_arr == "[]") return out;
-    // Remove brackets
     std::string inner = json_arr.substr(1, json_arr.size() - 2);
     size_t pos = 0;
     while (pos < inner.size()) {
-        // Skip whitespace and commas
         while (pos < inner.size() && (inner[pos] == ' ' || inner[pos] == '\t' || inner[pos] == ',')) pos++;
         if (pos >= inner.size()) break;
         if (inner[pos] == '"') {
@@ -165,10 +162,7 @@ std::string RemoteDecisionModel::name() const {
 }
 
 std::string RemoteDecisionModel::resolve_server_url() {
-    // 1. Check base_url override
     if (!fConfig.base_url.empty()) return fConfig.base_url;
-
-    // 2. Use model-specific URL
     switch (fType) {
         case DecisionModelType::REMOTE_KEV: return fConfig.kev_url;
         case DecisionModelType::REMOTE_LAYA: return fConfig.laya_url;
@@ -180,7 +174,6 @@ std::string RemoteDecisionModel::resolve_server_url() {
 bool RemoteDecisionModel::init_curl() {
     fCurl = curl_easy_init();
     if (!fCurl) return false;
-
     curl_easy_setopt(fCurl, CURLOPT_TIMEOUT, fConfig.timeout_secs);
     curl_easy_setopt(fCurl, CURLOPT_CONNECTTIMEOUT, 5);
     curl_easy_setopt(fCurl, CURLOPT_USERAGENT, "pluto-systemone/1.0");
@@ -192,7 +185,6 @@ bool RemoteDecisionModel::init_curl() {
 std::string RemoteDecisionModel::post_jsonrpc(const std::string& method, const std::string& params_json) {
     if (!fCurl || fServerUrl.empty()) return {};
 
-    // Build JSON-RPC request
     std::string req = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"" + method + "\",\"params\":" + params_json + "}";
 
     CurlString response;
@@ -216,21 +208,17 @@ std::string RemoteDecisionModel::post_jsonrpc(const std::string& method, const s
 
     // Parse JSON-RPC response to extract result
     try {
-        // Find "result" field
         size_t res_pos = response.data.find("\"result\"");
         if (res_pos == std::string::npos) return {};
 
         size_t colon = response.data.find(':', res_pos);
         if (colon == std::string::npos) return {};
 
-        // The result value could be an object, string, etc.
-        // Return everything from colon+1 to end (roughly)
         size_t start = colon + 1;
         while (start < response.data.size() && (response.data[start] == ' ' || response.data[start] == '\t')) start++;
 
         if (start >= response.data.size()) return {};
 
-        // Find matching closing brace/bracket
         if (response.data[start] == '{') {
             int depth = 0;
             size_t i = start;
@@ -244,12 +232,11 @@ std::string RemoteDecisionModel::post_jsonrpc(const std::string& method, const s
             }
             return response.data.substr(start, i - start);
         } else if (response.data[start] == '"') {
-            size_t pos = start + 1;
+            pos = start + 1;
             size_t end = response.data.find('"', pos);
             if (end == std::string::npos) return {};
             return response.data.substr(pos, end - pos);
         } else {
-            // Number, boolean, null
             size_t end = start;
             while (end < response.data.size() && response.data[end] != ',' && response.data[end] != '}' && response.data[end] != ']') end++;
             return response.data.substr(start, end - start);
@@ -263,7 +250,7 @@ bool RemoteDecisionModel::is_available() {
     return fAvailable && !fServerUrl.empty();
 }
 
-// ---------- Tool implementations ----------
+// ---------- Classification ----------
 
 ClassifyResult RemoteDecisionModel::classify(
     const std::string& text,
@@ -313,6 +300,94 @@ ClassifyMultiResult RemoteDecisionModel::classify_multi(
     return result;
 }
 
+SentimentResult RemoteDecisionModel::classify_sentiment(
+    const std::string& text) {
+
+    SentimentResult result;
+    if (!is_available()) {
+        result.sentiment = "neutral";
+        return result;
+    }
+
+    std::map<std::string, std::string> categories;
+    categories["positive"] = "positive sentiment, happy, good, great";
+    categories["negative"] = "negative sentiment, sad, bad, terrible";
+    categories["neutral"] = "neutral sentiment, neither positive nor negative";
+    categories["mixed"] = "mixed sentiment, both positive and negative";
+
+    auto r = classify(text, categories, 0.3);
+    result.sentiment = r.label;
+    result.score = r.probability;
+    result.confidence = r.confidence;
+    return result;
+}
+
+PriorityResult RemoteDecisionModel::classify_priority(
+    const std::string& text) {
+
+    PriorityResult result;
+    if (!is_available()) {
+        result.priority = "low";
+        return result;
+    }
+
+    std::map<std::string, std::string> categories;
+    categories["critical"] = "critical emergency, production down, security breach";
+    categories["high"] = "high priority, urgent, important, asap";
+    categories["medium"] = "medium priority, normal, standard";
+    categories["low"] = "low priority, minor, trivial, cosmetic";
+
+    auto r = classify(text, categories, 0.3);
+    result.priority = r.label;
+    result.score = r.probability;
+    result.escalate = (r.label == "critical" || r.label == "high");
+    return result;
+}
+
+TopicResult RemoteDecisionModel::classify_topic(
+    const std::string& text) {
+
+    TopicResult result;
+    if (!is_available()) return result;
+
+    std::map<std::string, std::string> categories;
+    categories["coding"] = "programming, code, software development, debugging";
+    categories["documentation"] = "documentation, README, guides, tutorials";
+    categories["bug"] = "bug report, error, issue, crash";
+    categories["feature"] = "feature request, enhancement, new functionality";
+    categories["infrastructure"] = "infrastructure, deployment, devops, ci/cd";
+    categories["security"] = "security, vulnerability, patch, exploit";
+
+    auto r = classify(text, categories, 0.3);
+    result.topic = r.label;
+    result.confidence = r.confidence;
+    return result;
+}
+
+UrgencyResult RemoteDecisionModel::classify_urgency(
+    const std::string& text) {
+
+    UrgencyResult result;
+    if (!is_available()) {
+        result.urgency = "low";
+        return result;
+    }
+
+    std::map<std::string, std::string> categories;
+    categories["critical"] = "critical emergency, immediate action required";
+    categories["high"] = "high urgency, urgent, important, time-sensitive";
+    categories["medium"] = "medium urgency, normal priority";
+    categories["low"] = "low urgency, can wait, minor";
+
+    auto r = classify(text, categories, 0.3);
+    result.urgency = r.label;
+    result.score = r.probability;
+    result.needs_immediate_action = (r.label == "critical");
+    return result;
+}
+
+// ---------- Verification & Safety ----------
+
 VerifyResult RemoteDecisionModel::verify(
     const std::string& source,
     const std::string& claim) {
@@ -328,6 +403,7 @@ VerifyResult RemoteDecisionModel::verify(
 
     result.supported = json_bool_value(resp, "supported", false);
     result.probability = json_num_value(resp, "probability", 0.0);
+    result.explanation = json_str_value(resp, "explanation");
     return result;
 }
 
@@ -358,6 +434,8 @@ GuardResult RemoteDecisionModel::guard(
     return result;
 }
 
+// ---------- Context Pruning & Token Savings ----------
+
 SelectRelevantResult RemoteDecisionModel::select_relevant(
     const std::string& question,
     const std::vector<std::string>& items,
@@ -378,8 +456,6 @@ SelectRelevantResult RemoteDecisionModel::select_relevant(
 
     std::string sel_str = json_array_value(resp, "selected") + json_array_value(resp, "sel");
     if (!sel_str.empty()) {
-        result.selected_indices = {};
-        // Parse comma-separated indices from array like [0,2,5]
         std::string inner = sel_str;
         if (inner.size() >= 2) inner = inner.substr(1, inner.size() - 2);
         std::stringstream ss(inner);
@@ -390,6 +466,164 @@ SelectRelevantResult RemoteDecisionModel::select_relevant(
     }
     return result;
 }
+
+KeyPointsResult RemoteDecisionModel::extract_key_points(
+    const std::string& text,
+    int max_points) {
+
+    KeyPointsResult result;
+    result.original_tokens = estimate_tokens(text);
+
+    if (!is_available()) {
+        // Fallback: simple sentence extraction
+        result.points = {extract_key_sentences(text, max_points)};
+        result.compressed_tokens = estimate_tokens(result.points[0]);
+        result.compression_ratio = compute_compression_ratio(text, result.points[0]);
+        return result;
+    }
+
+    std::map<std::string, std::string> categories;
+    categories["key_point"] = "important fact, insight, or conclusion";
+
+    auto r = classify_multi(text, categories, 0.3);
+    result.points = r.active_labels;
+
+    if (result.points.empty()) {
+        result.points = {extract_key_sentences(text, max_points)};
+    }
+
+    std::string joined;
+    for (const auto& p : result.points) {
+        if (!joined.empty()) joined += " ";
+        joined += p;
+    }
+    result.compressed_tokens = estimate_tokens(joined);
+    result.compression_ratio = compute_compression_ratio(text, joined);
+    return result;
+}
+
+SummarizeResult RemoteDecisionModel::summarize_text(
+    const std::string& text,
+    int max_tokens) {
+
+    SummarizeResult result;
+    result.original_tokens = estimate_tokens(text);
+
+    if (!is_available()) {
+        result.summary = compress_message(text, max_tokens);
+        result.compressed_tokens = estimate_tokens(result.summary);
+        result.compression_ratio = compute_compression_ratio(text, result.summary);
+        return result;
+    }
+
+    std::map<std::string, std::string> categories;
+    categories["summary"] = "concise summary of the main points";
+
+    auto r = classify_multi(text, categories, 0.3);
+    result.summary.clear();
+    for (const auto& p : r.active_labels) {
+        if (!result.summary.empty()) result.summary += " ";
+        result.summary += p;
+    }
+
+    if (result.summary.empty()) {
+        result.summary = compress_message(text, max_tokens);
+    }
+
+    result.compressed_tokens = estimate_tokens(result.summary);
+    result.compression_ratio = compute_compression_ratio(text, result.summary);
+    return result;
+}
+
+ExtractEntitiesResult RemoteDecisionModel::extract_entities(
+    const std::string& text) {
+
+    ExtractEntitiesResult result;
+    if (!is_available()) return result;
+
+    std::map<std::string, std::string> categories;
+    categories["person"] = "person name, human, individual";
+    categories["organization"] = "company, organization, institution";
+    categories["location"] = "place, city, country, location";
+    categories["date"] = "date, time, when";
+    categories["technology"] = "technology, software, hardware, tool";
+
+    auto r = classify_multi(text, categories, 0.3);
+    result.entities = r.active_labels;
+
+    // Simple entity type assignment based on category match
+    for (const auto& e : result.entities) {
+        result.entity_types.push_back(e);  // Simplified: use entity as type
+        result.confidence_scores[e] = 0.8;
+    }
+
+    return result;
+}
+
+std::vector<RankItem> RemoteDecisionModel::rank_importance(
+    const std::string& question,
+    const std::vector<std::string>& items) {
+
+    std::vector<RankItem> result;
+    if (!is_available()) {
+        // Fallback: rank by keyword overlap
+        for (size_t i = 0; i < items.size(); i++) {
+            RankItem ri;
+            ri.index = static_cast<int>(i);
+            ri.score = compute_compression_ratio(
+                question, extract_key_sentences(items[i], 1));
+            ri.reason = "keyword overlap";
+            result.push_back(ri);
+        }
+        std::sort(result.begin(), result.end(),
+            [](const RankItem& a, const RankItem& b) {
+                return a.score > b.score;
+            });
+        return result;
+    }
+
+    // Use select_relevant to get indices, then assign scores
+    auto sel = select_relevant(question, items, "chunks", 0.3);
+    for (size_t i = 0; i < items.size(); i++) {
+        RankItem ri;
+        ri.index = static_cast<int>(i);
+        ri.score = 0.0;
+        ri.reason = "not selected";
+        for (int sel_idx : sel.selected_indices) {
+            if (sel_idx == static_cast<int>(i)) {
+                ri.score = 1.0;
+                ri.reason = "selected as relevant";
+                break;
+            }
+        }
+        result.push_back(ri);
+    }
+
+    std::sort(result.begin(), result.end(),
+        [](const RankItem& a, const RankItem& b) {
+            return a.score > b.score;
+        });
+
+    return result;
+}
+
+ContextHeadroomResult RemoteDecisionModel::compute_headroom(
+    int total_tokens,
+    int used_tokens,
+    double compaction_threshold) {
+    return ::pluto::systemone::compute_context_headroom(
+        total_tokens, used_tokens, compaction_threshold);
+}
+
+std::vector<int> RemoteDecisionModel::compact_messages(
+    const std::vector<std::string>& messages,
+    int max_tokens,
+    double compaction_threshold) {
+    return ::pluto::systemone::select_messages_to_compact(
+        messages, "", max_tokens, compaction_threshold);
+}
+
+// ---------- Semantic Dedup ----------
 
 SameIntentResult RemoteDecisionModel::same_intent(
     const std::string& a,
@@ -410,6 +644,8 @@ SameIntentResult RemoteDecisionModel::same_intent(
     result.probability = json_num_value(resp, "probability", 0.0);
     return result;
 }
+
+// ---------- Decision & Triage ----------
 
 TriageResult RemoteDecisionModel::triage(
     const std::string& text,
@@ -442,6 +678,47 @@ TriageResult RemoteDecisionModel::triage(
     return result;
 }
 
+FullTriageResult RemoteDecisionModel::triage_full(
+    const std::string& text,
+    const std::map<std::string, std::string>& routes,
+    const std::map<std::string, std::string>& tags,
+    const std::string& urgent_question) {
+
+    FullTriageResult result;
+    if (!is_available()) {
+        result.guard_risk = "UNKNOWN";
+        return result;
+    }
+
+    std::string params = "{\"text\":\"" + json_escape(text) +
+        "\",\"routes\":" + map_to_json(routes) +
+        ",\"tags\":" + map_to_json(tags) +
+        ",\"urgent_question\":\"" + json_escape(urgent_question) + "\"}";
+
+    std::string resp = post_jsonrpc("systemone_triage", params);
+    if (resp.empty()) return result;
+
+    result.guard_risk = json_str_value(resp, "guard_risk");
+    if (result.guard_risk.empty()) result.guard_risk = "LOW";
+    result.route = json_str_value(resp, "route");
+    result.urgent = json_bool_value(resp, "urgent", false);
+    result.probability = json_num_value(resp, "probability", 0.0);
+
+    std::string tags_str = json_array_value(resp, "tags");
+    result.tags = parse_string_array(tags_str);
+
+    std::string actions_str = json_array_value(resp, "recommended_actions");
+    result.recommended_actions = parse_string_array(actions_str);
+
+    std::string tokens_saved_str = json_str_value(resp, "tokens_saved");
+    if (!tokens_saved_str.empty()) {
+        try { result.estimated_tokens_saved = std::stoi(tokens_saved_str); } catch (...) {}
+    }
+
+    result.reasoning = json_str_value(resp, "reasoning");
+    return result;
+}
+
 AnswerableResult RemoteDecisionModel::answerable(
     const std::string& question,
     const std::string& context,
@@ -459,6 +736,81 @@ AnswerableResult RemoteDecisionModel::answerable(
 
     result.answerable = json_bool_value(resp, "answerable", false);
     result.probability = json_num_value(resp, "probability", 0.0);
+    result.reasoning = json_str_value(resp, "reasoning");
+    return result;
+}
+
+RouteDecisionResult RemoteDecisionModel::decide_route(
+    const std::string& text,
+    const std::map<std::string, std::string>& routes) {
+
+    RouteDecisionResult result;
+    if (!is_available()) {
+        result.confidence = 0.0;
+        return result;
+    }
+
+    std::string params = "{\"text\":\"" + json_escape(text) +
+        "\",\"routes\":" + map_to_json(routes) + "}";
+
+    std::string resp = post_jsonrpc("systemone_decide_route", params);
+    if (resp.empty()) return result;
+
+    result.route = json_str_value(resp, "route");
+    result.confidence = json_num_value(resp, "confidence", 0.0);
+    result.reasoning = json_str_value(resp, "reasoning");
+
+    std::string alts_str = json_array_value(resp, "alternatives");
+    result.alternatives = parse_string_array(alts_str);
+    return result;
+}
+
+PriorityDecisionResult RemoteDecisionModel::decide_priority(
+    const std::string& text) {
+
+    PriorityDecisionResult result;
+    if (!is_available()) {
+        result.priority = "low";
+        return result;
+    }
+
+    std::map<std::string, std::string> categories;
+    categories["critical"] = "critical emergency, production down";
+    categories["high"] = "high priority, urgent, important";
+    categories["medium"] = "medium priority, normal";
+    categories["low"] = "low priority, minor";
+
+    auto r = classify(text, categories, 0.3);
+    result.priority = r.label;
+    result.score = r.probability;
+    result.should_escalate = (r.label == "critical" || r.label == "high");
+    result.reasoning = "Classified as " + r.label + " with confidence " +
+        std::to_string(r.confidence);
+    return result;
+}
+
+ActionDecisionResult RemoteDecisionModel::decide_action(
+    const std::string& text,
+    const std::vector<std::string>& available_actions) {
+
+    ActionDecisionResult result;
+    if (!is_available()) {
+        result.confidence = 0.0;
+        return result;
+    }
+
+    std::map<std::string, std::string> categories;
+    for (const auto& action : available_actions) {
+        categories[action] = "action: " + action;
+    }
+
+    auto r = classify(text, categories, 0.3);
+    result.action = r.label;
+    result.confidence = r.confidence;
+    result.reasoning = "Selected action: " + r.label;
+
+    // Estimate tokens for action execution
+    result.estimated_tokens = estimate_tokens(text) + estimate_tokens(result.action);
     return result;
 }
 
@@ -505,6 +857,18 @@ DecideProgramResult RemoteDecisionModel::decide_program(
     if (resp.empty()) return result;
 
     result.results = resp;
+
+    // Extract token savings if present
+    std::string ts_str = json_str_value(resp, "tokens_saved");
+    if (!ts_str.empty()) {
+        try { result.tokens_saved = std::stoi(ts_str); } catch (...) {}
+    }
+
+    std::string steps_str = json_str_value(resp, "steps_executed");
+    if (!steps_str.empty()) {
+        try { result.steps_executed = std::stoi(steps_str); } catch (...) {}
+    }
+
     return result;
 }
 

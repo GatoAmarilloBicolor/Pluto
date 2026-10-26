@@ -92,6 +92,22 @@ SystemOneConfig LoadSystemOneConfig() {
         }
         else if (key == "prefer_local") cfg.prefer_local = (val == "true" || val == "1");
         else if (key == "fallback_to_local") cfg.fallback_to_local = (val == "true" || val == "1");
+        else if (key == "context_compaction_threshold") {
+            try { cfg.context_compaction_threshold = std::stod(val); } catch (...) {}
+        }
+        else if (key == "context_target_tokens") {
+            try { cfg.context_target_tokens = std::stoi(val); } catch (...) {}
+        }
+        else if (key == "auto_compact_enabled") cfg.auto_compact_enabled = (val == "true" || val == "1");
+        else if (key == "max_context_tokens") {
+            try { cfg.max_context_tokens = std::stoi(val); } catch (...) {}
+        }
+        else if (key == "max_summary_tokens") {
+            try { cfg.max_summary_tokens = std::stoi(val); } catch (...) {}
+        }
+        else if (key == "max_key_points") {
+            try { cfg.max_key_points = std::stoi(val); } catch (...) {}
+        }
     }
     return cfg;
 }
@@ -120,6 +136,12 @@ bool SaveSystemOneConfig(const SystemOneConfig& cfg) {
     f << "timeout_secs = " << cfg.timeout_secs << "\n";
     f << "prefer_local = " << (cfg.prefer_local ? "true" : "false") << "\n";
     f << "fallback_to_local = " << (cfg.fallback_to_local ? "true" : "false") << "\n";
+    f << "context_compaction_threshold = " << cfg.context_compaction_threshold << "\n";
+    f << "context_target_tokens = " << cfg.context_target_tokens << "\n";
+    f << "auto_compact_enabled = " << (cfg.auto_compact_enabled ? "true" : "false") << "\n";
+    f << "max_context_tokens = " << cfg.max_context_tokens << "\n";
+    f << "max_summary_tokens = " << cfg.max_summary_tokens << "\n";
+    f << "max_key_points = " << cfg.max_key_points << "\n";
     return f.good();
 }
 

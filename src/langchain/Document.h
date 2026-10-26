@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include <ctime>
+#include "TextSplitter.h"
 
 namespace pluto {
 namespace langchain {

@@ -5,12 +5,12 @@
 #include <map>
 #include <memory>
 #include <functional>
+#include "PromptTemplate.h"
 
 namespace pluto {
 namespace langchain {
 
-// Forward declaration.
-class LLM;
+#include "LLM.h"
 
 // Base class for all chains.
 // A chain is a sequence of steps that processes input and produces output.

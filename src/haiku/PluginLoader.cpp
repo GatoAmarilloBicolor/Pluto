@@ -2,15 +2,17 @@
 
 #include "PluginLoader.h"
 
+#include <cstdio>
+#include <cstring>
+
 #ifdef __HAIKU__
+#include <Path.h>
 #include <Directory.h>
 #include <Entry.h>
-#include <Path.h>
+#include <Image.h>
+#include <OS.h>
+#include <kernel/image.h>
 #endif
-
-#include <cstdio>
-#include <dlfcn.h>
-#include <string>
 
 namespace pluto {
 
@@ -34,7 +36,7 @@ std::vector<AddonHandle> LoadAddonsFromDir(const std::string& dir) {
 		if (path.InitCheck() != B_OK) continue;
 
 		// Load the add-on image.
-		image_id img = load_image(path.Path(), nullptr, nullptr);
+		image_id img = load_image(path.Path(), B_NORMAL_IMAGE);
 		if (img < 0) {
 			std::fprintf(stderr, "[plugin] failed to load %s: %s\n",
 				path.Path(), strerror(-img));
@@ -74,6 +76,18 @@ void UnloadAddons(std::vector<AddonHandle>& handles) {
 	handles.clear();
 }
 
+#else  // __HAIKU__
+
+std::vector<AddonHandle> LoadAddonsFromDir(const std::string&) {
+	return {};
+}
+
+void UnloadAddons(std::vector<AddonHandle>& handles) {
+	handles.clear();
+}
+
+#endif  // __HAIKU__
+
 void RegisterAddonTools(const std::vector<AddonHandle>& addons,
                         ToolRegistry& registry) {
 	for (const auto& h : addons) {
@@ -89,22 +103,15 @@ void RegisterAddonTools(const std::vector<AddonHandle>& addons,
 
 void LoadAndRegisterPlugins(const std::string& plugins_dir,
                             ToolRegistry& registry) {
+#ifdef __HAIKU__
 	auto addons = LoadAddonsFromDir(plugins_dir);
 	RegisterAddonTools(addons, registry);
-	// Keep addons loaded (caller must keep the vector alive).
-	// Note: addons vector is local here; in production you'd store it.
-	// For now we leak intentionally — plugins live for process duration.
-	// A proper implementation would return the handles for the caller to keep.
+	// Keep addons loaded for process duration.
 	(void)addons;
+#else
+	(void)plugins_dir;
+	(void)registry;
+#endif
 }
-
-#else  // __HAIKU__
-
-std::vector<AddonHandle> LoadAddonsFromDir(const std::string&) { return {}; }
-void UnloadAddons(std::vector<AddonHandle>&) {}
-void RegisterAddonTools(const std::vector<AddonHandle>&, ToolRegistry&) {}
-void LoadAndRegisterPlugins(const std::string&, ToolRegistry&) {}
-
-#endif  // __HAIKU__
 
 }  // namespace pluto

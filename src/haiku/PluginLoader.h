@@ -5,8 +5,18 @@
 
 #pragma once
 
+#ifdef __HAIKU__
+#include <image.h>
+#ifndef image_id
+#define image_id int32_t
+#endif
+#else
+#include "mock_headers/haiku/image.h"
+#endif
+
 #include "tools/Tool.h"
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -16,9 +26,12 @@
 namespace pluto {
 
 // A loaded add-on: image handle + the factory symbol.
+// On non-Haiku platforms, image is just an int32 sentinel (-1 = none).
 struct AddonHandle {
 #ifdef __HAIKU__
 	image_id    image = -1;
+#else
+	int32_t     image = -1;  // placeholder when not on Haiku
 #endif
 	Tool*       (*create_tool)() = nullptr;
 	std::string path;
