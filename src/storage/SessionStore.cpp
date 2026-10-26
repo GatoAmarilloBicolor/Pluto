@@ -1,5 +1,6 @@
 #include "SessionStore.h"
 
+#ifdef __HAIKU__
 #include <Directory.h>
 #include <Entry.h>
 #include <Node.h>
@@ -10,13 +11,9 @@
 #include <VolumeRoster.h>
 #include <fs_attr.h>
 #include <fs_index.h>
-#include <sys/stat.h>
+#endif
 
-#include <algorithm>
-#include <cctype>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
+#include <sys/stat.h>
 #include <ctime>
 #include <fstream>
 #include <random>
@@ -26,8 +23,6 @@
 #include "../util.h"
 
 namespace pluto {
-
-namespace {
 
 std::string& dir_override() {
 	static std::string s;
@@ -67,6 +62,8 @@ std::string to_lower(const std::string& s) {
 }
 
 // ---------------- attribute helpers ----------------
+
+#ifdef __HAIKU__
 
 void write_string_attr(BNode& node, const char* name, const std::string& v) {
 	node.WriteAttr(name, B_STRING_TYPE, 0, v.c_str(), v.size() + 1);
@@ -111,6 +108,18 @@ int32_t read_int32_attr(BNode& node, const char* name) {
 	node.ReadAttr(name, B_INT32_TYPE, 0, &v, sizeof(v));
 	return v;
 }
+
+#else  // __HAIKU__
+
+// Stubs for non-Haiku builds.
+inline void write_string_attr(void*, const char*, const std::string&) {}
+inline void write_int64_attr(void*, const char*, int64_t) {}
+inline void write_int32_attr(void*, const char*, int32_t) {}
+inline std::string read_string_attr(void*, const char*) { return {}; }
+inline int64_t read_int64_attr(void*, const char*) { return 0; }
+inline int32_t read_int32_attr(void*, const char*) { return 0; }
+
+#endif  // __HAIKU__
 
 // ---------------- JSONL serialization ----------------
 
@@ -182,9 +191,9 @@ Message message_from_json(const json::Value& v) {
 	return m;
 }
 
-}  // namespace
-
 // ---------------- SessionStore ----------------
+
+#ifdef __HAIKU__
 
 std::string SessionStore::sessions_dir() {
 	if (!dir_override().empty()) return dir_override();
@@ -279,9 +288,9 @@ std::string SessionStore::save(std::string path,
 }
 
 bool SessionStore::load(const std::string& path,
-                        std::vector<Message>& out,
-                        SessionMetadata& meta,
-                        std::string& error) {
+                       std::vector<Message>& out,
+                       SessionMetadata& meta,
+                       std::string& error) {
 	std::ifstream f(path);
 	if (!f) {
 		error = "cannot open: " + path;
@@ -473,5 +482,43 @@ bool SessionStore::remove_tag(const std::string& path, const std::string& tag,
 	}
 	return true;
 }
+
+#else  // __HAIKU__
+
+// Stubs for non-Haiku builds.
+std::string SessionStore::sessions_dir() { return {}; }
+void SessionStore::set_dir_override(const std::string&) {}
+bool SessionStore::ensure_sessions_dir() { return false; }
+std::string SessionStore::save(std::string, const std::string&, const std::string&,
+                               int64_t, int64_t, const std::vector<Message>&,
+                               std::string& error) {
+	error = "SessionStore not available on this platform";
+	return {};
+}
+bool SessionStore::load(const std::string&, std::vector<Message>&,
+                        SessionMetadata&, std::string& error) {
+	error = "SessionStore not available on this platform";
+	return false;
+}
+std::vector<SessionMetadata> SessionStore::list() { return {}; }
+SessionMetadata SessionStore::most_recent() { return {}; }
+bool SessionStore::remove(const std::string&, std::string& error) {
+	error = "SessionStore not available on this platform";
+	return false;
+}
+SessionMetadata SessionStore::find_by_title(const std::string&) { return {}; }
+std::vector<std::string> SessionStore::get_tags(const std::string&) { return {}; }
+bool SessionStore::add_tag(const std::string&, const std::string&,
+                           std::string& error) {
+	error = "SessionStore not available on this platform";
+	return false;
+}
+bool SessionStore::remove_tag(const std::string&, const std::string&,
+                              std::string& error) {
+	error = "SessionStore not available on this platform";
+	return false;
+}
+
+#endif  // __HAIKU__
 
 }  // namespace pluto

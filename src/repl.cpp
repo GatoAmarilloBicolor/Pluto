@@ -16,8 +16,10 @@
 #include "map/Scanner.h"
 #include "map/BfsAttrs.h"
 
+#ifdef __HAIKU__
 #include <Clipboard.h>
 #include <Message.h>
+#endif
 
 #include <curl/curl.h>
 #include <dirent.h>
@@ -1192,6 +1194,7 @@ if (line == "/cost") {
 				std::printf("%s(nothing to copy)%s\n", kDim, kReset);
 				continue;
 			}
+#ifdef __HAIKU__
 			BClipboard clipboard("system");
 			if (!clipboard.Lock()) {
 				std::printf("%s[copy] cannot lock clipboard%s\n", kRed, kReset);
@@ -1205,6 +1208,9 @@ if (line == "/cost") {
 				clipboard.Commit();
 			}
 			clipboard.Unlock();
+#else
+			(void)text;
+#endif
 			std::printf("%s  copied %zu bytes to clipboard%s\n",
 				kDim, text.size(), kReset);
 			continue;

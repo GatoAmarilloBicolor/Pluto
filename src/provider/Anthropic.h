@@ -25,6 +25,25 @@ public:
 	virtual bool stream_post(const RequestOptions& opts, StreamCallback cb) = 0;
 
 protected:
+	// Stream state for SSE parsing
+	struct StreamState {
+		std::string buffer;
+		std::string event_data;
+		StreamCallback cb;
+		bool done = false;
+		bool cb_error = false;
+
+		enum { NONE, TEXT_BLOCK, TOOL_USE_BLOCK } block_type = NONE;
+		std::string tool_id;
+		std::string tool_name;
+		std::string tool_input;
+
+		int input_tokens = 0;
+		int output_tokens = 0;
+		int cache_read = 0;
+		int cache_creation = 0;
+	};
+
 	// Build headers list including auth.
 	std::vector<std::string> build_headers(const std::string& token,
 	                                       const std::string& auth_type,

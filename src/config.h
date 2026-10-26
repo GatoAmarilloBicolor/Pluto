@@ -46,8 +46,10 @@ struct Config {
 	bool cache = true;             // ephemeral cache_control on system+tools
 	int font_delta = 0;            // GUI font zoom delta, persisted
 	bool dry_run = false;          // skip API call, emit a preview of the request
-	int max_iterations = 25;       // max agent loop iterations per turn
-	std::string active_mode;       // current mode name, empty = default (all tools)
+int max_iterations = 25; // max agent loop iterations per turn
+	int max_tool_output = 48 * 1024; // max tool output bytes before truncation
+	int model_output_cap = 0; // 0 = auto-detect from model name
+	std::string active_mode; // current mode name, empty = default (all tools)
 	std::string color_scheme = "auto";  // "auto" (system), "dark", "light"
 
 	// Available modes (built-in + loaded from modes/ dir).
@@ -132,8 +134,14 @@ std::unique_ptr<Provider> CreateProvider(const Config& cfg);
 
 // Guess model capabilities from model name. Used when the user switches
 // model and the profile doesn't specify explicit values.
-int GuessMaxOutputTokens(const std::string& model);
-int GuessContextWindow(const std::string& model);
+// Dynamically queries provider /v1/models when possible, falls back to
+// hardcoded guesses.
+int GuessMaxOutputTokens(const std::string& provider,
+                         const std::string& base_url,
+                         const std::string& model);
+int GuessContextWindow(const std::string& provider,
+                       const std::string& base_url,
+                       const std::string& model);
 
 // Resolve API key: env var named in cfg.api_key_env first, then fall back
 // to ~/config/settings/pluto-api-key (single line, chmod 600).

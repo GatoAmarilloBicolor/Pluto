@@ -449,7 +449,7 @@ void App::_LaunchMain() {
 		// It will be replaced when the user configures one via Settings.
 		fProvider = std::make_unique<AnthropicProvider>("", AuthType::API_KEY);
 	}
-	fMcp = std::make_unique<McpManager>(*fTools,
+fMcp = std::make_unique<McpManager>(*fTools,
 		[this](const McpServerSpec& s) { return _PromptProjectApproval(s); });
 
 	// Auto-discover local MCP servers not yet configured and connect them
@@ -458,17 +458,17 @@ void App::_LaunchMain() {
 		McpServerSpec spec;
 		spec.name = d.name;
 		spec.type = d.type;
-		spec.url  = d.url;
+		spec.url = d.url;
 		spec.scope = McpServerSpec::LOCAL;
 		std::string err;
 		auto transport = pluto::MakeTransport(spec, err);
 		if (!transport || !transport->start(err)) continue;
-		auto client = std::make_unique<pluto::McpClient>(
+		auto client = std::make_shared<pluto::McpClient>(
 			spec.name, std::move(transport));
 		if (!client->connect()) continue;
 		std::fprintf(stderr, "[discover/%s] %zu tools\n",
 			spec.name.c_str(), client->tools().size());
-		fMcp->add_client(std::move(client), *fTools);
+		fMcp->add_client(client, *fTools);
 	}
 
 	// Inject MCP tool descriptions into the system prompt so the model

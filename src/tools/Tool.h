@@ -31,6 +31,20 @@ public:
 	void add(std::unique_ptr<Tool> t);
 	Tool* find(const std::string& name);
 	std::vector<const Tool*> list() const;
+	
+	ToolRegistry() = default;
+	ToolRegistry(ToolRegistry&& other) noexcept 
+		: fTools(std::move(other.fTools)) {}
+	ToolRegistry& operator=(ToolRegistry&& other) noexcept {
+		if (this != &other) {
+			std::lock_guard<std::mutex> lock(fMutex);
+			std::lock_guard<std::mutex> lock_other(other.fMutex);
+			fTools = std::move(other.fTools);
+		}
+		return *this;
+	}
+	ToolRegistry(const ToolRegistry&) = delete;
+	ToolRegistry& operator=(const ToolRegistry&) = delete;
 
 private:
 	mutable std::mutex fMutex;

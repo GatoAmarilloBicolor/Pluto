@@ -2,7 +2,6 @@
 
 #include <functional>
 #include <memory>
-#include <string>
 #include <vector>
 
 #include "../tools/Tool.h"
@@ -12,8 +11,7 @@
 namespace pluto {
 
 // Owns the lifetime of all connected MCP clients and registers their tools
-// in a shared ToolRegistry. Constructed once per process; the manager must
-// outlive the registry (RemoteTool holds raw pointers to McpClient).
+// in a shared ToolRegistry. Constructed once per process.
 class McpManager {
 public:
 	using ApproveFn = std::function<bool(const McpServerSpec& spec)>;
@@ -23,17 +21,17 @@ public:
 	// tools. Failures are logged to stderr and skipped.
 	McpManager(ToolRegistry& tools, ApproveFn approve);
 
-	std::vector<McpClient*> clients() const;
+	std::vector<std::shared_ptr<McpClient>> clients() const;
 
 	// Add a pre-connected client (used by auto-discovery).
-	void add_client(std::unique_ptr<McpClient> client, ToolRegistry& tools);
+	void add_client(std::shared_ptr<McpClient> client, ToolRegistry& tools);
 
 	// Generate a system prompt block that describes all connected MCP
 	// servers and their tools, so the model knows what is available.
 	std::string system_prompt_block() const;
 
 private:
-	std::vector<std::unique_ptr<McpClient>> fClients;
+	std::vector<std::shared_ptr<McpClient>> fClients;
 };
 
 }  // namespace pluto

@@ -10,18 +10,20 @@
 #include "util.h"
 #include "workspace.h"
 
+#ifdef __HAIKU__
 #include <FindDirectory.h>
 #include <Node.h>
 #include <OS.h>
 #include <String.h>
+#endif
+
 #include <sys/stat.h>
 
 #include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
-#include <cstdlib>
-#include <cstring>
+#include <ctime>
 #include <dirent.h>
 #include <fstream>
 #include <iostream>
@@ -29,8 +31,6 @@
 #include <sstream>
 
 namespace pluto {
-
-namespace {
 
 std::mutex g_wiki_mutex;
 std::vector<WikiEntry> g_wiki_entries;
@@ -56,6 +56,7 @@ void build_wiki_idf() {
 
 		auto toks = Tokenize(text);
 		std::unordered_set<std::string> seen(toks.begin(), toks.end());
+		seen.insert(e.slug);
 		doc_tokens.push_back(std::move(seen));
 	}
 
@@ -76,8 +77,6 @@ double score_wiki_entry(const WikiEntry& entry,
 
 	return ScoreDocument(fields, query_tokens, g_wiki_idf);
 }
-
-}  // namespace
 
 int WikiInit(const std::string& dir) {
 	std::lock_guard<std::mutex> lock(g_wiki_mutex);
@@ -141,8 +140,12 @@ std::vector<WikiResult> WikiSearch(const std::string& query, int top_k) {
 	std::vector<WikiResult> results;
 	for (const auto& entry : g_wiki_entries) {
 		double s = score_wiki_entry(entry, query_tokens);
-		if (s > 0.0)
-			results.push_back({ &entry, s });
+		if (s > 0.0) {
+			WikiResult r;
+			r.entry = &entry;
+			r.score = s;
+			results.push_back(r);
+		}
 	}
 
 	std::sort(results.begin(), results.end(),
@@ -159,7 +162,9 @@ std::vector<WikiResult> WikiSearch(const std::string& query, int top_k) {
 std::string WikiSave(const std::string& dir, const std::string& topic,
                      const std::vector<std::string>& tags,
                      const std::string& source, const std::string& body) {
+#ifdef __HAIKU__
 	::mkdir(dir.c_str(), 0755);
+#endif
 
 	std::string slug = Slugify(topic);
 	std::string path = dir + "/" + slug + ".md";
@@ -199,6 +204,7 @@ std::string WikiSave(const std::string& dir, const std::string& topic,
 	f << body << "\n";
 	f.close();
 
+#ifdef __HAIKU__
 	// Write BFS attributes for query_fs support.
 	BNode node(path.c_str());
 	if (node.InitCheck() == B_OK) {
@@ -220,6 +226,7 @@ std::string WikiSave(const std::string& dir, const std::string& topic,
 			node.WriteAttrString("wiki:source", &bsource);
 		}
 	}
+#endif
 
 	return path;
 }

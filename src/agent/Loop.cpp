@@ -1,5 +1,6 @@
 #include "Loop.h"
 #include "../rag.h"
+#include "../haiku/Notifications.h"
 
 #include <cctype>
 #include <cstdio>
@@ -12,6 +13,10 @@
 #include <unistd.h>
 
 namespace pluto {
+
+#ifdef __HAIKU__
+static NotificationCenter g_notify_center;
+#endif
 
 namespace {
 
@@ -48,15 +53,16 @@ PermissionFn InteractivePrompt() {
 namespace {
 // Hard cap on a single tool_result payload to protect the context window.
 // ~48 KB ≈ 12k tokens, enough for most diagnostic output, small enough that
-// even a dozen tool calls can't blow a 200k context.
-constexpr size_t kMaxToolOutput = 48 * 1024;
-
-void cap_tool_output(std::string& out) {
+void cap_tool_output(std::string& out, const Config& cfg) {
+	size_t kMaxToolOutput = cfg.max_tool_output;
 	if (out.size() <= kMaxToolOutput) return;
 	size_t dropped = out.size() - kMaxToolOutput;
 	out.resize(kMaxToolOutput);
-	out += "\n... [truncated " + std::to_string(dropped) + " bytes]";
+	out += "
+... [truncated " + std::to_string(dropped) + " bytes]";
 }
+
+
 
 // Rough token estimate: 4 chars per token. Used only for the local
 // truncation heuristic, not for billing.
@@ -496,6 +502,10 @@ void RunTurn(Provider& provider,
 				});
 			}
 			if (had_error) {
+#ifdef __HAIKU__
+				g_notify_center.Post("Pluto — error",
+				                     "Request failed: " + cfg.model);
+#endif
 				messages.resize(entry_size);
 				return;
 			}
@@ -541,7 +551,7 @@ void RunTurn(Provider& provider,
 			run_hooks(cfg.hooks_pre_tool, "pre", block.tool_name);
 			ToolResult tr = tool->execute(block.tool_input);
 			run_hooks(cfg.hooks_post_tool, "post", block.tool_name);
-			cap_tool_output(tr.output);
+			cap_tool_output(tr.output, cfg);
 			result.is_error = tr.is_error;
 			result.text = tr.output;
 			if (ui.on_tool_result)
@@ -552,6 +562,10 @@ void RunTurn(Provider& provider,
 		messages.push_back(user_results);
 		// Loop: next iteration feeds tool_results back to the model.
 	}
+#ifdef __HAIKU__
+	g_notify_center.Post("Pluto — response complete",
+	                     "Turn finished successfully in " + cfg.model);
+#endif
 }
 
 bool MaybeCompact(Provider& provider,

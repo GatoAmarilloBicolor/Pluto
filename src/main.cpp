@@ -18,6 +18,7 @@
 #include "config.h"
 #include "haiku/BfsTools.h"
 #include "haiku/DesktopTools.h"
+#include "haiku/PluginLoader.h"
 #include "mcp/Cli.h"
 #include "mcp/Client.h"
 #include "mcp/Config.h"
@@ -506,8 +507,13 @@ int main(int argc, char** argv) {
 	tools.add(pluto::MakeLspTool());
 	tools.add(pluto::MakeGraphQueryTool());
 
-	// MCP bootstrap. McpManager must outlive ToolRegistry (RemoteTool holds
-	// raw McpClient pointers); declared after `tools` so it destructs first.
+	// Load Haiku-native add-ons from the plugins directory.
+#ifdef __HAIKU__
+	std::string plugins_dir = SettingsDir() + "/plugins";
+	pluto::LoadAndRegisterPlugins(plugins_dir, tools);
+#endif
+
+	// MCP bootstrap.
 	pluto::McpManager mcp(tools, prompt_project_approval);
 
 	// Auto-discover local MCP servers not already configured.
@@ -520,12 +526,12 @@ int main(int argc, char** argv) {
 		std::string err;
 		auto transport = pluto::MakeTransport(spec, err);
 		if (!transport || !transport->start(err)) continue;
-		auto client = std::make_unique<pluto::McpClient>(
+		auto client = std::make_shared<pluto::McpClient>(
 			spec.name, std::move(transport));
 		if (!client->connect()) continue;
 		std::fprintf(stderr, "[discover/%s] %zu tools\n",
 			spec.name.c_str(), client->tools().size());
-		mcp.add_client(std::move(client), tools);
+		mcp.add_client(client, tools);
 	}
 
 	// Inject MCP tool descriptions into the system prompt so the model

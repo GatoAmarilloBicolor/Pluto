@@ -162,10 +162,10 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 				Config& tc = _ActiveConv()->MutableConfig();
 				tc.model = newModel;
 				AutoDetectProvider(tc);
-				int guessed_ctx = pluto::GuessContextWindow(newModel);
+				int guessed_ctx = pluto::GuessContextWindow(tc.provider, tc.base_url, tc.model);
 				if (guessed_ctx > 0) tc.context_window = guessed_ctx;
 				{
-					int out_limit = pluto::GuessMaxOutputTokens(newModel);
+					int out_limit = pluto::GuessMaxOutputTokens(tc.provider, tc.base_url, tc.model);
 					int ctx_cap = tc.context_window * 3 / 4;
 					int cap = std::min(out_limit, ctx_cap);
 					if (tc.max_tokens > cap)
@@ -265,9 +265,9 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 					pluto::Config& tc = _ActiveConv()->MutableConfig();
 					tc.model = m->model;
 					pluto::AutoDetectProvider(tc);
-					int ctx = pluto::GuessContextWindow(m->model);
+					int ctx = pluto::GuessContextWindow(tc.provider, tc.base_url, m->model);
 					if (ctx > 0) tc.context_window = ctx;
-					int out_limit = pluto::GuessMaxOutputTokens(m->model);
+					int out_limit = pluto::GuessMaxOutputTokens(tc.provider, tc.base_url, m->model);
 					int ctx_cap = tc.context_window * 3 / 4;
 					int cap = std::min(out_limit, ctx_cap);
 					if (tc.max_tokens > cap)
@@ -589,7 +589,8 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 			_Append("Wiki ingest: " + arg + "\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			std::string input_arg = arg;
 			// Run ingest in a background thread to avoid blocking the GUI.
-			std::thread([this, input_arg]() {
+						BMessenger messenger(this);
+std::thread([messenger, input_arg]() {
 				// Find our own executable.
 				std::string self_exe;
 				{
@@ -613,7 +614,7 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 				// Post result back to the window thread.
 				BMessage* msg = new BMessage('wiki');
 				msg->AddString("result", output.c_str());
-				PostMessage(msg);
+				messenger.SendMessage(msg);
 			}).detach();
 		}
 		return true;

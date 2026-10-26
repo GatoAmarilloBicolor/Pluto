@@ -25,6 +25,8 @@
 #include "../log.h"
 
 
+#ifdef __HAIKU__
+
 namespace pluto {
 
 
@@ -921,3 +923,39 @@ LspClient::_DetectLanguageId(const std::string& path)
 
 
 }	// namespace pluto
+
+
+#else  // __HAIKU__
+
+namespace pluto {
+
+LspClient::LspClient() = default;
+LspClient::~LspClient() = default;
+
+bool LspClient::Start(const std::string&, const std::vector<std::string>&, std::string& error) {
+    error = "LSP not supported on this platform";
+    return false;
+}
+bool LspClient::Initialize(const std::string&, std::string& error) {
+    error = "LSP not supported on this platform";
+    return false;
+}
+bool LspClient::DidOpen(const std::string&, std::string&) { return false; }
+void LspClient::DidClose(const std::string&) {}
+void LspClient::Shutdown() {}
+LspHoverResult LspClient::Hover(const std::string&, int, int, std::string&) { return {}; }
+std::vector<LspLocation> LspClient::GoToDefinition(const std::string&, int, int, std::string&) { return {}; }
+std::vector<LspLocation> LspClient::FindReferences(const std::string&, int, int, std::string&) { return {}; }
+std::vector<LspDiagnostic> LspClient::GetDiagnostics(const std::string&, std::string&) { return {}; }
+std::vector<LspSymbol> LspClient::DocumentSymbols(const std::string&, std::string&) { return {}; }
+// IsRunning() is inline in header
+bool LspClient::_SendRequest(const json::Value&, std::string&) { return false; }
+bool LspClient::_SendNotification(const json::Value&) { return false; }
+json::Value LspClient::_ReadResponse(int, int, std::string&) { return json::Value(); }
+bool LspClient::_WriteAll(const char*, size_t) { return false; }
+bool LspClient::_ReadBytes(size_t, std::string&, int) { return false; }
+bool LspClient::_ReadLine(std::string&, int) { return false; }
+
+}  // namespace pluto
+
+#endif  // __HAIKU__

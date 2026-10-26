@@ -1,7 +1,9 @@
 #include "BfsAttrs.h"
 
+#ifdef __HAIKU__
 #include <Node.h>
 #include <TypeConstants.h>
+#endif
 
 #include <cstdio>
 #include <ctime>
@@ -10,6 +12,8 @@
 
 namespace pluto {
 namespace map {
+
+#ifdef __HAIKU__
 
 int StampBfsAttributes(const Graph& graph)
 {
@@ -103,6 +107,16 @@ int StampBfsAttributes(const Graph& graph)
 		stamped);
 	return stamped;
 }
+
+#else  // __HAIKU__
+
+int StampBfsAttributes(const Graph& /*graph*/)
+{
+	std::fprintf(stderr, "[map] BFS attributes not available on this platform\n");
+	return 0;
+}
+
+#endif  // __HAIKU__
 
 }  // namespace map
 }  // namespace pluto

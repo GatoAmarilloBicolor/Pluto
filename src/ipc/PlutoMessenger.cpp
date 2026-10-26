@@ -1,5 +1,8 @@
 #include "PlutoMessenger.h"
 
+#ifdef __HAIKU__
+
+
 #include <Application.h>
 #include <List.h>
 #include <Messenger.h>
@@ -202,3 +205,23 @@ std::string query_context(int32_t team_id, const std::string& topic) {
 
 }  // namespace ipc
 }  // namespace pluto
+
+
+#else  // __HAIKU__
+
+namespace pluto {
+namespace ipc {
+
+// Forward declare Haiku types for non-Haiku builds
+using team_id = int32_t;
+using int32 = int32_t;
+struct Message {};  // minimal stub
+
+std::vector<PeerInfo> find_peers() { return {}; }
+bool send_message(team_id, const Message&) { return false; }
+bool send_reply(int32, const Message&) { return false; }
+
+}  // namespace ipc
+}  // namespace pluto
+
+#endif  // __HAIKU__

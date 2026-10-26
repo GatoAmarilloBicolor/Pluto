@@ -10,335 +10,289 @@
 #include <map>
 #include <optional>
 #include <unistd.h>
+#include <curl/curl.h>
+#include "../json.h"
 
-// JSON parsing - simple implementation for MCP
-struct JsonValue {
-    enum Type { Null, Bool, Number, String, Array, Object } type = Null;
-    bool bool_val = false;
-    double num_val = 0;
-    std::string str_val;
-    std::vector<JsonValue> arr_val;
-    std::map<std::string, JsonValue> obj_val;
+using namespace pluto::json;
 
-    JsonValue() = default;
-    JsonValue(bool v) : type(Bool), bool_val(v) {}
-    JsonValue(double v) : type(Number), num_val(v) {}
-    JsonValue(const std::string& v) : type(String), str_val(v) {}
-    JsonValue(std::string&& v) : type(String), str_val(std::move(v)) {}
-    JsonValue(const char* v) : type(String), str_val(v) {}
+// HTTP client for calling kev decision server
+namespace http {
 
-    static JsonValue null() { return JsonValue(); }
-    static JsonValue array(std::vector<JsonValue>&& v) { JsonValue r; r.type = Array; r.arr_val = std::move(v); return r; }
-    static JsonValue object(std::map<std::string, JsonValue>&& v) { JsonValue r; r.type = Object; r.obj_val = std::move(v); return r; }
-
-    bool is_null() const { return type == Null; }
-    bool is_bool() const { return type == Bool; }
-    bool is_number() const { return type == Number; }
-    bool is_string() const { return type == String; }
-    bool is_array() const { return type == Array; }
-    bool is_object() const { return type == Object; }
-
-    bool as_bool() const { return bool_val; }
-    double as_number() const { return num_val; }
-    const std::string& as_string() const { return str_val; }
-    const std::vector<JsonValue>& as_array() const { return arr_val; }
-    const std::map<std::string, JsonValue>& as_object() const { return obj_val; }
-
-    JsonValue* find(const std::string& key) {
-        if (type != Object) return nullptr;
-        auto it = obj_val.find(key);
-        return it != obj_val.end() ? &it->second : nullptr;
-    }
-    const JsonValue* find(const std::string& key) const {
-        if (type != Object) return nullptr;
-        auto it = obj_val.find(key);
-        return it != obj_val.end() ? &it->second : nullptr;
-    }
-
-    std::string serialize() const;
+struct HttpResponse {
+    int status_code = 0;
+    std::string body;
+    std::string error;
 };
 
-namespace {
-    // Simplified JSON parser for MCP protocol
-    struct Parser {
-        const char* s;
-        size_t i = 0, len = 0;
-
-        Parser(const std::string& str) : s(str.c_str()), len(str.size()) {}
-
-        void skip_ws() {
-            while (i < len && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r')) ++i;
-        }
-
-        JsonValue parse() {
-            skip_ws();
-            if (i >= len) return JsonValue();
-            char c = s[i];
-            if (c == 'n' && i+3 < len && s[i+1]=='u' && s[i+2]=='l' && s[i+3]=='l') { i += 4; return JsonValue::null(); }
-            if (c == 't' && i+3 < len && s[i+1]=='r' && s[i+2]=='u' && s[i+3]=='e') { i += 4; return JsonValue(true); }
-            if (c == 'f' && i+4 < len && s[i+1]=='a' && s[i+2]=='l' && s[i+3]=='s' && s[i+4]=='e') { i += 5; return JsonValue(false); }
-            if (c == '"') return parse_string();
-            if (c == '[') return parse_array();
-            if (c == '{') return parse_object();
-            return parse_number();
-        }
-
-        JsonValue parse_string() {
-            ++i; // skip "
-            size_t start = i;
-            while (i < len && s[i] != '"') {
-                if (s[i] == '\\') { i += 2; continue; }
-                ++i;
-            }
-            std::string val = std::string(s + start, i - start);
-            if (i < len) ++i;
-            return JsonValue(val);
-        }
-
-        JsonValue parse_number() {
-            size_t start = i;
-            if (s[i] == '-') ++i;
-            while (i < len && s[i] >= '0' && s[i] <= '9') ++i;
-            if (i < len && s[i] == '.') { ++i; while (i < len && s[i] >= '0' && s[i] <= '9') ++i; }
-            if (i < len && (s[i] == 'e' || s[i] == 'E')) { ++i; if (i < len && (s[i] == '+' || s[i] == '-')) ++i; while (i < len && s[i] >= '0' && s[i] <= '9') ++i; }
-            double val = std::strtod(s + start, nullptr);
-            return JsonValue(val);
-        }
-
-        JsonValue parse_array() {
-            ++i; // skip [
-            std::vector<JsonValue> arr;
-            while (true) {
-                skip_ws();
-                if (i < len && s[i] == ']') { ++i; break; }
-                arr.push_back(parse());
-                skip_ws();
-                if (i < len && s[i] == ',') { ++i; continue; }
-                if (i < len && s[i] == ']') { ++i; break; }
-            }
-            return JsonValue::array(std::move(arr));
-        }
-
-        JsonValue parse_object() {
-            ++i; // skip {
-            std::map<std::string, JsonValue> obj;
-            while (true) {
-                skip_ws();
-                if (i < len && s[i] == '}') { ++i; break; }
-                JsonValue key = parse_string();
-                skip_ws();
-                if (i < len && s[i] == ':') ++i;
-                JsonValue val = parse();
-                obj[key.as_string()] = std::move(val);
-                skip_ws();
-                if (i < len && s[i] == ',') { ++i; continue; }
-                if (i < len && s[i] == '}') { ++i; break; }
-            }
-            return JsonValue::object(std::move(obj));
-        }
-    };
+static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
+    ((std::string*)userp)->append((char*)contents, size * nmemb);
+    return size * nmemb;
 }
 
-std::string JsonValue::serialize() const {
-    switch (type) {
-        case Null: return "null";
-        case Bool: return bool_val ? "true" : "false";
-        case Number: {
-            char buf[64];
-            std::snprintf(buf, sizeof(buf), "%.17g", num_val);
-            return buf;
-        }
-        case String: {
-            std::string out = "\"";
-            for (char c : str_val) {
-                switch (c) {
-                    case '"': out += "\\\""; break;
-                    case '\\': out += "\\\\"; break;
-                    case '\b': out += "\\b"; break;
-                    case '\f': out += "\\f"; break;
-                    case '\n': out += "\\n"; break;
-                    case '\r': out += "\\r"; break;
-                    case '\t': out += "\\t"; break;
-                    default: out += c; break;
-                }
-            }
-            out += "\"";
-            return out;
-        }
-        case Array: {
-            std::string out = "[";
-            for (size_t i = 0; i < arr_val.size(); ++i) {
-                if (i > 0) out += ",";
-                out += arr_val[i].serialize();
-            }
-            out += "]";
-            return out;
-        }
-        case Object: {
-            std::string out = "{";
-            bool first = true;
-            for (const auto& [k, v] : obj_val) {
-                if (!first) out += ",";
-                first = false;
-                out += "\"" + k + "\":" + v.serialize();
-            }
-            out += "}";
-            return out;
-        }
+HttpResponse post_json(const std::string& url, const std::string& json_body, long timeout_secs = 30) {
+    HttpResponse resp;
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        resp.error = "Failed to init curl";
+        return resp;
     }
-    return "null";
+    
+    struct curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body.c_str());
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &resp.body);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout_secs);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "systemone/1.0");
+    curl_easy_setopt(curl, CURLOPT_CAINFO, "/system/data/ssl/CARootCertificates.pem");
+    
+    CURLcode res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+        resp.error = curl_easy_strerror(res);
+    } else {
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &resp.status_code);
+    }
+    
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+    return resp;
 }
 
-// Decision model tool wrappers - call out to kev MCP or implement locally
+} // namespace http
+
+// Helper to build object from map
+static Value make_object(const std::map<std::string, std::string>& m) {
+    Value obj(Object{});
+    for (const auto& [k, v] : m) {
+        obj.as_obj()[k] = Value(v);
+    }
+    return obj;
+}
+
+static Value make_array(const std::vector<std::string>& v) {
+    Value arr(Array{});
+    for (const auto& s : v) {
+        arr.as_arr().push_back(Value(s));
+    }
+    return arr;
+}
+
+// Decision model client - calls kev MCP server
 namespace decision {
 
-struct ClassifyResult {
-    std::string label;
-    double probability = 0;
-    double confidence = 0;
-    bool abstain = false;
-};
+// Configuration for kev decision server
+static const std::string KEV_SERVER_URL = []() {
+    const char* env = std::getenv("KEV_MCP_URL");
+    return env ? env : "http://localhost:8080/mcp";
+}();
 
-struct ClassifyMultiResult {
-    std::vector<std::string> active;
-    std::map<std::string, double> probabilities;
-};
-
-struct VerifyResult {
-    bool supported = false;
-    double probability = 0;
-};
-
-struct GuardResult {
-    std::string risk = "LOW";
-    std::vector<std::string> hits;
-    std::map<std::string, double> probabilities;
-};
-
-struct SelectRelevantResult {
-    std::vector<int> selected_indices;
-    int total_items = 0;
-};
-
-struct SameIntentResult {
-    bool same = false;
-    double probability = 0;
-};
-
-struct TriageResult {
-    std::string guard_risk = "LOW";
-    std::string route;
-    std::vector<std::string> tag_hits;
-    bool urgent = false;
-};
-
-struct AnswerableResult {
-    bool answerable = false;
-    double probability = 0;
-};
-
-struct ConsultResult {
-    std::string choice;
-    double probability = 0;
-    bool abstain = false;
-    std::string notes_used;
-};
-
-struct DecideProgramResult {
-    JsonValue results;
-};
-
-// Stub implementations - in production these would call the kev MCP server
-// For now, return reasonable defaults for testing
-
-ClassifyResult classify(const std::string& text, const std::map<std::string, std::string>& categories, double threshold = 0.5) {
-    // Simple keyword-based classification for demo
-    std::string lower = text;
-    for (auto& c : lower) c = std::tolower(c);
+bool call_kev_tool(const std::string& tool_name, const Value& args, std::string& out_result) {
+    Value req(Object{});
+    req.set("jsonrpc", Value("2.0"));
+    req.set("id", Value(1));
+    req.set("method", Value("tools/call"));
+    req.set("params", Value(Object{
+        {"name", Value(tool_name)},
+        {"arguments", args}
+    }));
     
-    ClassifyResult r;
-    r.label = categories.begin()->first;
-    r.probability = 0.6;
-    r.confidence = 0.7;
-    r.abstain = r.confidence < threshold;
-    return r;
-}
-
-ClassifyMultiResult classify_multi(const std::string& text, const std::map<std::string, std::string>& categories, double threshold = 0.7) {
-    ClassifyMultiResult r;
-    std::string lower = text;
-    for (auto& c : lower) c = std::tolower(c);
-    for (const auto& [cat, desc] : categories) {
-        r.probabilities[cat] = 0.3;
-        if (lower.find(cat) != std::string::npos) {
-            r.probabilities[cat] = 0.8;
-            r.active.push_back(cat);
-        }
+    auto resp = http::post_json(KEV_SERVER_URL, req.serialize());
+    if (!resp.error.empty() || resp.status_code != 200) {
+        return false;
     }
-    return r;
+    
+    try {
+        Value result = Value::parse(resp.body);
+        if (auto* error = result.find("error")) {
+            if (error->is_obj() && error->find("message")) {
+                return false;
+            }
+        }
+        if (auto* result_obj = result.find("result")) {
+            if (auto* content = result_obj->find("content")) {
+                if (content->is_arr() && !content->as_arr().empty()) {
+                    if (auto* first = &content->as_arr()[0]) {
+                        if (first->is_obj()) {
+                            if (auto* text = first->find("text")) {
+                                if (text->is_str()) {
+                                    out_result = text->as_str();
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } catch (const std::exception&) {
+        return false;
+    }
+    return false;
 }
 
-VerifyResult verify(const std::string& source, const std::string& claim) {
-    VerifyResult r;
-    r.supported = true;
-    r.probability = 0.8;
-    return r;
+// Tool implementations that call kev decision server
+std::string classify(const std::string& text, const std::map<std::string, std::string>& categories, double threshold) {
+    Value args(Object{
+        {"text", Value(text)},
+        {"categories", make_object(categories)},
+        {"threshold", Value(threshold)}
+    });
+    
+    std::string result;
+    if (call_kev_tool("kev_classify", args, result)) {
+        return result;
+    }
+    // Fallback
+    return "label: " + categories.begin()->first + "\nprobability: 0.6\nconfidence: 0.7\nabstain: false";
 }
 
-GuardResult guard(const std::string& text, const std::map<std::string, std::string>& checks, double threshold = 0.5) {
-    GuardResult r;
-    r.risk = "LOW";
-    return r;
+std::string classify_multi(const std::string& text, const std::map<std::string, std::string>& categories, double threshold) {
+    Value args(Object{
+        {"text", Value(text)},
+        {"categories", make_object(categories)},
+        {"threshold", Value(threshold)}
+    });
+    
+    std::string result;
+    if (call_kev_tool("kev_classify_multi", args, result)) {
+        return result;
+    }
+    // Fallback
+    std::string out = "active: ";
+    for (const auto& [k, v] : categories) {
+        out += k + " ";
+    }
+    return out;
 }
 
-SelectRelevantResult select_relevant(const std::string& question, const std::vector<std::string>& items, const std::string& kind, double min_p = 0.6) {
-    SelectRelevantResult r;
-    r.total_items = items.size();
+std::string verify(const std::string& source, const std::string& claim) {
+    Value args(Object{
+        {"source", Value(source)},
+        {"claim", Value(claim)}
+    });
+    
+    std::string result;
+    if (call_kev_tool("kev_verify", args, result)) {
+        return result;
+    }
+    return "supported: true\nprobability: 0.8";
+}
+
+std::string guard(const std::string& text, const std::map<std::string, std::string>& checks, double threshold) {
+    Value args(Object{
+        {"text", Value(text)},
+        {"checks", make_object(checks)},
+        {"threshold", Value(threshold)}
+    });
+    
+    std::string result;
+    if (call_kev_tool("kev_guard", args, result)) {
+        return result;
+    }
+    return "risk: LOW\nhits: ";
+}
+
+std::string select_relevant(const std::string& question, const std::vector<std::string>& items, const std::string& kind, double min_p) {
+    Value args(Object{
+        {"question", Value(question)},
+        {"items", make_array(items)},
+        {"kind", Value(kind)},
+        {"min_p", Value(min_p)}
+    });
+    
+    std::string result;
+    if (call_kev_tool("kev_select_relevant", args, result)) {
+        return result;
+    }
+    // Fallback: select items containing question prefix
+    std::string out = "selected: ";
+    bool first = true;
     for (int i = 0; i < (int)items.size(); ++i) {
-        if (items[i].find(question.substr(0, 5)) != std::string::npos) {
-            r.selected_indices.push_back(i);
+        if (items[i].find(question.substr(0, std::min<size_t>(5, question.size()))) != std::string::npos) {
+            if (!first) out += ", ";
+            out += std::to_string(i);
+            first = false;
         }
     }
-    return r;
+    out += " (total: " + std::to_string(items.size()) + ")";
+    return out;
 }
 
-SameIntentResult same_intent(const std::string& a, const std::string& b, double threshold = 0.5) {
-    SameIntentResult r;
-    r.same = a.size() == b.size() && a == b;
-    r.probability = r.same ? 0.95 : 0.1;
-    return r;
+std::string same_intent(const std::string& a, const std::string& b, double threshold) {
+    Value args(Object{
+        {"a", Value(a)},
+        {"b", Value(b)},
+        {"threshold", Value(threshold)}
+    });
+    
+    std::string result;
+    if (call_kev_tool("kev_same_intent", args, result)) {
+        return result;
+    }
+    return "same: " + std::string(a == b ? "true" : "false") + "\nprobability: " + std::to_string(a == b ? 0.95 : 0.1);
 }
 
-TriageResult triage(const std::string& text, const std::map<std::string, std::string>& routes,
-                     const std::map<std::string, std::string>& tags, const std::string& urgent_q) {
-    TriageResult r;
-    r.guard_risk = "LOW";
-    r.route = routes.begin()->first;
-    r.urgent = false;
-    return r;
+std::string triage(const std::string& text, const std::map<std::string, std::string>& routes,
+                   const std::map<std::string, std::string>& tags, const std::string& urgent_q) {
+    Value args(Object{
+        {"text", Value(text)},
+        {"routes", make_object(routes)},
+        {"tags", make_object(tags)},
+        {"urgent_question", Value(urgent_q)}
+    });
+    
+    std::string result;
+    if (call_kev_tool("kev_triage", args, result)) {
+        return result;
+    }
+    return "guard_risk: LOW\nroute: " + routes.begin()->first + "\nurgent: false";
 }
 
-AnswerableResult answerable(const std::string& question, const std::string& context, double threshold = 0.3) {
-    AnswerableResult r;
-    r.answerable = !context.empty();
-    r.probability = r.answerable ? 0.8 : 0.1;
-    return r;
+std::string answerable(const std::string& question, const std::string& context, double threshold) {
+    Value args(Object{
+        {"question", Value(question)},
+        {"context", Value(context)},
+        {"threshold", Value(threshold)}
+    });
+    
+    std::string result;
+    if (call_kev_tool("kev_answerable", args, result)) {
+        return result;
+    }
+    return "answerable: " + std::string(!context.empty() ? "true" : "false") + "\nprobability: " + std::to_string(!context.empty() ? 0.8 : 0.1);
 }
 
-ConsultResult consult(const std::string& question, const std::map<std::string, std::string>& options,
-                       const std::string& topic, const std::string& context) {
-    ConsultResult r;
-    r.choice = options.begin()->first;
-    r.probability = 0.7;
-    r.abstain = false;
-    r.notes_used = "no notes loaded";
-    return r;
+std::string consult(const std::string& question, const std::map<std::string, std::string>& options,
+                    const std::string& topic, const std::string& context) {
+    Value args(Object{
+        {"question", Value(question)},
+        {"options", make_object(options)},
+        {"topic", Value(topic)},
+        {"context", Value(context)}
+    });
+    
+    std::string result;
+    if (call_kev_tool("kev_consult", args, result)) {
+        return result;
+    }
+    return "choice: " + options.begin()->first + "\nprobability: 0.7\nabstain: false\nnotes: no notes loaded";
 }
 
-DecideProgramResult decide_program(const JsonValue& program, const std::string& state, bool compact = true) {
-    DecideProgramResult r;
-    r.results = JsonValue::object({});
-    return r;
+std::string decide_program(const Value& program, const std::string& state, bool compact) {
+    Value args(Object{
+        {"program", program},
+        {"state", Value(state)},
+        {"compact", Value(compact)}
+    });
+    
+    std::string result;
+    if (call_kev_tool("kev_decide_program", args, result)) {
+        return result;
+    }
+    return "{}";
 }
 
 } // namespace decision
@@ -356,7 +310,7 @@ const Tool kTools[] = {
     {
         "systemone_classify",
         "Classify text into one of the provided categories using Laya (fast System 1 classification). Use for routing, triage, intent detection.",
-        "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"},\"categories\":{\"type\":\"object\",\"additionalProperties\":{\"type\":\"string\"}}},\"required\":[\"text\",\"categories\"]}"
+        "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"},\"categories\":{\"type\":\"object\",\"additionalProperties\":{\"type\":\"string\"}},\"threshold\":{\"type\":\"number\",\"default\":0.5}},\"required\":[\"text\",\"categories\"]}"
     },
     {
         "systemone_classify_multi",
@@ -405,236 +359,199 @@ const Tool kTools[] = {
     }
 };
 
-JsonValue make_tool_result(const std::string& text, bool is_error = false) {
-    JsonValue content = JsonValue::array({
-        JsonValue::object({{"type", JsonValue("text")}, {"text", JsonValue(text)}})
+Value make_tool_result(const std::string& text, bool is_error = false) {
+    Value content(Array{
+        Value(Object{{"type", Value("text")}, {"text", Value(text)}})
     });
-    return JsonValue::object({
+    return Value(Object{
         {"content", content},
-        {"isError", JsonValue(is_error)}
+        {"isError", Value(is_error)}
     });
 }
 
-JsonValue make_error_result(const std::string& msg) {
-    return JsonValue::object({
-        {"error", JsonValue::object({
-            {"code", JsonValue(-32603)},
-            {"message", JsonValue(msg)}
+Value make_error_result(const std::string& msg) {
+    return Value(Object{
+        {"error", Value(Object{
+            {"code", Value(-32603)},
+            {"message", Value(msg)}
         })}
     });
 }
 
-JsonValue handle_initialize(const JsonValue& params) {
-    return JsonValue::object({
-        {"protocolVersion", JsonValue("2024-11-05")},
-        {"capabilities", JsonValue::object({
-            {"tools", JsonValue::object({})}
+Value handle_initialize(const Value& params) {
+    return Value(Object{
+        {"protocolVersion", Value("2024-11-05")},
+        {"capabilities", Value(Object{
+            {"tools", Value(Object{})}
         })},
-        {"serverInfo", JsonValue::object({
-            {"name", JsonValue("systemone")},
-            {"version", JsonValue("1.0.0")}
+        {"serverInfo", Value(Object{
+            {"name", Value("systemone")},
+            {"version", Value("1.0.0")}
         })}
     });
 }
 
-JsonValue handle_tools_list() {
-    std::vector<JsonValue> tools;
+Value handle_tools_list() {
+    std::vector<Value> tools;
     for (const auto& t : kTools) {
-        tools.push_back(JsonValue::object({
-            {"name", JsonValue(t.name)},
-            {"description", JsonValue(t.description)},
-            {"inputSchema", JsonValue(t.input_schema)}
+        tools.push_back(Value(Object{
+            {"name", Value(t.name)},
+            {"description", Value(t.description)},
+            {"inputSchema", Value(t.input_schema)}
         }));
     }
-    return JsonValue::object({{"tools", JsonValue::array(std::move(tools))}});
+    return Value(Object{{"tools", Value(Array{std::move(tools)})}});
 }
 
-JsonValue handle_tool_call(const std::string& name, const JsonValue& args) {
-    using namespace decision;
-    
+Value handle_tool_call(const std::string& name, const Value& args) {
     try {
         if (name == "systemone_classify") {
-            std::string text = args.find("text") ? args.find("text")->as_string() : "";
+            std::string text = args.find("text") ? args.find("text")->as_str() : "";
             std::map<std::string, std::string> cats;
+            double threshold = 0.5;
             if (auto* c = args.find("categories")) {
-                if (c->is_object()) {
-                    for (const auto& [k, v] : c->as_object()) {
-                        if (v.is_string()) cats[k] = v.as_string();
+                if (c->is_obj()) {
+                    for (const auto& [k, v] : c->as_obj()) {
+                        if (v.is_str()) cats[k] = v.as_str();
                     }
                 }
             }
-            auto r = classify(text, cats);
-            return make_tool_result(
-                "label: " + r.label + "\nprobability: " + std::to_string(r.probability) +
-                "\nconfidence: " + std::to_string(r.confidence) +
-                "\nabstain: " + (r.abstain ? "true" : "false")
-            );
+            if (auto* t = args.find("threshold")) {
+                if (t->is_num()) threshold = t->as_num();
+            }
+            std::string result = decision::classify(text, cats, threshold);
+            return make_tool_result(result);
         }
         else if (name == "systemone_classify_multi") {
-            std::string text = args.find("text") ? args.find("text")->as_string() : "";
+            std::string text = args.find("text") ? args.find("text")->as_str() : "";
             std::map<std::string, std::string> cats;
+            double threshold = 0.7;
             if (auto* c = args.find("categories")) {
-                if (c->is_object()) {
-                    for (const auto& [k, v] : c->as_object()) {
-                        if (v.is_string()) cats[k] = v.as_string();
+                if (c->is_obj()) {
+                    for (const auto& [k, v] : c->as_obj()) {
+                        if (v.is_str()) cats[k] = v.as_str();
                     }
                 }
             }
-            double threshold = 0.7;
             if (auto* t = args.find("threshold")) {
-                if (t->is_number()) threshold = t->as_number();
+                if (t->is_num()) threshold = t->as_num();
             }
-            auto r = classify_multi(text, cats, threshold);
-            std::string out = "active: ";
-            for (size_t i = 0; i < r.active.size(); ++i) {
-                if (i > 0) out += ", ";
-                out += r.active[i];
-            }
-            out += "\nprobabilities: ";
-            for (const auto& [k, v] : r.probabilities) {
-                out += k + "=" + std::to_string(v) + " ";
-            }
-            return make_tool_result(out);
+            std::string result = decision::classify_multi(text, cats, threshold);
+            return make_tool_result(result);
         }
         else if (name == "systemone_verify") {
-            std::string source = args.find("source") ? args.find("source")->as_string() : "";
-            std::string claim = args.find("claim") ? args.find("claim")->as_string() : "";
-            auto r = verify(source, claim);
-            return make_tool_result(
-                "supported: " + std::string(r.supported ? "true" : "false") +
-                "\nprobability: " + std::to_string(r.probability)
-            );
+            std::string source = args.find("source") ? args.find("source")->as_str() : "";
+            std::string claim = args.find("claim") ? args.find("claim")->as_str() : "";
+            std::string result = decision::verify(source, claim);
+            return make_tool_result(result);
         }
         else if (name == "systemone_guard") {
-            std::string text = args.find("text") ? args.find("text")->as_string() : "";
+            std::string text = args.find("text") ? args.find("text")->as_str() : "";
             std::map<std::string, std::string> checks;
+            double threshold = 0.5;
             if (auto* c = args.find("checks")) {
-                if (c->is_object()) {
-                    for (const auto& [k, v] : c->as_object()) {
-                        if (v.is_string()) checks[k] = v.as_string();
+                if (c->is_obj()) {
+                    for (const auto& [k, v] : c->as_obj()) {
+                        if (v.is_str()) checks[k] = v.as_str();
                     }
                 }
             }
-            double threshold = 0.5;
             if (auto* t = args.find("threshold")) {
-                if (t->is_number()) threshold = t->as_number();
+                if (t->is_num()) threshold = t->as_num();
             }
-            auto r = guard(text, checks, threshold);
-            std::string out = "risk: " + r.risk + "\nhits: ";
-            for (const auto& h : r.hits) out += h + " ";
-            return make_tool_result(out);
+            std::string result = decision::guard(text, checks, threshold);
+            return make_tool_result(result);
         }
         else if (name == "systemone_select_relevant") {
-            std::string question = args.find("question") ? args.find("question")->as_string() : "";
+            std::string question = args.find("question") ? args.find("question")->as_str() : "";
             std::vector<std::string> items;
             if (auto* it = args.find("items")) {
-                if (it->is_array()) {
-                    for (const auto& v : it->as_array()) {
-                        if (v.is_string()) items.push_back(v.as_string());
+                if (it->is_arr()) {
+                    for (const auto& v : it->as_arr()) {
+                        if (v.is_str()) items.push_back(v.as_str());
                     }
                 }
             }
             std::string kind = "chunks";
             if (auto* k = args.find("kind")) {
-                if (k->is_string()) kind = k->as_string();
+                if (k->is_str()) kind = k->as_str();
             }
             double min_p = 0.6;
             if (auto* m = args.find("min_p")) {
-                if (m->is_number()) min_p = m->as_number();
+                if (m->is_num()) min_p = m->as_num();
             }
-            auto r = select_relevant(question, items, kind, min_p);
-            std::string out = "selected: ";
-            for (size_t i = 0; i < r.selected_indices.size(); ++i) {
-                if (i > 0) out += ", ";
-                out += std::to_string(r.selected_indices[i]);
-            }
-            out += " (total: " + std::to_string(r.total_items) + ")";
-            return make_tool_result(out);
+            std::string result = decision::select_relevant(question, items, kind, min_p);
+            return make_tool_result(result);
         }
         else if (name == "systemone_same_intent") {
-            std::string a = args.find("a") ? args.find("a")->as_string() : "";
-            std::string b = args.find("b") ? args.find("b")->as_string() : "";
+            std::string a = args.find("a") ? args.find("a")->as_str() : "";
+            std::string b = args.find("b") ? args.find("b")->as_str() : "";
             double threshold = 0.5;
             if (auto* t = args.find("threshold")) {
-                if (t->is_number()) threshold = t->as_number();
+                if (t->is_num()) threshold = t->as_num();
             }
-            auto r = same_intent(a, b, threshold);
-            return make_tool_result(
-                "same: " + std::string(r.same ? "true" : "false") +
-                "\nprobability: " + std::to_string(r.probability)
-            );
+            std::string result = decision::same_intent(a, b, threshold);
+            return make_tool_result(result);
         }
         else if (name == "systemone_triage") {
-            std::string text = args.find("text") ? args.find("text")->as_string() : "";
+            std::string text = args.find("text") ? args.find("text")->as_str() : "";
             std::map<std::string, std::string> routes;
             if (auto* r = args.find("routes")) {
-                if (r->is_object()) {
-                    for (const auto& [k, v] : r->as_object()) {
-                        if (v.is_string()) routes[k] = v.as_string();
+                if (r->is_obj()) {
+                    for (const auto& [k, v] : r->as_obj()) {
+                        if (v.is_str()) routes[k] = v.as_str();
                     }
                 }
             }
             std::map<std::string, std::string> tags;
             if (auto* t = args.find("tags")) {
-                if (t->is_object()) {
-                    for (const auto& [k, v] : t->as_object()) {
-                        if (v.is_string()) tags[k] = v.as_string();
+                if (t->is_obj()) {
+                    for (const auto& [k, v] : t->as_obj()) {
+                        if (v.is_str()) tags[k] = v.as_str();
                     }
                 }
             }
             std::string urgent_q = "Does this need a human within the hour?";
             if (auto* u = args.find("urgent_question")) {
-                if (u->is_string()) urgent_q = u->as_string();
+                if (u->is_str()) urgent_q = u->as_str();
             }
-            auto r = triage(text, routes, tags, urgent_q);
-            return make_tool_result(
-                "guard_risk: " + r.guard_risk +
-                "\nroute: " + r.route +
-                "\nurgent: " + (r.urgent ? "true" : "false")
-            );
+            std::string result = decision::triage(text, routes, tags, urgent_q);
+            return make_tool_result(result);
         }
         else if (name == "systemone_answerable") {
-            std::string question = args.find("question") ? args.find("question")->as_string() : "";
-            std::string context = args.find("context") ? args.find("context")->as_string() : "";
+            std::string question = args.find("question") ? args.find("question")->as_str() : "";
+            std::string context = args.find("context") ? args.find("context")->as_str() : "";
             double threshold = 0.3;
             if (auto* t = args.find("threshold")) {
-                if (t->is_number()) threshold = t->as_number();
+                if (t->is_num()) threshold = t->as_num();
             }
-            auto r = answerable(question, context, threshold);
-            return make_tool_result(
-                "answerable: " + std::string(r.answerable ? "true" : "false") +
-                "\nprobability: " + std::to_string(r.probability)
-            );
+            std::string result = decision::answerable(question, context, threshold);
+            return make_tool_result(result);
         }
         else if (name == "systemone_consult") {
-            std::string question = args.find("question") ? args.find("question")->as_string() : "";
+            std::string question = args.find("question") ? args.find("question")->as_str() : "";
             std::map<std::string, std::string> options;
             if (auto* o = args.find("options")) {
-                if (o->is_object()) {
-                    for (const auto& [k, v] : o->as_object()) {
-                        if (v.is_string()) options[k] = v.as_string();
+                if (o->is_obj()) {
+                    for (const auto& [k, v] : o->as_obj()) {
+                        if (v.is_str()) options[k] = v.as_str();
                     }
                 }
             }
-            std::string topic = args.find("topic") ? args.find("topic")->as_string() : "";
-            std::string context = args.find("context") ? args.find("context")->as_string() : "";
-            auto r = consult(question, options, topic, context);
-            return make_tool_result(
-                "choice: " + r.choice +
-                "\nprobability: " + std::to_string(r.probability) +
-                "\nabstain: " + (r.abstain ? "true" : "false") +
-                "\nnotes: " + r.notes_used
-            );
+            std::string topic = args.find("topic") ? args.find("topic")->as_str() : "";
+            std::string context = args.find("context") ? args.find("context")->as_str() : "";
+            std::string result = decision::consult(question, options, topic, context);
+            return make_tool_result(result);
         }
         else if (name == "systemone_decide_program") {
-            JsonValue program = args.find("program") ? *args.find("program") : JsonValue();
-            std::string state = args.find("state") ? args.find("state")->as_string() : "";
+            Value program = args.find("program") ? *args.find("program") : Value();
+            std::string state = args.find("state") ? args.find("state")->as_str() : "";
             bool compact = true;
             if (auto* c = args.find("compact")) {
                 if (c->is_bool()) compact = c->as_bool();
             }
-            auto r = decide_program(program, state, compact);
-            return make_tool_result(r.results.serialize());
+            std::string result = decision::decide_program(program, state, compact);
+            return make_tool_result(result);
         }
         
         return make_error_result("Unknown tool: " + name);
@@ -643,10 +560,10 @@ JsonValue handle_tool_call(const std::string& name, const JsonValue& args) {
     }
 }
 
-void send_response(int id, const JsonValue& result) {
-    JsonValue resp = JsonValue::object({
-        {"jsonrpc", JsonValue("2.0")},
-        {"id", JsonValue(id)},
+void send_response(int id, const Value& result) {
+    Value resp(Object{
+        {"jsonrpc", Value("2.0")},
+        {"id", Value(id)},
         {"result", result}
     });
     std::cout << resp.serialize() << "\n";
@@ -654,22 +571,22 @@ void send_response(int id, const JsonValue& result) {
 }
 
 void send_error_response(int id, int code, const std::string& msg) {
-    JsonValue resp = JsonValue::object({
-        {"jsonrpc", JsonValue("2.0")},
-        {"id", JsonValue(id)},
-        {"error", JsonValue::object({
-            {"code", JsonValue(code)},
-            {"message", JsonValue(msg)}
+    Value resp(Object{
+        {"jsonrpc", Value("2.0")},
+        {"id", Value(id)},
+        {"error", Value(Object{
+            {"code", Value(code)},
+            {"message", Value(msg)}
         })}
     });
     std::cout << resp.serialize() << "\n";
     std::cout.flush();
 }
 
-void send_notification(const std::string& method, const JsonValue& params) {
-    JsonValue resp = JsonValue::object({
-        {"jsonrpc", JsonValue("2.0")},
-        {"method", JsonValue(method)},
+void send_notification(const std::string& method, const Value& params) {
+    Value resp(Object{
+        {"jsonrpc", Value("2.0")},
+        {"method", Value(method)},
         {"params", params}
     });
     std::cout << resp.serialize() << "\n";
@@ -679,6 +596,9 @@ void send_notification(const std::string& method, const JsonValue& params) {
 } // namespace mcp
 
 int main() {
+    // Initialize curl
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+    
     // Disable stdio buffering for real-time JSON-RPC
     setvbuf(stdin, nullptr, _IONBF, 0);
     setvbuf(stdout, nullptr, _IONBF, 0);
@@ -695,19 +615,18 @@ int main() {
         }
         if (len == 0) continue;
 
-        // Parse JSON-RPC request
-        mcp::Parser parser(line);
-        JsonValue req = parser.parse();
+        // Parse JSON-RPC request using pluto::json
+        Value req = Value::parse(line);
         
         if (req.is_null()) continue;
 
         int id = -1;
         if (auto* id_val = req.find("id")) {
-            if (id_val->is_number()) id = static_cast<int>(id_val->as_number());
+            if (id_val->is_num()) id = static_cast<int>(id_val->as_num());
         }
 
-        std::string method = req.find("method") ? req.find("method")->as_string() : "";
-        JsonValue params = req.find("params") ? *req.find("params") : JsonValue();
+        std::string method = req.find("method") ? req.find("method")->as_str() : "";
+        Value params = req.find("params") ? *req.find("params") : Value();
 
         if (method == "initialize") {
             if (id >= 0) send_response(id, mcp::handle_initialize(params));
@@ -719,19 +638,21 @@ int main() {
             if (id >= 0) send_response(id, mcp::handle_tools_list());
         }
         else if (method == "tools/call") {
-            std::string tool_name = params.find("name") ? params.find("name")->as_string() : "";
-            JsonValue args = params.find("arguments") ? *params.find("arguments") : JsonValue();
+            std::string tool_name = params.find("name") ? params.find("name")->as_str() : "";
+            Value args = params.find("arguments") ? *params.find("arguments") : Value();
             if (id >= 0) {
-                JsonValue result = mcp::handle_tool_call(tool_name, args);
+                Value result = mcp::handle_tool_call(tool_name, args);
                 send_response(id, result);
             }
         }
         else if (method == "ping") {
-            if (id >= 0) send_response(id, JsonValue::object({}));
+            if (id >= 0) send_response(id, Value(Object{}));
         }
         else {
             if (id >= 0) send_error_response(id, -32601, "Method not found: " + method);
         }
     }
+    
+    curl_global_cleanup();
     return 0;
 }

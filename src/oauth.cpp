@@ -1,7 +1,10 @@
+#include "oauth.h"
+
+#ifdef __HAIKU__
+
 // OAuth 2.0 + PKCE authentication for Claude Max/Pro plans.
 // Implements the same flow as Claude Code.
 
-#include "oauth.h"
 #include "filelock.h"
 #include "json.h"
 #include "util.h"
@@ -480,3 +483,22 @@ OAuthProfile OAuthGetProfile(const std::string& access_token) {
 }
 
 }  // namespace pluto
+
+
+#include <string>
+
+#else  // __HAIKU__
+
+namespace pluto {
+
+// Stubs for non-Haiku builds
+OAuthTokens LoadOAuthTokens() { return {}; }
+bool SaveOAuthTokens(const OAuthTokens&) { return false; }
+void DeleteOAuthTokens() {}
+std::string OAuthEnsureValidToken(OAuthTokens&) { return ""; }
+OAuthProfile OAuthGetProfile(const std::string&) { return {}; }
+bool OAuthLogin() { return false; }
+
+}  // namespace pluto
+
+#endif  // __HAIKU__

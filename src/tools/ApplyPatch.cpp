@@ -41,6 +41,7 @@ static std::set<std::string> extract_patch_paths(const std::string& patch) {
 	return paths;
 }
 
+// Shell-safe quoting: wraps in single quotes, escaping embedded quotes.
 static std::string shq(const std::string& s) {
 	std::string out = "'";
 	for (char c : s) {
@@ -50,6 +51,8 @@ static std::string shq(const std::string& s) {
 	out += "'";
 	return out;
 }
+
+}  // namespace
 
 class ApplyPatchTool : public Tool {
 public:

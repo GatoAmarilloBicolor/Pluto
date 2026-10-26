@@ -17,7 +17,7 @@ struct McpToolInfo {
 
 // JSON-RPC 2.0 client for MCP 2024-11-05. Delegates transport to a Transport
 // implementation (http, stdio, sse).
-class McpClient {
+class McpClient : public std::enable_shared_from_this<McpClient> {
 public:
 	McpClient(std::string server_name, std::unique_ptr<Transport> transport);
 	~McpClient();
@@ -38,7 +38,7 @@ private:
 };
 
 // Register every tool from client into registry, prefixed "<server>__<tool>".
-// The client must outlive the registry.
-void register_mcp_tools(McpClient& client, ToolRegistry& registry);
+// Uses shared_ptr for safe lifetime management.
+void register_mcp_tools(std::shared_ptr<McpClient> client, ToolRegistry& registry);
 
 }  // namespace pluto

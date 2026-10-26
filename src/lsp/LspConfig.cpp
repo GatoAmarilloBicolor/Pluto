@@ -1,7 +1,14 @@
+
 /*
  * Copyright 2026, Pluto Authors. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
+#include "LspConfig.h"
+
+#ifdef __HAIKU__
+
+
+
 #include "LspConfig.h"
 
 #include <Entry.h>
@@ -173,3 +180,15 @@ FileExtension(const std::string& path)
 
 
 }	// namespace pluto
+
+
+#else  // __HAIKU__
+
+namespace pluto {
+
+void ParseLspConf(const std::string&, std::vector<LspServerConfig>&) {}
+void LoadLspConfigs(std::vector<LspServerConfig>&) {}
+
+}  // namespace pluto
+
+#endif  // __HAIKU__

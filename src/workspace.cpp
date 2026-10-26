@@ -2,14 +2,14 @@
 #include "util.h"
 #include "filelock.h"
 
+#ifdef __HAIKU__
 #include <Path.h>
+#include <Entry.h>
+#include <Directory.h>
+#include <VolumeRoster.h>
+#endif
 
 #include <sys/stat.h>
-#include <unistd.h>
-
-#include <algorithm>
-#include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <fstream>
@@ -19,23 +19,9 @@
 
 namespace pluto {
 
-namespace {
-
 std::string g_WorkspaceRoot;
 bool g_session_trusted = false;
 
-// Shell-safe quoting: wraps in single quotes, escapes embedded quotes.
-std::string shq(const std::string& s) {
-	std::string out = "'";
-	for (char c : s) {
-		if (c == '\'') out += "'\\''";
-		else out += c;
-	}
-	out += "'";
-	return out;
-}
-
-// Empty means "use default". Non-empty means override (for tests).
 std::string g_trusted_file_override;
 std::string g_log_file_override;
 
@@ -62,7 +48,18 @@ std::string trim(const std::string& s) {
 	while (a < b && (s[a] == ' ' || s[a] == '\t' || s[a] == '\r')) ++a;
 	while (b > a && (s[b - 1] == ' ' || s[b - 1] == '\t' || s[b - 1] == '\r'))
 		--b;
-	return s.substr(a, b - a);
+	return s.substr(a, b - a + 1);
+}
+
+// Shell-safe quoting: wraps in single quotes, escapes embedded quotes.
+std::string shq(const std::string& s) {
+	std::string out = "'";
+	for (char c : s) {
+		if (c == '\'') out += "'\\''";
+		else out += c;
+	}
+	out += "'";
+	return out;
 }
 
 // Normalize a path string by resolving . and .. components.
@@ -95,6 +92,8 @@ std::string normalize_path(const std::string& path) {
 	if (result.empty()) result = ".";
 	return result;
 }
+
+#ifdef __HAIKU__
 
 // Canonicalize a path: resolve via BPath if possible. If the full
 // path doesn't exist (e.g. not-yet-created file), resolve the longest
@@ -133,14 +132,22 @@ std::string canonicalize(const std::string& raw) {
 	return s;
 }
 
+#else  // __HAIKU__
+
+std::string canonicalize(const std::string& raw) {
+	if (raw.empty()) return raw;
+	// Lexical-only normalization (no symlink resolution on non-Haiku).
+	return normalize_path(raw);
+}
+
+#endif  // __HAIKU__
+
 bool starts_with(const std::string& str, const std::string& prefix) {
 	if (prefix.size() > str.size()) return false;
 	if (str.compare(0, prefix.size(), prefix) != 0) return false;
 	// Must be exact match or followed by '/'
 	return str.size() == prefix.size() || str[prefix.size()] == '/';
 }
-
-}  // namespace
 
 void WorkspaceInit() {
 	char buf[PATH_MAX];

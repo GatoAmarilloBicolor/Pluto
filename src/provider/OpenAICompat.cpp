@@ -5,10 +5,18 @@
 #include "OpenAICompat.h"
 #include "../version.h"
 
+#ifdef __HAIKU__
 #include <OS.h>
+#endif
 #include <curl/curl.h>
 
 #include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <unistd.h>
+#include <utility>
 
 #include <cstdio>
 #include <cstring>
@@ -714,13 +722,17 @@ void OpenAICompatProvider::stream(const CompletionRequest& req,
 			         || rc == CURLE_COULDNT_RESOLVE_HOST
 			         || rc == CURLE_OPERATION_TIMEDOUT;
 			if (pre && conn && attempt < kMaxAttempts) {
-				bigtime_t d = 1000000LL * (1LL << (attempt - 1));
+				int64_t d = 1000000LL * (1LL << (attempt - 1));
 				StreamEvent info;
 				info.type = StreamEvent::RETRY_INFO;
 				info.text = std::string(curl_easy_strerror(rc))
 					+ ", retrying in " + std::to_string(d / 1000000) + "s…";
 				cb(info);
+#ifdef __HAIKU__
 				snooze(d);
+#else
+				usleep(static_cast<useconds_t>(d));
+#endif
 				continue;
 			}
 			StreamEvent err;
@@ -754,13 +766,17 @@ void OpenAICompatProvider::stream(const CompletionRequest& req,
 
 		bool retryable = (http_code == 429 || http_code >= 500);
 		if (retryable && attempt < kMaxAttempts) {
-			bigtime_t d = 1000000LL * (1LL << (attempt - 1));
+			int64_t d = 1000000LL * (1LL << (attempt - 1));
 			StreamEvent info;
 			info.type = StreamEvent::RETRY_INFO;
 			info.text = "HTTP " + std::to_string(http_code)
 				+ ", retrying in " + std::to_string(d / 1000000) + "s…";
 			cb(info);
+#ifdef __HAIKU__
 			snooze(d);
+#else
+			usleep(static_cast<useconds_t>(d));
+#endif
 			continue;
 		}
 

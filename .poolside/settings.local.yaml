@@ -1,0 +1,14 @@
+tools:
+    shell:
+        allow:
+            - find *
+            - head *
+            - ls *
+            - sort
+            - cd *
+            - git log *
+            - uname *
+            - which g++
+            - g++ *
+            - echo *
+            - grep *

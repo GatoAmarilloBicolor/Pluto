@@ -3,6 +3,7 @@
 
 #include "BfsTools.h"
 
+#ifdef __HAIKU__
 #include <Directory.h>
 #include <Entry.h>
 #include <Handler.h>
@@ -13,12 +14,11 @@
 #include <NodeMonitor.h>
 #include <OS.h>
 #include <Path.h>
-#include <Query.h>
-#include <TypeConstants.h>
 #include <Volume.h>
 #include <VolumeRoster.h>
-#include <fs_attr.h>
+#endif
 
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -32,9 +32,7 @@
 
 namespace pluto {
 
-namespace {
-
-std::string format_type_code(uint32 type) {
+std::string format_type_code(uint32_t type) {
 	char t[5] = {
 		static_cast<char>((type >> 24) & 0xff),
 		static_cast<char>((type >> 16) & 0xff),
@@ -53,7 +51,8 @@ std::string format_type_code(uint32 type) {
 	return std::string("'") + t + "'";
 }
 
-std::string format_attr_value(uint32 type, const void* data, ssize_t size) {
+std::string format_attr_value(uint32_t type, const void* data, ssize_t size) {
+#ifdef __HAIKU__
 	switch (type) {
 		case B_STRING_TYPE: {
 			const char* s = static_cast<const char*>(data);
@@ -93,9 +92,15 @@ std::string format_attr_value(uint32 type, const void* data, ssize_t size) {
 			return buf;
 		}
 	}
+#else
+	(void)type; (void)data; (void)size;
+	return "(binary attr)";
+#endif
 }
 
 // ---------------- read_attr ----------------
+
+#ifdef __HAIKU__
 
 class ReadAttrTool : public Tool {
 public:
@@ -127,7 +132,7 @@ public:
 			path = v.str("path");
 			name = v.str("name");
 		} catch (const std::exception& e) {
-			r.is_error = true; r.output = std::string("args: ") + e.what(); return r;
+			r.is_error = true; r.output = e.what(); return r;
 		}
 		if (path.empty() || name.empty()) {
 			r.is_error = true; r.output = "path and name required"; return r;
@@ -135,8 +140,7 @@ public:
 		if (!WorkspaceAllows(path)) {
 			LogAccess(path, "read_attr", false);
 			r.is_error = true;
-			r.output = path + " is outside workspace " + WorkspaceRoot()
-			         + " — use `pluto trust add <dir>` to allow";
+			r.output = path + " is outside workspace";
 			return r;
 		}
 		LogAccess(path, "read_attr", true);
@@ -203,7 +207,7 @@ public:
 			std::string t = v.str("type");
 			if (!t.empty()) type_str = t;
 		} catch (const std::exception& e) {
-			r.is_error = true; r.output = std::string("args: ") + e.what(); return r;
+			r.is_error = true; r.output = e.what(); return r;
 		}
 		if (path.empty() || name.empty()) {
 			r.is_error = true; r.output = "path and name required"; return r;
@@ -211,8 +215,7 @@ public:
 		if (!WorkspaceAllows(path)) {
 			LogAccess(path, "write_attr", false);
 			r.is_error = true;
-			r.output = path + " is outside workspace " + WorkspaceRoot()
-			         + " — use `pluto trust add <dir>` to allow";
+			r.output = path + " is outside workspace";
 			return r;
 		}
 		LogAccess(path, "write_attr", true);
@@ -291,7 +294,7 @@ public:
 			auto v = json::Value::parse(input_json);
 			path = v.str("path");
 		} catch (const std::exception& e) {
-			r.is_error = true; r.output = std::string("args: ") + e.what(); return r;
+			r.is_error = true; r.output = e.what(); return r;
 		}
 		if (path.empty()) {
 			r.is_error = true; r.output = "path required"; return r;
@@ -299,8 +302,7 @@ public:
 		if (!WorkspaceAllows(path)) {
 			LogAccess(path, "list_attrs", false);
 			r.is_error = true;
-			r.output = path + " is outside workspace " + WorkspaceRoot()
-			         + " — use `pluto trust add <dir>` to allow";
+			r.output = path + " is outside workspace";
 			return r;
 		}
 		LogAccess(path, "list_attrs", true);
@@ -363,7 +365,7 @@ public:
 			path = v.str("path");
 			name = v.str("name");
 		} catch (const std::exception& e) {
-			r.is_error = true; r.output = std::string("args: ") + e.what(); return r;
+			r.is_error = true; r.output = e.what(); return r;
 		}
 		if (path.empty() || name.empty()) {
 			r.is_error = true; r.output = "path and name required"; return r;
@@ -371,8 +373,7 @@ public:
 		if (!WorkspaceAllows(path)) {
 			LogAccess(path, "remove_attr", false);
 			r.is_error = true;
-			r.output = path + " is outside workspace " + WorkspaceRoot()
-			         + " — use `pluto trust add <dir>` to allow";
+			r.output = path + " is outside workspace";
 			return r;
 		}
 		LogAccess(path, "remove_attr", true);
@@ -433,7 +434,7 @@ public:
 			if (const auto* l = v.find("limit"); l && l->is_num())
 				limit = static_cast<int>(l->as_num());
 		} catch (const std::exception& e) {
-			r.is_error = true; r.output = std::string("args: ") + e.what(); return r;
+			r.is_error = true; r.output = e.what(); return r;
 		}
 		if (predicate.empty()) {
 			r.is_error = true; r.output = "predicate required"; return r;
@@ -613,6 +614,11 @@ public:
 				return r;
 			}
 		}
+		if (volume.InitCheck() != B_OK) {
+			r.is_error = true;
+			r.output = "invalid volume";
+			return r;
+		}
 
 		LiveQueryListener* listener = new LiveQueryListener();
 
@@ -688,13 +694,23 @@ public:
 	}
 };
 
-}  // namespace
-
 std::unique_ptr<Tool> MakeReadAttrTool()    { return std::make_unique<ReadAttrTool>(); }
 std::unique_ptr<Tool> MakeWriteAttrTool()   { return std::make_unique<WriteAttrTool>(); }
 std::unique_ptr<Tool> MakeListAttrsTool()   { return std::make_unique<ListAttrsTool>(); }
 std::unique_ptr<Tool> MakeRemoveAttrTool()  { return std::make_unique<RemoveAttrTool>(); }
 std::unique_ptr<Tool> MakeQueryFsTool()     { return std::make_unique<QueryFsTool>(); }
 std::unique_ptr<Tool> MakeLiveQueryTool()   { return std::make_unique<LiveQueryTool>(); }
+
+#else  // __HAIKU__
+
+// Stubs for non-Haiku builds.
+std::unique_ptr<Tool> MakeReadAttrTool()    { return nullptr; }
+std::unique_ptr<Tool> MakeWriteAttrTool()   { return nullptr; }
+std::unique_ptr<Tool> MakeListAttrsTool()   { return nullptr; }
+std::unique_ptr<Tool> MakeRemoveAttrTool()  { return nullptr; }
+std::unique_ptr<Tool> MakeQueryFsTool()     { return nullptr; }
+std::unique_ptr<Tool> MakeLiveQueryTool()   { return nullptr; }
+
+#endif  // __HAIKU__
 
 }  // namespace pluto

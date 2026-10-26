@@ -7,10 +7,12 @@
 #include "text_index.h"
 #include "util.h"
 
+#ifdef __HAIKU__
 #include <Node.h>
 #include <String.h>
-#include <sys/stat.h>
+#endif
 
+#include <sys/stat.h>
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
@@ -288,6 +290,7 @@ int RagLoadCustom(const std::string& custom_path) {
 }
 
 int RagExportBfs(const std::string& dir) {
+#ifdef __HAIKU__
 	::mkdir(dir.c_str(), 0755);
 	int written = 0;
 
@@ -328,6 +331,10 @@ int RagExportBfs(const std::string& dir) {
 		++written;
 	}
 	return written;
+#else
+	(void)dir;
+	return 0;
+#endif
 }
 
 namespace {

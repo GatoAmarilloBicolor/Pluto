@@ -1,7 +1,9 @@
 #include "routine.h"
 #include "util.h"
 
+#ifdef __HAIKU__
 #include <Clipboard.h>
+#endif
 
 #include <dirent.h>
 #include <fcntl.h>
@@ -54,6 +56,7 @@ std::string trim(const std::string& s) {
 }
 
 std::string get_clipboard_text() {
+#ifdef __HAIKU__
 	BClipboard clipboard("system");
 	if (!clipboard.Lock()) return "";
 	BMessage* data = clipboard.Data();
@@ -68,6 +71,10 @@ std::string get_clipboard_text() {
 	std::string result(text, len > 0 ? (size_t)len : 0);
 	clipboard.Unlock();
 	return result;
+#else
+	(void)0;
+	return "";
+#endif
 }
 
 std::string now_str() {

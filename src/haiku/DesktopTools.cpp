@@ -3,37 +3,33 @@
 
 #include "DesktopTools.h"
 
+#ifdef __HAIKU__
 #include <Clipboard.h>
 #include <InterfaceDefs.h>
 #include <Roster.h>
 #include <Size.h>
 #include <Directory.h>
 #include <Entry.h>
-#include <Handler.h>
-#include <Looper.h>
-#include <Message.h>
-#include <Messenger.h>
 #include <Node.h>
 #include <NodeMonitor.h>
-#include <OS.h>
 #include <Path.h>
 #include <Point.h>
 #include <PropertyInfo.h>
 #include <Rect.h>
 #include <Statable.h>
+#endif
 
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <memory>
-#include <mutex>
 #include <string>
-#include <vector>
 
 #include "../json.h"
+#include "../workspace.h"
 
 namespace pluto {
 
-namespace {
+#ifdef __HAIKU__
 
 // ---------------- clipboard ----------------
 
@@ -135,12 +131,13 @@ public:
 			BLooper::MessageReceived(msg);
 			return;
 		}
-		Event ev;
-		msg->FindInt32("opcode", &ev.opcode);
-		const char* n = nullptr;
-		if (msg->FindString("name", &n) == B_OK && n) ev.name = n;
+		int32 opcode = 0;
+		msg->FindInt32("opcode", &opcode);
+		const char* name = nullptr;
+		msg->FindString("name", &name);
+
 		std::lock_guard<std::mutex> lk(fMu);
-		fEvents.push_back(std::move(ev));
+		fEvents.push_back({opcode, name ? name : ""});
 	}
 
 	std::vector<Event> drain() {
@@ -189,15 +186,21 @@ public:
 		if (path.empty()) {
 			r.is_error = true; r.output = "path required"; return r;
 		}
+		if (!WorkspaceAllows(path)) {
+			r.is_error = true;
+			r.output = path + " is outside workspace";
+			return r;
+		}
 		if (duration_ms < 100)   duration_ms = 100;
 		if (duration_ms > 60000) duration_ms = 60000;
 
 		BNode node(path.c_str());
-		if (node.InitCheck() != B_OK) {
+		if (node.InitCheck() != B_OK || !node.IsDirectory()) {
 			r.is_error = true;
-			r.output = "cannot open node: " + path;
+			r.output = "not a directory: " + path;
 			return r;
 		}
+
 		node_ref nref;
 		if (node.GetNodeRef(&nref) != B_OK) {
 			r.is_error = true;
@@ -208,7 +211,7 @@ public:
 		NodeWatcher* watcher = new NodeWatcher();
 		BMessenger target(watcher);
 
-		uint32 flags = B_WATCH_DIRECTORY | B_WATCH_NAME | B_WATCH_STAT;
+		uint32_t flags = B_WATCH_DIRECTORY | B_WATCH_NAME | B_WATCH_STAT;
 		if (watch_node(&nref, flags, target) != B_OK) {
 			watcher->Lock();
 			watcher->Quit();
@@ -261,13 +264,6 @@ public:
 // Sends a BMessage scripting command to a running Haiku application.
 // Uses BRoster to find the app and BMessenger to deliver the message.
 //
-// Scripting protocol basics:
-//   what:        B_GET_PROPERTY / B_SET_PROPERTY / B_COUNT_PROPERTIES /
-//                B_CREATE_PROPERTY / B_DELETE_PROPERTY / B_EXECUTE_PROPERTY
-//   specifier:   B_DIRECT_SPECIFIER (default), B_NAME_SPECIFIER,
-//                B_INDEX_SPECIFIER
-//   property:    "Window", "View", "Frame", "Title", "Name", etc.
-//   The "Suites" pseudo-property lists all supported suites for introspection.
 
 class DesktopScriptTool : public Tool {
 public:
@@ -304,7 +300,6 @@ public:
 			return p;
 		} catch (...) { return Tool::preview(input_json); }
 	}
-
 	ToolResult execute(const std::string& input_json) override {
 		ToolResult r;
 		std::string app_sig, action, property, spec_name, value_str;
@@ -320,9 +315,7 @@ public:
 			    idx && idx->is_num())
 				spec_index = static_cast<int>(idx->as_num());
 		} catch (const std::exception& e) {
-			r.is_error = true;
-			r.output = std::string("args: ") + e.what();
-			return r;
+			r.is_error = true; r.output = e.what(); return r;
 		}
 		if (app_sig.empty() || action.empty()) {
 			r.is_error = true;
@@ -331,7 +324,7 @@ public:
 		}
 
 		// Resolve action → what code
-		uint32 what = 0;
+		uint32_t what = 0;
 		if      (action == "get")     what = B_GET_PROPERTY;
 		else if (action == "set")     what = B_SET_PROPERTY;
 		else if (action == "count")   what = B_COUNT_PROPERTIES;
@@ -550,8 +543,6 @@ private:
 	}
 };
 
-}  // namespace
-
 // ---- Launch App ----
 
 class LaunchAppTool : public Tool {
@@ -607,5 +598,15 @@ std::unique_ptr<Tool> MakeClipboardTool()      { return std::make_unique<Clipboa
 std::unique_ptr<Tool> MakeNodeMonitorTool()   { return std::make_unique<NodeMonitorTool>(); }
 std::unique_ptr<Tool> MakeDesktopScriptTool() { return std::make_unique<DesktopScriptTool>(); }
 std::unique_ptr<Tool> MakeLaunchAppTool()     { return std::make_unique<LaunchAppTool>(); }
+
+#else  // __HAIKU__
+
+// Stubs for non-Haiku builds.
+std::unique_ptr<Tool> MakeClipboardTool()      { return nullptr; }
+std::unique_ptr<Tool> MakeNodeMonitorTool()   { return nullptr; }
+std::unique_ptr<Tool> MakeDesktopScriptTool() { return nullptr; }
+std::unique_ptr<Tool> MakeLaunchAppTool()     { return nullptr; }
+
+#endif  // __HAIKU__
 
 }  // namespace pluto

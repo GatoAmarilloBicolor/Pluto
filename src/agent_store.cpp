@@ -1,3 +1,5 @@
+#ifdef __HAIKU__
+
 #include "agent_store.h"
 #include "util.h"
 
@@ -1148,3 +1150,26 @@ bool InstallAgentFromRegistry(const std::string& name, std::string& error) {
 }
 
 }  // namespace pluto
+
+#else  // __HAIKU__
+
+#include <string>
+#include <vector>
+
+namespace pluto {
+
+// Forward declarations for non-Haiku builds
+struct Agent {};
+
+bool InstallAgent(const std::string&, std::string&) { return false; }
+bool InstallAgentFromUrl(const std::string&, std::string&) { return false; }
+bool UpdateAgent(const std::string&, std::string&) { return false; }
+bool InstallAgentFromRegistry(const std::string&, std::string&) { return false; }
+std::vector<Agent> ListAgents() { return {}; }
+std::string AgentsDir() { return ""; }
+bool ParseAgent(const std::string&, Agent&) { return false; }
+int RunAgentStoreCli(int, char**) { return 1; }
+
+}  // namespace pluto
+
+#endif  // __HAIKU__

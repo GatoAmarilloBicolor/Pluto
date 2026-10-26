@@ -29,7 +29,7 @@ McpManager::McpManager(ToolRegistry& tools, ApproveFn approve) {
 			continue;
 		}
 
-		auto client = std::make_unique<McpClient>(spec.name, std::move(transport));
+		auto client = std::make_shared<McpClient>(spec.name, std::move(transport));
 		if (!client->connect()) {
 			std::fprintf(stderr, "[mcp/%s] connect failed\n",
 				spec.name.c_str());
@@ -38,21 +38,21 @@ McpManager::McpManager(ToolRegistry& tools, ApproveFn approve) {
 		std::fprintf(stderr, "[mcp/%s] %zu tools\n",
 			spec.name.c_str(), client->tools().size());
 
-		register_mcp_tools(*client, tools);
+		register_mcp_tools(client, tools);
 		fClients.push_back(std::move(client));
 	}
 }
 
-void McpManager::add_client(std::unique_ptr<McpClient> client,
+void McpManager::add_client(std::shared_ptr<McpClient> client,
                              ToolRegistry& tools) {
-	register_mcp_tools(*client, tools);
+	register_mcp_tools(client, tools);
 	fClients.push_back(std::move(client));
 }
 
-std::vector<McpClient*> McpManager::clients() const {
-	std::vector<McpClient*> out;
+std::vector<std::shared_ptr<McpClient>> McpManager::clients() const {
+	std::vector<std::shared_ptr<McpClient>> out;
 	out.reserve(fClients.size());
-	for (const auto& c : fClients) out.push_back(c.get());
+	for (const auto& c : fClients) out.push_back(c);
 	return out;
 }
 

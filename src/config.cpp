@@ -6,11 +6,15 @@
 #include "provider/OpenAICompat.h"
 #include "rag.h"
 #include "util.h"
+#include "haiku/ModelCaps.h"
 
+#ifdef __HAIKU__
 #include <Directory.h>
 #include <Entry.h>
 #include <Path.h>
 #include <image.h>
+#include <OS.h>
+#endif
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -44,14 +48,10 @@ std::string settings_dir() {
 }
 
 std::string config_path() {
-	// Config file lives inside the pluto settings directory so that
-	// sub-directories (sessions/, skills/, commands/) can coexist.
-	// Legacy: if ~/config/settings/pluto is a FILE (old layout), read
-	// from it directly for backward compat; writes go to the new path.
 	std::string dir = settings_dir();
 	struct stat st;
 	if (::stat(dir.c_str(), &st) == 0 && S_ISREG(st.st_mode))
-		return dir;  // legacy: pluto IS the config file
+		return dir;
 	return dir + "/config";
 }
 
@@ -59,31 +59,23 @@ std::string api_key_path() {
 	return home_dir() + "/config/settings/pluto-api-key";
 }
 
-// Migrate from legacy layout where ~/config/settings/pluto was a flat file
-// to the new layout where it's a directory containing a `config` file.
-// This only runs once; after migration the directory exists and sub-dirs
-// (sessions, skills, commands, mcp-approvals.json) can be created inside it.
 void maybe_migrate_settings() {
 	std::string path = settings_dir();
 	struct stat st;
 	if (::stat(path.c_str(), &st) != 0) {
-		// Doesn't exist yet — create the directory.
 		::mkdir(path.c_str(), 0755);
 		return;
 	}
-	if (S_ISDIR(st.st_mode)) return;  // already a directory, nothing to do.
+	if (S_ISDIR(st.st_mode)) return;
 
-	// It's a file (legacy). Rename it, create the directory, move it inside.
 	std::string tmp = path + ".migrating";
 	if (::rename(path.c_str(), tmp.c_str()) != 0) return;
 	if (::mkdir(path.c_str(), 0755) != 0) {
-		// mkdir failed — roll back to avoid losing the config.
 		::rename(tmp.c_str(), path.c_str());
 		return;
 	}
 	std::string dest = path + "/config";
 	if (::rename(tmp.c_str(), dest.c_str()) != 0) {
-		// Move failed — roll back: remove dir, restore file.
 		::rmdir(path.c_str());
 		::rename(tmp.c_str(), path.c_str());
 		return;
@@ -99,10 +91,6 @@ bool IsFirstRun() {
 	std::string path = config_path();
 	return ::stat(path.c_str(), &st) != 0;
 }
-
-// ----------------------------------------------------------------
-// .conf provider profile loading (shared by CLI wizard and GUI)
-// ----------------------------------------------------------------
 
 bool ParseProviderConf(const std::string& path, ProviderConf& out) {
 	std::ifstream f(path);
@@ -139,6 +127,8 @@ bool ParseProviderConf(const std::string& path, ProviderConf& out) {
 	return !out.label.empty();
 }
 
+#ifdef __HAIKU__
+
 namespace {
 
 void load_confs_from(const std::string& dir, std::vector<ProviderConf>& out) {
@@ -165,12 +155,8 @@ void load_confs_from(const std::string& dir, std::vector<ProviderConf>& out) {
 
 std::vector<ProviderConf> LoadProviderConfs() {
 	std::vector<ProviderConf> out;
-	// 1. Built-in providers shipped with the package.
-	//    Try relative path first (works when run from source tree),
-	//    then resolve relative to the executable (works when installed).
 	load_confs_from("data/providers", out);
 	if (out.empty()) {
-		// Resolve exe directory via Haiku's image_info.
 		image_info info;
 		int32 cookie = 0;
 		if (get_next_image_info(B_CURRENT_TEAM, &cookie, &info) == B_OK) {
@@ -182,21 +168,22 @@ std::vector<ProviderConf> LoadProviderConfs() {
 	}
 	if (out.empty())
 		load_confs_from("/boot/system/data/pluto/providers", out);
-	// 2. User-defined providers (override or extend).
 	load_confs_from(SettingsDir() + "/providers", out);
 	return out;
 }
+
+#else  // __HAIKU__
+
+std::vector<ProviderConf> LoadProviderConfs() { return {}; }
+
+#endif  // __HAIKU__
 
 bool RunFirstRunWizard(Config& cfg) {
 	std::printf("\n");
 	std::printf("  \x1b[1mWelcome to Pluto!\x1b[0m\n\n");
 
-	// Load all .conf providers dynamically.
 	auto confs = LoadProviderConfs();
 
-	// Partition providers into categories for a friendlier menu.
-	// "Quick start" = no signup or one signup for many models.
-	// Find Ollama and OpenRouter indices in the confs list.
 	int ollama_idx = -1, openrouter_idx = -1;
 	for (size_t i = 0; i < confs.size(); ++i) {
 		if (confs[i].base_url.find("localhost:11434") != std::string::npos)
@@ -207,7 +194,6 @@ bool RunFirstRunWizard(Config& cfg) {
 
 	std::printf("  \x1b[1mQuick start\x1b[0m (no credit card needed):\n\n");
 	int num = 1;
-	// Ollama first — zero signup.
 	if (ollama_idx >= 0) {
 		std::printf("    %d. Ollama (local)              — no signup, private, offline\n", num);
 	} else {
@@ -215,18 +201,15 @@ bool RunFirstRunWizard(Config& cfg) {
 	}
 	int choice_ollama = num++;
 
-	// OpenRouter second — one signup, many free models.
 	std::printf("    %d. OpenRouter (free models)    — one free signup, many models\n", num);
 	int choice_openrouter = num++;
 
 	std::printf("\n  \x1b[1mAll providers\x1b[0m:\n\n");
 
-	// Anthropic (native, always present).
 	std::printf("    %d. Anthropic (Claude)         — API key or Claude Max/Pro\n", num);
 	int choice_anthropic = num++;
 
-	// All .conf providers except Ollama and OpenRouter (already shown).
-	std::vector<int> conf_map;  // maps menu number → confs[] index
+	std::vector<int> conf_map;
 	for (size_t i = 0; i < confs.size(); ++i) {
 		if ((int)i == ollama_idx || (int)i == openrouter_idx)
 			continue;
@@ -274,7 +257,6 @@ bool RunFirstRunWizard(Config& cfg) {
 		if (ollama_idx >= 0) {
 			apply_conf(confs[ollama_idx]);
 		} else {
-			// Ollama not in confs — use hardcoded defaults.
 			cfg.provider = "openai-compat";
 			cfg.base_url = "http://localhost:11434";
 			cfg.model = "llama3.1";
@@ -310,7 +292,6 @@ bool RunFirstRunWizard(Config& cfg) {
 		std::printf("    Option A: pluto login  (Claude Max/Pro subscription)\n");
 		std::printf("    Option B: export ANTHROPIC_API_KEY=sk-ant-...\n");
 	} else {
-		// Check the "All providers" section.
 		int idx_in_map = choice - (choice_anthropic + 1);
 		if (idx_in_map >= 0 && idx_in_map < (int)conf_map.size()) {
 			apply_conf(confs[conf_map[idx_in_map]]);
@@ -320,7 +301,6 @@ bool RunFirstRunWizard(Config& cfg) {
 		}
 	}
 
-	// Save config immediately.
 	SaveConfig(cfg);
 	std::printf("\n  Config saved to: %s\n", config_path().c_str());
 	std::printf("  (change anytime with /model or settings GUI)\n\n");
@@ -372,8 +352,6 @@ Config LoadConfig() {
 void AutoDetectProvider(Config& cfg) {
 	const std::string& m = cfg.model;
 
-	// OpenRouter models use "provider/model" format (e.g. "google/gemma-4-26b").
-	// Detect this first — if the model ID contains a slash, it's an OpenRouter model.
 	if (m.find('/') != std::string::npos) {
 		cfg.provider = "openai-compat";
 		cfg.base_url = "https://openrouter.ai/api";
@@ -404,30 +382,21 @@ void AutoDetectProvider(Config& cfg) {
 	        || m.find("qwen") != std::string::npos
 	        || m.find("gemma") != std::string::npos
 	        || m.find("deepseek") != std::string::npos) {
-		// Open-weight models could be Ollama, OpenRouter, Groq, etc.
-		// Only auto-switch if currently on Anthropic (clearly wrong).
-		// Don't override if user has explicitly set a remote base_url.
 		if (cfg.provider == "anthropic") {
 			cfg.provider = "openai-compat";
 			cfg.base_url = "http://localhost:11434";
 			cfg.api_key_env.clear();
 		} else if (cfg.provider == "openai-compat" && cfg.base_url.empty()) {
-			// User selected openai-compat but didn't set a base_url —
-			// default to local Ollama for open-weight models.
 			cfg.base_url = "http://localhost:11434";
 			cfg.api_key_env.clear();
 		}
 	}
 }
 
-// ---- Centralised provider factory ----
-
 std::unique_ptr<Provider> CreateProvider(const Config& cfg) {
 	std::string key = ResolveApiKey(cfg);
 
 	if (cfg.provider == "openai-compat" && !cfg.base_url.empty()) {
-		// For local servers (Ollama, LM Studio) empty key is valid.
-		// For remote servers (OpenRouter, OpenAI, etc.) warn if missing.
 		if (key.empty() && cfg.base_url.find("localhost") == std::string::npos
 			&& cfg.base_url.find("127.0.0.1") == std::string::npos) {
 			std::fprintf(stderr, "[warn] %s set but no key found (env or ~/config/settings/pluto/keys/%s)\n",
@@ -436,55 +405,34 @@ std::unique_ptr<Provider> CreateProvider(const Config& cfg) {
 		return std::make_unique<OpenAICompatProvider>(key, cfg.base_url);
 	}
 
-	// Anthropic: check for OAuth tokens first.
 	AuthType auth = AuthType::API_KEY;
 	OAuthTokens tok = LoadOAuthTokens();
 	if (!tok.empty()) {
 		std::string oauth_key = OAuthEnsureValidToken(tok);
 		if (!oauth_key.empty()) {
-			key  = oauth_key;
+			key = oauth_key;
 			auth = AuthType::OAUTH;
 		}
 	}
-	// Validate Anthropic API key (unless OAuth).
 	if (auth == AuthType::API_KEY && key.empty()) {
 		std::fprintf(stderr, "[error] Anthropic provider requires API key. "
 			"Set %s env var or run 'pluto login' for OAuth.\n", cfg.api_key_env.c_str());
-		// Still create provider; it will fail at request time with clear error.
 	}
 	return std::make_unique<AnthropicProvider>(key, auth);
 }
 
-int GuessMaxOutputTokens(const std::string& model) {
-	if (model.find("opus") != std::string::npos)     return 32000;
-	if (model.find("sonnet") != std::string::npos)   return 64000;
-	if (model.find("haiku") != std::string::npos)    return 64000;
-	if (model.find("claude") != std::string::npos)   return 64000;
-	if (model.find("gpt-4o") != std::string::npos)   return 16384;
-	if (model.find("gpt-4") != std::string::npos)    return 16384;
-	if (model.find("o1") != std::string::npos)       return 100000;
-	if (model.find("o3") != std::string::npos)       return 100000;
-	if (model.find("o4") != std::string::npos)       return 100000;
-	if (model.find("gemini") != std::string::npos)   return 65536;
-	if (model.find("deepseek") != std::string::npos) return 8192;
-	return 8192;
+int GuessMaxOutputTokens(const std::string& provider,
+                         const std::string& base_url,
+                         const std::string& model) {
+	auto caps = LookupModelCaps(provider, base_url, model);
+	return caps.max_output_tokens;
 }
 
-int GuessContextWindow(const std::string& model) {
-	if (model.find("opus") != std::string::npos)     return 1000000;
-	if (model.find("sonnet") != std::string::npos)   return 200000;
-	if (model.find("haiku") != std::string::npos)    return 200000;
-	if (model.find("claude") != std::string::npos)   return 200000;
-	if (model.find("gpt-4") != std::string::npos)    return 128000;
-	if (model.find("gpt-oss") != std::string::npos)  return 128000;
-	if (model.find("gemini") != std::string::npos)   return 1000000;
-	if (model.find("gemma-4") != std::string::npos)  return 128000;
-	if (model.find("gemma-3") != std::string::npos)  return 32000;
-	if (model.find("llama") != std::string::npos)    return 131072;
-	if (model.find("qwen") != std::string::npos)     return 131072;
-	if (model.find("deepseek") != std::string::npos) return 64000;
-	if (model.find("mistral") != std::string::npos)  return 32000;
-	return 128000;
+int GuessContextWindow(const std::string& provider,
+                       const std::string& base_url,
+                       const std::string& model) {
+	auto caps = LookupModelCaps(provider, base_url, model);
+	return caps.context_window;
 }
 
 bool SaveConfig(const Config& cfg) {
@@ -492,7 +440,6 @@ bool SaveConfig(const Config& cfg) {
 	ScopedFileLock lock(path + ".lock");
 	if (!lock.locked()) return false;
 
-	// Strip newlines from string values to prevent config injection.
 	auto sanitize = [](const std::string& s) -> std::string {
 		std::string out;
 		out.reserve(s.size());
@@ -535,9 +482,8 @@ bool SaveConfig(const Config& cfg) {
 	return true;
 }
 
-namespace {
+#ifdef __HAIKU__
 
-// Per-provider key file: ~/config/settings/pluto/keys/<env_var_name>
 std::string provider_key_path(const std::string& env_name) {
 	BPath p(settings_dir().c_str());
 	p.Append("keys");
@@ -545,6 +491,14 @@ std::string provider_key_path(const std::string& env_name) {
 	::mkdir(dir.c_str(), 0700);
 	return dir + "/" + env_name;
 }
+
+#else  // __HAIKU__
+
+std::string provider_key_path(const std::string& env_name) {
+	return home_dir() + "/config/settings/pluto/keys/" + env_name;
+}
+
+#endif  // __HAIKU__
 
 std::string read_key_file(const std::string& path) {
 	std::ifstream f(path);
@@ -558,31 +512,25 @@ std::string read_key_file(const std::string& path) {
 	return key;
 }
 
-}  // namespace
-
 std::string ResolveProviderKey(const std::string& env_name) {
 	if (env_name.empty()) return {};
 	return read_key_file(provider_key_path(env_name));
 }
 
 std::string ResolveApiKey(const Config& cfg) {
-	// 1. Environment variable.
 	const char* v = std::getenv(cfg.api_key_env.c_str());
 	if (v && *v) return std::string(v);
 
-	// 2. Per-provider key file.
 	if (!cfg.api_key_env.empty()) {
 		std::string key = read_key_file(provider_key_path(cfg.api_key_env));
 		if (!key.empty()) return key;
 	}
 
-	// 3. Legacy single key file (fallback).
 	return read_key_file(api_key_path());
 }
 
-namespace {
+#ifdef __HAIKU__
 
-// Read a whole file into a string. Returns empty if missing.
 std::string read_file_to_string(const std::string& path) {
 	std::ifstream f(path);
 	if (!f) return {};
@@ -594,8 +542,6 @@ std::string read_file_to_string(const std::string& path) {
 	return s;
 }
 
-// Append a single file to cfg.system_prompt wrapped in a tag.
-// Returns true if anything was appended.
 bool append_doc(Config& cfg, const std::string& path, const char* tag) {
 	std::string body = read_file_to_string(path);
 	if (body.empty()) return false;
@@ -612,8 +558,6 @@ bool append_doc(Config& cfg, const std::string& path, const char* tag) {
 	return true;
 }
 
-// Canonicalize a path via BPath. Falls back to the input if normalization
-// fails (e.g. non-existent path).
 std::string canon(const std::string& raw) {
 	if (raw.empty()) return raw;
 	BPath p;
@@ -621,8 +565,6 @@ std::string canon(const std::string& raw) {
 	return raw;
 }
 
-// At a given directory, return the absolute path of the first memory file
-// that exists: pluto.md → AGENTS.md → CLAUDE.md. Empty string if none.
 std::string find_memory_file(const std::string& dir) {
 	static const char* kNames[] = { "pluto.md", "AGENTS.md", "CLAUDE.md" };
 	struct stat st;
@@ -634,11 +576,7 @@ std::string find_memory_file(const std::string& dir) {
 	return {};
 }
 
-}  // namespace
-
 void ApplyProjectMemory(Config& cfg) {
-	// Prepend a base system prompt if the user hasn't set a custom one.
-	// This tells the model about its capabilities and workspace.
 	char cwd_buf[PATH_MAX] = {};
 	::getcwd(cwd_buf, sizeof(cwd_buf));
 	std::string cwd = canon(cwd_buf);
@@ -655,17 +593,11 @@ void ApplyProjectMemory(Config& cfg) {
 			"Current workspace: " + cwd;
 	}
 
-	// Global user memory — always loaded first, highest in conversation
-	// context order so per-project files can override.
 	std::string user_mem = home_dir() + "/config/settings/pluto/pluto.md";
 	std::set<std::string> seen;
 	if (append_doc(cfg, user_mem, "user_memory"))
 		seen.insert(canon(user_mem));
 
-	// Walk parent directories from $HOME (or "/") down to cwd, collecting
-	// memory files. Outermost-first so cwd-level memory appears last and
-	// has the strongest claim on the model's attention. Matches Pi/Codex
-	// AGENTS.md conventions: pluto.md → AGENTS.md → CLAUDE.md per level.
 	std::vector<std::string> chain;
 	{
 		std::string base = (cwd.rfind(home, 0) == 0) ? home : std::string("/");
@@ -677,7 +609,7 @@ void ApplyProjectMemory(Config& cfg) {
 			size_t slash = cur.rfind('/');
 			if (slash == std::string::npos) break;
 			cur = (slash == 0) ? std::string("/") : cur.substr(0, slash);
-			if (chain.size() > 64) break;  // sanity cap
+			if (chain.size() > 64) break;
 		}
 	}
 	std::reverse(chain.begin(), chain.end());
@@ -691,13 +623,10 @@ void ApplyProjectMemory(Config& cfg) {
 	}
 }
 
-// Parse optional YAML-ish frontmatter from a skill file.
-// Returns the body (after frontmatter) and fills triggers if present.
 static std::string parse_skill_frontmatter(const std::string& content,
                                             std::vector<std::string>& triggers) {
 	triggers.clear();
 	Frontmatter fm = ParseFrontmatter(content);
-	// Accept both "trigger" and "triggers" as key.
 	if (fm.has("trigger"))
 		triggers = fm.get_list("trigger");
 	else if (fm.has("triggers"))
@@ -728,8 +657,6 @@ void ApplySkills(Config& cfg) {
 		std::string body = parse_skill_frontmatter(raw, triggers);
 
 		if (triggers.empty()) {
-			// Always-on skill (backward compatible).
-			// XML-escape the skill name to prevent injection.
 			std::string safe_name;
 			for (char c : name) {
 				if (c == '<') safe_name += "&lt;";
@@ -745,7 +672,6 @@ void ApplySkills(Config& cfg) {
 			always_block += "\n</skill>";
 			++always_count;
 		} else {
-			// Triggered skill — store for on-demand injection.
 			SkillEntry se;
 			se.name = name;
 			se.body = body;
@@ -753,7 +679,6 @@ void ApplySkills(Config& cfg) {
 			se.always = false;
 			cfg.triggered_skills.push_back(std::move(se));
 
-			// Add to catalog for visibility (XML-escape name).
 			std::string cat_name;
 			for (char c : name) {
 				if (c == '<') cat_name += "&lt;";
@@ -790,11 +715,10 @@ void ApplySkills(Config& cfg) {
 }
 
 std::vector<std::string> InjectTriggeredSkills(Config& cfg,
-                                                  const std::string& user_message) {
+                                                 const std::string& user_message) {
 	std::vector<std::string> activated;
 	if (cfg.triggered_skills.empty()) return activated;
 
-	// Case-insensitive search in the user message.
 	std::string lower_msg = user_message;
 	for (auto& c : lower_msg) c = std::tolower(static_cast<unsigned char>(c));
 
@@ -802,7 +726,6 @@ std::vector<std::string> InjectTriggeredSkills(Config& cfg,
 	while (it != cfg.triggered_skills.end()) {
 		bool matched = false;
 		for (const auto& trigger : it->triggers) {
-			// Triggers are typically short (1-3 words); tolower inline.
 			std::string lt;
 			lt.reserve(trigger.size());
 			for (char c : trigger)
@@ -814,7 +737,6 @@ std::vector<std::string> InjectTriggeredSkills(Config& cfg,
 		}
 
 		if (matched) {
-			// Inject into system prompt.
 			if (!cfg.system_prompt.empty()) cfg.system_prompt += "\n\n";
 			cfg.system_prompt += "<skill name=\"";
 			cfg.system_prompt += it->name;
@@ -831,6 +753,88 @@ std::vector<std::string> InjectTriggeredSkills(Config& cfg,
 	return activated;
 }
 
+void ApplyRagHint(Config& cfg) {
+	if (RagEntryCount() == 0) return;
+	if (!cfg.system_prompt.empty()) cfg.system_prompt += "\n\n";
+	cfg.system_prompt +=
+		"<beapi_hint>\n"
+		"You have access to a local BeAPI reference with "
+		+ std::to_string(RagEntryCount()) +
+		" code examples covering Haiku OS APIs.\n"
+		"When writing Haiku-native C++ code, use the `beapi_lookup` tool "
+		"to find correct API usage patterns for Be classes "
+		"(BView, BWindow, BMessage, BSlider, etc.).\n"
+		"Relevant snippets are also automatically injected when your user "
+		"mentions Be class names.\n"
+		"</beapi_hint>";
+}
+
+static ModeEntry parse_mode_file(const std::string& content) {
+	ModeEntry m;
+	Frontmatter fm = ParseFrontmatter(content);
+	if (fm.fields.empty())
+		return m;
+	m.name = fm.get("name");
+	m.description = fm.get("description");
+	m.model = fm.get("model");
+	m.disabled_tools = fm.get_list("disabled_tools");
+	m.prompt = fm.body;
+	return m;
+}
+
+void LoadModes(Config& cfg) {
+	cfg.modes.clear();
+
+	ModeEntry plan;
+	plan.name = "plan";
+	plan.description = "Read-only analysis — no file writes";
+	plan.prompt = "You are in plan/analysis mode. "
+		"You can read files and search but cannot modify anything. "
+		"Describe what changes you would make without making them.";
+	plan.disabled_tools = {
+		"write_file", "edit_file", "apply_patch", "bash",
+		"write_attr", "remove_attr", "desktop_script", "launch_app"
+	};
+	cfg.modes.push_back(std::move(plan));
+
+	std::string modes_dir = home_dir() + "/config/settings/pluto/modes";
+	BDirectory modesDir(modes_dir.c_str());
+	if (modesDir.InitCheck() != B_OK) return;
+
+	BEntry modeEntry;
+	while (modesDir.GetNextEntry(&modeEntry) == B_OK) {
+		char nameBuf[B_FILE_NAME_LENGTH];
+		if (modeEntry.GetName(nameBuf) != B_OK) continue;
+		std::string fname = nameBuf;
+		if (fname.size() < 4
+			|| fname.substr(fname.size() - 3) != ".md")
+			continue;
+		std::string raw = read_file_to_string(modes_dir + "/" + fname);
+		if (raw.empty()) continue;
+		ModeEntry m = parse_mode_file(raw);
+		if (m.name.empty()) {
+			m.name = fname.substr(0, fname.size() - 3);
+		}
+		bool duplicate = false;
+		for (const auto& existing : cfg.modes) {
+			if (existing.name == m.name) { duplicate = true; break; }
+		}
+		if (!duplicate)
+			cfg.modes.push_back(std::move(m));
+	}
+}
+
+#else  // __HAIKU__
+
+void ApplyProjectMemory(Config& cfg) { (void)cfg; }
+void ApplySkills(Config& cfg) { (void)cfg; }
+void ApplyRagHint(Config& cfg) { (void)cfg; }
+void LoadModes(Config& cfg) { (void)cfg; }
+std::vector<std::string> InjectTriggeredSkills(Config&,
+                                                 const std::string&) { return {}; }
+
+#endif  // __HAIKU__
+
 namespace {
 
 bool write_key_file(const std::string& path, const std::string& key) {
@@ -838,8 +842,6 @@ bool write_key_file(const std::string& path, const std::string& key) {
 	if (!lock.locked()) return false;
 
 	std::string tmp = path + ".tmp." + std::to_string(getpid());
-	// Create with restricted permissions from the start to avoid
-	// a TOCTOU window where another process could read the key.
 	int fd = ::open(tmp.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
 	if (fd < 0) return false;
 	std::string data = key + "\n";
@@ -868,24 +870,19 @@ bool SaveApiKey(const std::string& key, const std::string& env_name) {
 }
 
 Credentials ResolveCredentials(Config& cfg) {
-	// 1. Check for OAuth tokens (only relevant for Anthropic provider).
 	if (cfg.provider == "anthropic") {
 		OAuthTokens tokens = LoadOAuthTokens();
-if (!tokens.empty()) {
-		std::string at = OAuthEnsureValidToken(tokens);
-		if (!at.empty())
-			return { Credentials::OAUTH, at };
-		// OAuth tokens exist but refresh failed — fall back to API key
-		// if available, with warning. User can still run 'pluto login'.
-		std::fprintf(stderr,
-			"[auth] OAuth token refresh failed. "
-			"Run 'pluto login' to re-authenticate.\n"
-			"       Falling back to API key if configured...\n");
-	}
+		if (!tokens.empty()) {
+			std::string at = OAuthEnsureValidToken(tokens);
+			if (!at.empty())
+				return { Credentials::OAUTH, at };
+			std::fprintf(stderr,
+				"[auth] OAuth token refresh failed. "
+				"Run 'pluto login' to re-authenticate.\n"
+				"       Falling back to API key if configured...\n");
+		}
 	}
 
-	// 2. API key (for any provider). Local servers (empty api_key_env)
-	//    don't need credentials — return a dummy token.
 	if (cfg.api_key_env.empty())
 		return { Credentials::API_KEY, "local" };
 
@@ -894,89 +891,6 @@ if (!tokens.empty()) {
 		return { Credentials::API_KEY, key };
 
 	return {};
-}
-
-void ApplyRagHint(Config& cfg) {
-	if (RagEntryCount() == 0) return;
-	if (!cfg.system_prompt.empty()) cfg.system_prompt += "\n\n";
-	cfg.system_prompt +=
-		"<beapi_hint>\n"
-		"You have access to a local BeAPI reference with "
-		+ std::to_string(RagEntryCount()) +
-		" code examples covering Haiku OS APIs.\n"
-		"When writing Haiku-native C++ code, use the `beapi_lookup` tool "
-		"to find correct API usage patterns for Be classes "
-		"(BView, BWindow, BMessage, BSlider, etc.).\n"
-		"Relevant snippets are also automatically injected when your user "
-		"mentions Be class names.\n"
-		"</beapi_hint>";
-}
-
-// Parse mode frontmatter from a .md file.
-static ModeEntry parse_mode_file(const std::string& content) {
-	ModeEntry m;
-	Frontmatter fm = ParseFrontmatter(content);
-	if (fm.fields.empty())
-		return m;
-	m.name = fm.get("name");
-	m.description = fm.get("description");
-	m.model = fm.get("model");
-	m.disabled_tools = fm.get_list("disabled_tools");
-	m.prompt = fm.body;
-	return m;
-}
-
-void LoadModes(Config& cfg) {
-	cfg.modes.clear();
-
-	// Built-in "plan" mode (backward compatible with old plan_mode toggle).
-	ModeEntry plan;
-	plan.name = "plan";
-	plan.description = "Read-only analysis — no file writes";
-	plan.prompt = "You are in plan/analysis mode. "
-		"You can read files and search but cannot modify anything. "
-		"Describe what changes you would make without making them.";
-	plan.disabled_tools = {
-		"write_file", "edit_file", "apply_patch", "bash",
-		"write_attr", "remove_attr", "desktop_script", "launch_app"
-	};
-	cfg.modes.push_back(std::move(plan));
-
-	// Load user-defined modes from ~/config/settings/pluto/modes/*.md
-	std::string modes_dir = home_dir() + "/config/settings/pluto/modes";
-	BDirectory modesDir(modes_dir.c_str());
-	if (modesDir.InitCheck() != B_OK) return;
-
-	BEntry modeEntry;
-	while (modesDir.GetNextEntry(&modeEntry) == B_OK) {
-		char nameBuf[B_FILE_NAME_LENGTH];
-		if (modeEntry.GetName(nameBuf) != B_OK) continue;
-		std::string fname = nameBuf;
-		if (fname.size() < 4
-			|| fname.substr(fname.size() - 3) != ".md")
-			continue;
-		std::string raw = read_file_to_string(modes_dir + "/" + fname);
-		if (raw.empty()) continue;
-		ModeEntry m = parse_mode_file(raw);
-		if (m.name.empty()) {
-			// Use filename (without .md) as name.
-			m.name = fname.substr(0, fname.size() - 3);
-		}
-		// Don't override the built-in plan mode.
-		bool duplicate = false;
-		for (const auto& existing : cfg.modes) {
-			if (existing.name == m.name) { duplicate = true; break; }
-		}
-		if (!duplicate)
-			cfg.modes.push_back(std::move(m));
-	}
-}
-
-const ModeEntry* FindMode(const Config& cfg, const std::string& name) {
-	for (const auto& m : cfg.modes) {
-		if (m.name == name) return &m;
-	}
-	return nullptr;
 }
 
 }  // namespace pluto

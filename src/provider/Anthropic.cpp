@@ -1,12 +1,16 @@
 #include "Anthropic.h"
 #include "../version.h"
 
+#ifdef __HAIKU__
 #include <OS.h>
+#endif
 #include <curl/curl.h>
 
 #include <cstdio>
+#include <cstdint>
 #include <cstring>
 #include <string>
+#include <unistd.h>
 #include <utility>
 
 #include "../cancel.h"
@@ -449,7 +453,7 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
 				rc == CURLE_COULDNT_RESOLVE_HOST ||
 				rc == CURLE_OPERATION_TIMEDOUT;
 			if (pre_stream && conn_err && attempt < kMaxAttempts) {
-				bigtime_t delay = 1000000LL * (1LL << (attempt - 1));
+				int64_t delay = 1000000LL * (1LL << (attempt - 1));
 				log_warn("curl", "%s, retrying in %llds",
 					curl_easy_strerror(rc),
 					(long long)(delay / 1000000));
@@ -458,7 +462,11 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
 				info.text = std::string(curl_easy_strerror(rc))
 					+ ", retrying in " + std::to_string(delay / 1000000) + "s...";
 				cb(info);
+#ifdef __HAIKU__
 				snooze(delay);
+#else
+				usleep(static_cast<useconds_t>(delay));
+#endif
 				continue;
 			}
 			StreamEvent err;
@@ -502,7 +510,11 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
 			info.text = "HTTP " + std::to_string(http_code)
 				+ ", retrying in " + std::to_string(backoff) + "s...";
 			cb(info);
+#ifdef __HAIKU__
 			snooze(backoff * 1000000LL);
+#else
+			usleep(static_cast<useconds_t>(backoff * 1000000LL));
+#endif
 			continue;
 		}
 

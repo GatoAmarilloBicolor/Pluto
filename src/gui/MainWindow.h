@@ -39,7 +39,7 @@ class TokenGauge;
 class MainWindow : public BWindow, public ConversationDelegate {
 public:
 	MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
-	           const std::vector<McpClient*>& mcp_clients);
+	           const std::vector<std::shared_ptr<McpClient>>& mcp_clients);
 	~MainWindow() override;
 
 	void MessageReceived(BMessage* msg) override;
@@ -189,7 +189,7 @@ private:
 	std::unique_ptr<Provider> fOwnedProvider;  // when we recreate provider at runtime
 	Config*       fConfig;
 	ToolRegistry* fTools;
-	std::vector<McpClient*> fMcpClients;
+	std::vector<std::shared_ptr<McpClient>> fMcpClients;
 
 	std::vector<LinkRegion>            fSideLinks;
 	std::map<std::string, int32>       fSideAnchors;

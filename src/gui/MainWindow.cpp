@@ -1228,7 +1228,7 @@ public:
 // ----------------------------------------------------------------
 
 MainWindow::MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
-                       const std::vector<McpClient*>& mcp_clients)
+                       const std::vector<std::shared_ptr<McpClient>>& mcp_clients)
 	: BWindow(BRect(0, 0, 1020, 720), "Pluto", B_TITLED_WINDOW,
 	          B_ASYNCHRONOUS_CONTROLS),
 	  fProvider(provider), fConfig(cfg), fTools(tools),
@@ -1416,7 +1416,7 @@ MainWindow::MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
 		bool has_oauth = !check_tokens.empty();
 
 		long total_remote = 0;
-		for (auto* c : fMcpClients)
+		for (auto& c : fMcpClients)
 			total_remote += (long)c->tools().size();
 		long builtin = (long)fTools->list().size() - total_remote;
 
@@ -3084,7 +3084,7 @@ void MainWindow::MessageReceived(BMessage* msg) {
 				AutoDetectProvider(tc);
 
 				// Auto-detect context window for the new model.
-				int guessed_ctx = pluto::GuessContextWindow(tc.model);
+				int guessed_ctx = pluto::GuessContextWindow(tc.provider, tc.base_url, tc.model);
 				if (guessed_ctx > 0) tc.context_window = guessed_ctx;
 
 				// Picker may carry overrides from the model catalog.
@@ -3096,7 +3096,7 @@ void MainWindow::MessageReceived(BMessage* msg) {
 
 				// Safety cap: max_tokens must not exceed the model's
 				// output limit or ~75% of context, whichever is smaller.
-				int out_limit = pluto::GuessMaxOutputTokens(tc.model);
+				int out_limit = pluto::GuessMaxOutputTokens(tc.provider, tc.base_url, tc.model);
 				int ctx_cap = tc.context_window * 3 / 4;
 				int cap = std::min(out_limit, ctx_cap);
 				if (tc.max_tokens > cap)

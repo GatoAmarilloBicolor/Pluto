@@ -3,10 +3,13 @@
 #include "../json.h"
 #include "../workspace.h"
 
+#ifdef __HAIKU__
 #include <File.h>
 #include <NodeInfo.h>
+#endif
 
 #include <cerrno>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -87,12 +90,16 @@ public:
 				if ((unsigned char)probe[i] == 0) { is_binary = true; break; }
 			}
 			if (is_binary) {
+#ifdef __HAIKU__
 				std::string desc = "binary file";
 				BNode node(path.c_str());
 				BNodeInfo info(&node);
 				char mime[256] = {};
 				if (info.GetType(mime) == B_OK && mime[0])
 					desc = std::string(mime) + " file";
+#else
+				std::string desc = "binary file";
+#endif
 				r.output = "(" + desc + ", "
 				         + std::to_string(file_size) + " bytes"
 				         + ", path: " + path

@@ -44,8 +44,11 @@ CORE_SRCS = src/lsp/LspClient.cpp \
             src/map/Graph.cpp \
             src/map/Scanner.cpp \
             src/map/BfsAttrs.cpp \
+            src/haiku/AsyncStream.cpp \
             src/haiku/BfsTools.cpp \
             src/haiku/DesktopTools.cpp \
+            src/haiku/Notifications.cpp \
+            src/haiku/PluginLoader.cpp \
             src/mcp/Client.cpp \
             src/mcp/Config.cpp \
             src/mcp/Manager.cpp \
@@ -59,7 +62,11 @@ CORE_SRCS = src/lsp/LspClient.cpp \
 
 CLI_SRCS = src/main.cpp \
            src/repl.cpp \
-           src/mcp/Cli.cpp
+           src/mcp/Cli.cpp \
+           src/cli/CliApp.cpp \
+           src/cli/ProviderFactory.cpp \
+           src/cli/ToolRegistryBuilder.cpp \
+           src/cli/McpBootstrap.cpp
 
 GUI_SRCS = src/gui/main_gui.cpp \
            src/gui/App.cpp \
@@ -173,13 +180,22 @@ TEXTVIEW_OBJS = src/gui/textview/Bullet.o src/gui/textview/BulletData.o \
 
 # --- Tests (minimal self-contained runners, no framework) ---
 
-TEST_BINS = test_json test_session test_tools test_sse test_workspace \
+TEST_BINS = test_json test_session test_tools test_sse test_workspace test_expected test_loop \
             test_desktop_script test_image test_schedule test_routine \
             test_tracker_addon test_syntax test_oauth test_agent_store \
             test_skills test_markdown test_rag test_history test_ipc \
             test_toolblock test_streaming_md test_tabs
 
 test_json: tests/test_json.cpp src/json.o
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+test_loop: tests/test_loop.cpp \
+	src/agent/Loop.o src/json.o src/config.o src/util.o src/workspace.o src/tools/Tool.o \
+	src/tools/ReadFile.o src/tools/WriteFile.o src/tools/EditFile.o src/tools/Bash.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lbe
+
+test_expected: tests/test_expected.cpp
+	$(CXX) $(CXXFLAGS) -o $@ $<
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 test_sse: tests/test_sse.cpp src/json.o
@@ -328,6 +344,6 @@ clean:
 .PHONY: all clean check ci package install-addon uninstall-addon
 
 # System One MCP server (stdio transport)
-systemone_server: src/mcp/systemone_server.cpp
-	$(CXX) $(CXXFLAGS) -o $@ $<
+systemone_server: src/mcp/systemone_server.cpp src/json.o
+	$(CXX) $(CXXFLAGS) -o $@ $< src/json.o $(LDLIBS)
 
