@@ -409,7 +409,7 @@ public:
         const std::string& urgent_question = "Does this need a human within the hour?") {
         TriageResult r;
         r.guard_risk = "LOW";
-        r.urgent = False;
+        r.urgent = false;
         r.probability = 0.0;
         return r;
     }
@@ -433,7 +433,7 @@ public:
         const std::string& context,
         double threshold = 0.3) {
         AnswerableResult r;
-        r.answerable = False;
+        r.answerable = false;
         r.probability = 0.0;
         r.reasoning = "Not implemented";
         return r;
@@ -478,7 +478,7 @@ public:
         ConsultResult r;
         r.choice = "";
         r.probability = 0.0;
-        r.abstain = True;
+        r.abstain = true;
         r.notes_used = "";
         return r;
     }
@@ -487,7 +487,7 @@ public:
     virtual DecideProgramResult decide_program(
         const std::string& program_json,
         const std::string& state,
-        bool compact = True) {
+        bool compact = true) {
         DecideProgramResult r;
         r.results = "{}";
         r.tokens_saved = 0;
