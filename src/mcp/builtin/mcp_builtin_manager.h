@@ -5,10 +5,9 @@
 #include <map>
 #include <memory>
 
-#include "../mcp/Client.h"
-#include "../mcp/Transport.h"
-#include "../tools/Tool.h"
-#include "../tools/ToolRegistry.h"
+#include "../Client.h"
+#include "../Transport.h"
+#include "../../tools/Tool.h"
 #include "builtin_servers.h"
 
 namespace pluto {

@@ -52,25 +52,11 @@ CORE_SRCS = src/lsp/LspClient.cpp \
             src/map/Graph.cpp \
             src/map/Scanner.cpp \
             src/map/BfsAttrs.cpp \
-            src/haiku/AsyncStream.cpp \
-            src/haiku/BfsTools.cpp \
-            src/haiku/DesktopTools.cpp \
-            src/haiku/ModelCaps.cpp \
-            src/haiku/Notifications.cpp \
-            src/haiku/PluginLoader.cpp \
             src/systemone/SystemOneConfig.cpp \
             src/systemone/DecisionModel.cpp \
             src/systemone/RemoteDecisionModel.cpp \
             src/systemone/LocalDecisionModel.cpp \
             src/systemone/SystemOneClient.cpp \
-            src/langchain/PromptTemplate.cpp \
-            src/langchain/Document.cpp \
-            src/langchain/TextSplitter.cpp \
-            src/langchain/Chain.cpp \
-            src/langchain/Memory.cpp \
-            src/langchain/VectorStore.cpp \
-            src/langchain/Agent.cpp \
-            src/langchain/Integration.cpp \
             src/mcp/builtin/builtin_servers.cpp \
             src/mcp/builtin/mcp_builtin_manager.cpp \
             src/mcp/builtin/mcp_tool_wrapper.cpp \

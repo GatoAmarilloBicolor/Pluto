@@ -1,5 +1,6 @@
 #include "mcp_builtin_manager.h"
-#include "../mcp/StdioTransport.h"
+#include "mcp_tool_wrapper.h"
+#include "../StdioTransport.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -13,16 +14,16 @@ BuiltinMcpManager::BuiltinMcpManager() {}
 
 BuiltinMcpManager::~BuiltinMcpManager() {}
 
-	std::unique_ptr<Transport>
-	BuiltinMcpManager::make_stdio_transport(const BuiltinMcpServer& s,
-                                             std::string& err) {
-		try {
-			return std::make_unique<StdioTransport>(s.command, s.args, s.env);
-		} catch (const std::exception& e) {
-			err = e.what();
-			return nullptr;
-		}
+std::unique_ptr<Transport>
+BuiltinMcpManager::make_stdio_transport(const BuiltinMcpServer& s,
+                                         std::string& err) {
+	try {
+		return std::make_unique<StdioTransport>(s.command, s.args, s.env);
+	} catch (const std::exception& e) {
+		err = e.what();
+		return nullptr;
 	}
+}
 
 int BuiltinMcpManager::launch_server(const BuiltinMcpServer& spec,
                                       ToolRegistry& registry) {
@@ -67,17 +68,17 @@ std::shared_ptr<McpClient> BuiltinMcpManager::client(
 	return nullptr;
 }
 
-ToolResult BuiltinMcpManager::call_tool(const std::string& tool_name,
+ToolResult BuiltinMcpManager::call_tool(const std::string& requested_tool,
                                          const std::string& arguments_json) {
 	ToolResult r;
 	r.is_error = true;
 
 	// Parse "server__tool" or just "tool".
 	std::string server_name, tool_name;
-	size_t pos = tool_name.find("__");
+	size_t pos = requested_tool.find("__");
 	if (pos != std::string::npos) {
-		server_name = tool_name.substr(0, pos);
-		tool_name = tool_name.substr(pos + 2);
+		server_name = requested_tool.substr(0, pos);
+		tool_name = requested_tool.substr(pos + 2);
 	} else {
 		// Try to find the tool in any connected server.
 		for (auto& [name, client] : fClients) {
@@ -90,7 +91,7 @@ ToolResult BuiltinMcpManager::call_tool(const std::string& tool_name,
 			if (!server_name.empty()) break;
 		}
 		if (server_name.empty()) {
-			r.output = "MCP tool not found: " + tool_name;
+			r.output = "MCP tool not found: " + requested_tool;
 			return r;
 		}
 	}

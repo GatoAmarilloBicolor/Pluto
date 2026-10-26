@@ -108,7 +108,7 @@ std::vector<BuiltinMcpServer> list_builtin_mcp_servers() {
 }
 
 const BuiltinMcpServer* find_builtin_mcp_server(const std::string& name) {
-	auto& servers = list_builtin_mcp_servers();
+	auto servers = list_builtin_mcp_servers();
 	for (auto& s : servers) {
 		if (s.name == name) return &s;
 	}

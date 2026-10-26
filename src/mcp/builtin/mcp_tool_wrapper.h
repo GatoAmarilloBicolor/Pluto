@@ -5,9 +5,8 @@
 #include <map>
 #include <memory>
 
-#include "../mcp/Client.h"
-#include "../tools/Tool.h"
-#include "../tools/ToolRegistry.h"
+#include "../Client.h"
+#include "../../tools/Tool.h"
 
 namespace pluto {
 namespace mcp {

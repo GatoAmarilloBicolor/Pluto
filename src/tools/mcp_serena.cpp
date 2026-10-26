@@ -1,10 +1,9 @@
 // Serena MCP tools — codebase exploration (symbol search, file read/edit, LSP).
 // Wraps the Serena MCP server (stdio) as Pluto tools.
 
-#include "mcp/Client.h"
-#include "mcp/builtin/mcp_tool_wrapper.h"
-#include "../tools/Tool.h"
-#include "../tools/ToolRegistry.h"
+#include "../mcp/Client.h"
+#include "../mcp/builtin/mcp_tool_wrapper.h"
+#include "Tool.h"
 #include "../json.h"
 
 #include <memory>
@@ -54,7 +53,7 @@ public:
 		       "Returns matching lines with context.";
 	}
 	std::string input_schema_json() const override {
-		return R"({"type":"object","properties":{"pattern":{"type":"string","description":"Regex pattern to search"},"path":{"type":"string","description":"Directory to search (default '.')"}},"required":["pattern"]})";
+		return R"json({"type":"object","properties":{"pattern":{"type":"string","description":"Regex pattern to search"},"path":{"type":"string","description":"Directory to search (default '.')"}},"required":["pattern"]})json";
 	}
 	std::string preview(const std::string& input_json) const override {
 		return "serena_search_pattern " + input_json.substr(0, 80);
@@ -69,7 +68,7 @@ public:
 // Register Serena tools into the registry.
 void register_serena_tools(ToolRegistry& registry,
                            std::shared_ptr<McpClient> client) {
-	int count = register_mcp_client_tools(client, registry, "serena__");
+	int count = ::pluto::mcp::register_mcp_client_tools(client, registry, "serena__");
 	(void)count;
 }
 
