@@ -47,6 +47,7 @@ CORE_SRCS = src/lsp/LspClient.cpp \
             src/haiku/AsyncStream.cpp \
             src/haiku/BfsTools.cpp \
             src/haiku/DesktopTools.cpp \
+            src/haiku/ModelCaps.cpp \
             src/haiku/Notifications.cpp \
             src/haiku/PluginLoader.cpp \
             src/mcp/Client.cpp \

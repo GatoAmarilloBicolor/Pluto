@@ -58,8 +58,7 @@ void cap_tool_output(std::string& out, const Config& cfg) {
 	if (out.size() <= kMaxToolOutput) return;
 	size_t dropped = out.size() - kMaxToolOutput;
 	out.resize(kMaxToolOutput);
-	out += "
-... [truncated " + std::to_string(dropped) + " bytes]";
+	out += "\n... [truncated " + std::to_string(dropped) + " bytes]";
 }
 
 
