@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include <cstring>
 #include <ctime>
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <string>
