@@ -4,6 +4,7 @@
 #include "Types.h"
 
 #define B_CURRENT_TEAM 0
+#define B_NORMAL_IMAGE 0
 
 struct image_info {
     image_id id;
@@ -21,8 +22,13 @@ inline status_t get_next_image_info(team_id team, int32* cookie, image_info* inf
     return -1;
 }
 
-inline status_t load_image(int32 argc, const char** argv, const char** envp) {
+inline image_id load_image(int32 argc, const char** argv, const char** envp) {
     (void)argc; (void)argv; (void)envp;
+    return -1;
+}
+
+inline image_id load_image(const char* path, uint32 flags = B_NORMAL_IMAGE) {
+    (void)path; (void)flags;
     return -1;
 }
 

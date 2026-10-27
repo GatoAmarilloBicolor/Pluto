@@ -2,10 +2,7 @@
 #define MOCK_TYPES_H
 
 // Basic Haiku types - use existing system types where available
-#ifndef __HAIKU__
-// On non-Haiku systems, use system types
 #include <sys/types.h>
-#endif
 
 // Only define Haiku-specific types that don't exist on POSIX systems
 #ifndef status_t
@@ -26,6 +23,10 @@ typedef long long int64;
 
 #ifndef int64_t
 typedef long long int64_t;
+#endif
+
+#ifndef uint32
+typedef uint32_t uint32;
 #endif
 
 #ifndef uint8_t

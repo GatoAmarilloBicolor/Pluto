@@ -133,6 +133,9 @@ private:
     double keyword_overlap(const std::string& a, const std::string& b);
     bool contains_keyword(const std::string& text,
                           std::initializer_list<const char*> keywords);
+    std::string best_route(const std::string& text,
+                           const std::map<std::string, std::string>& routes,
+                           double& best_score_out);
 };
 
 } // namespace systemone

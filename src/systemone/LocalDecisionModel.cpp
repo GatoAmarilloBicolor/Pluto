@@ -382,14 +382,14 @@ SameIntentResult LocalDecisionModel::same_intent(
 
 // ---------- Decision & Triage ----------
 
-static std::string best_route(const std::string& text,
+std::string LocalDecisionModel::best_route(const std::string& text,
                               const std::map<std::string, std::string>& routes,
                               double& best_score_out) {
     std::string best_route;
     double best_score = 0.0;
     for (const auto& [route, desc] : routes) {
-        double score = keyword_overlap(text, route) * 0.6 +
-                       keyword_overlap(text, desc) * 0.4;
+        double score = LocalDecisionModel::keyword_overlap(text, route) * 0.6 +
+                       LocalDecisionModel::keyword_overlap(text, desc) * 0.4;
         if (score > best_score) {
             best_score = score;
             best_route = route;

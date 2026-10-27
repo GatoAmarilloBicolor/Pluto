@@ -9,8 +9,11 @@ public:
     BPath() = default;
     BPath(const char* path) : fPath(path ? path : "") {}
     BPath(const entry_ref* ref) { (void)ref; }
+    BPath(const BEntry* entry) { (void)entry; }
     BPath(const BDirectory* dir, const char* name) { (void)dir; (void)name; }
     ~BPath() = default;
+
+    bool InitCheck() const { return !fPath.empty(); }
     
     status_t SetTo(const char* path) { fPath = path ? path : ""; return B_OK; }
     status_t SetTo(const char* path, const char* leaf, bool trailingSlash) { 
