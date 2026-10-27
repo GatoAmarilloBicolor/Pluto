@@ -35,7 +35,7 @@ std::vector<AddonHandle> LoadAddonsFromDir(const std::string& dir) {
 		if (path.InitCheck() != B_OK) continue;
 
 		// Load the add-on image.
-		image_id img = load_image(path.Path(), B_NORMAL_IMAGE);
+		image_id img = load_add_on(path.Path());
 		if (img < 0) {
 			std::fprintf(stderr, "[plugin] failed to load %s: %s\n",
 				path.Path(), strerror(-img));
@@ -49,7 +49,7 @@ std::vector<AddonHandle> LoadAddonsFromDir(const std::string& dir) {
 		                     (void**)&create_tool) != B_OK) {
 			std::fprintf(stderr, "[plugin] %s: missing CreatePlutoTool symbol\n",
 				path.Path());
-			unload_image(img);
+			unload_add_on(img);
 			continue;
 		}
 
@@ -68,7 +68,7 @@ std::vector<AddonHandle> LoadAddonsFromDir(const std::string& dir) {
 void UnloadAddons(std::vector<AddonHandle>& handles) {
 	for (auto& h : handles) {
 		if (h.image >= 0) {
-			unload_image(h.image);
+			unload_add_on(h.image);
 			h.image = -1;
 		}
 	}
