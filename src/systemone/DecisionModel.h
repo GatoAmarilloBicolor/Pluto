@@ -231,9 +231,9 @@ public:
 
     // Single-label classification (routing, triage).
     virtual ClassifyResult classify(
-        const std::string& text,
-        const std::map<std::string, std::string>& categories,
-        double threshold = 0.5) {
+        [[maybe_unused]] const std::string& text,
+        [[maybe_unused]] const std::map<std::string, std::string>& categories,
+        [[maybe_unused]] double threshold = 0.5) {
         ClassifyResult r;
         r.label = "unknown";
         r.probability = 0.0;
@@ -244,16 +244,16 @@ public:
 
     // Multi-label classification.
     virtual ClassifyMultiResult classify_multi(
-        const std::string& text,
-        const std::map<std::string, std::string>& categories,
-        double threshold = 0.7) {
+        [[maybe_unused]] const std::string& text,
+        [[maybe_unused]] const std::map<std::string, std::string>& categories,
+        [[maybe_unused]] double threshold = 0.7) {
         ClassifyMultiResult r;
         return r;
     }
 
     // Sentiment analysis.
     virtual SentimentResult classify_sentiment(
-        const std::string& text) {
+        [[maybe_unused]] const std::string& text) {
         SentimentResult r;
         r.sentiment = "neutral";
         r.score = 0.0;
@@ -263,7 +263,7 @@ public:
 
     // Priority classification.
     virtual PriorityResult classify_priority(
-        const std::string& text) {
+        [[maybe_unused]] const std::string& text) {
         PriorityResult r;
         r.priority = "medium";
         r.score = 0.5;
@@ -273,7 +273,7 @@ public:
 
     // Topic classification.
     virtual TopicResult classify_topic(
-        const std::string& text) {
+        [[maybe_unused]] const std::string& text) {
         TopicResult r;
         r.topic = "unknown";
         r.confidence = 0.0;
@@ -282,7 +282,7 @@ public:
 
     // Urgency classification.
     virtual UrgencyResult classify_urgency(
-        const std::string& text) {
+        [[maybe_unused]] const std::string& text) {
         UrgencyResult r;
         r.urgency = "low";
         r.score = 0.0;
@@ -294,8 +294,8 @@ public:
 
     // Entailment check (ground RAG, validate summaries).
     virtual VerifyResult verify(
-        const std::string& source,
-        const std::string& claim) {
+        [[maybe_unused]] const std::string& source,
+        [[maybe_unused]] const std::string& claim) {
         VerifyResult r;
         r.supported = false;
         r.probability = 0.0;
@@ -305,9 +305,9 @@ public:
 
     // Safety gate (prompt injection, PII, toxic, spam).
     virtual GuardResult guard(
-        const std::string& text,
-        const std::map<std::string, std::string>& checks,
-        double threshold = 0.5) {
+        [[maybe_unused]] const std::string& text,
+        [[maybe_unused]] const std::map<std::string, std::string>& checks,
+        [[maybe_unused]] double threshold = 0.5) {
         GuardResult r;
         r.risk = "LOW";
         r.probability = 0.0;
@@ -318,10 +318,10 @@ public:
 
     // Context pruning (90% recall, 80% precision).
     virtual SelectRelevantResult select_relevant(
-        const std::string& question,
-        const std::vector<std::string>& items,
-        const std::string& kind = "chunks",
-        double min_p = 0.6) {
+        [[maybe_unused]] const std::string& question,
+        [[maybe_unused]] const std::vector<std::string>& items,
+        [[maybe_unused]] const std::string& kind = "chunks",
+        [[maybe_unused]] double min_p = 0.6) {
         SelectRelevantResult r;
         r.total_items = 0;
         r.compression_ratio = 1.0;
@@ -331,8 +331,8 @@ public:
 
     // Extract key points from text (token-efficient).
     virtual KeyPointsResult extract_key_points(
-        const std::string& text,
-        int max_points = 5) {
+        [[maybe_unused]] const std::string& text,
+        [[maybe_unused]] int max_points = 5) {
         KeyPointsResult r;
         r.original_tokens = 0;
         r.compressed_tokens = 0;
@@ -342,8 +342,8 @@ public:
 
     // Summarize text (token-efficient).
     virtual SummarizeResult summarize_text(
-        const std::string& text,
-        int max_tokens = 200) {
+        [[maybe_unused]] const std::string& text,
+        [[maybe_unused]] int max_tokens = 200) {
         SummarizeResult r;
         r.original_tokens = 0;
         r.compressed_tokens = 0;
@@ -353,22 +353,22 @@ public:
 
     // Extract entities from text.
     virtual ExtractEntitiesResult extract_entities(
-        const std::string& text) {
+        [[maybe_unused]] const std::string& text) {
         return {};
     }
 
     // Rank items by importance for context window management.
     virtual std::vector<RankItem> rank_importance(
-        const std::string& question,
-        const std::vector<std::string>& items) {
+        [[maybe_unused]] const std::string& question,
+        [[maybe_unused]] const std::vector<std::string>& items) {
         return {};
     }
 
     // Compute context window headroom.
     virtual ContextHeadroomResult compute_headroom(
-        int total_tokens,
-        int used_tokens,
-        double compaction_threshold = 0.85) {
+        [[maybe_unused]] int total_tokens,
+        [[maybe_unused]] int used_tokens,
+        [[maybe_unused]] double compaction_threshold = 0.85) {
         ContextHeadroomResult r;
         r.total_tokens = total_tokens;
         r.used_tokens = used_tokens;
@@ -380,9 +380,9 @@ public:
 
     // Compact messages to fit within context window.
     virtual std::vector<int> compact_messages(
-        const std::vector<std::string>& messages,
-        int max_tokens,
-        double compaction_threshold = 0.85) {
+        [[maybe_unused]] const std::vector<std::string>& messages,
+        [[maybe_unused]] int max_tokens,
+        [[maybe_unused]] double compaction_threshold = 0.85) {
         return {};
     }
 
@@ -390,9 +390,9 @@ public:
 
     // Semantic dedup (94% accuracy).
     virtual SameIntentResult same_intent(
-        const std::string& a,
-        const std::string& b,
-        double threshold = 0.5) {
+        [[maybe_unused]] const std::string& a,
+        [[maybe_unused]] const std::string& b,
+        [[maybe_unused]] double threshold = 0.5) {
         SameIntentResult r;
         r.same = false;
         r.probability = 0.0;
@@ -403,10 +403,10 @@ public:
 
     // Guard + route + tags + urgency (saves 3-4 calls).
     virtual TriageResult triage(
-        const std::string& text,
-        const std::map<std::string, std::string>& routes,
-        const std::map<std::string, std::string>& tags,
-        const std::string& urgent_question = "Does this need a human within the hour?") {
+        [[maybe_unused]] const std::string& text,
+        [[maybe_unused]] const std::map<std::string, std::string>& routes,
+        [[maybe_unused]] const std::map<std::string, std::string>& tags,
+        [[maybe_unused]] const std::string& urgent_question = "Does this need a human within the hour?") {
         TriageResult r;
         r.guard_risk = "LOW";
         r.urgent = false;
@@ -416,10 +416,10 @@ public:
 
     // Full triage with more detail.
     virtual FullTriageResult triage_full(
-        const std::string& text,
-        const std::map<std::string, std::string>& routes,
-        const std::map<std::string, std::string>& tags,
-        const std::string& urgent_question = "Does this need a human within the hour?") {
+        [[maybe_unused]] const std::string& text,
+        [[maybe_unused]] const std::map<std::string, std::string>& routes,
+        [[maybe_unused]] const std::map<std::string, std::string>& tags,
+        [[maybe_unused]] const std::string& urgent_question = "Does this need a human within the hour?") {
         FullTriageResult r;
         r.guard_risk = "LOW";
         r.urgent = false;
@@ -429,9 +429,9 @@ public:
 
     // RAG gate (90% at threshold 0.3).
     virtual AnswerableResult answerable(
-        const std::string& question,
-        const std::string& context,
-        double threshold = 0.3) {
+        [[maybe_unused]] const std::string& question,
+        [[maybe_unused]] const std::string& context,
+        [[maybe_unused]] double threshold = 0.3) {
         AnswerableResult r;
         r.answerable = false;
         r.probability = 0.0;
@@ -441,8 +441,8 @@ public:
 
     // Route decision (which path to take).
     virtual RouteDecisionResult decide_route(
-        const std::string& text,
-        const std::map<std::string, std::string>& routes) {
+        [[maybe_unused]] const std::string& text,
+        [[maybe_unused]] const std::map<std::string, std::string>& routes) {
         RouteDecisionResult r;
         r.route = "unknown";
         r.confidence = 0.0;
@@ -451,7 +451,7 @@ public:
 
     // Priority decision.
     virtual PriorityDecisionResult decide_priority(
-        const std::string& text) {
+        [[maybe_unused]] const std::string& text) {
         PriorityDecisionResult r;
         r.priority = "medium";
         r.score = 0.5;
@@ -461,8 +461,8 @@ public:
 
     // Action decision (what to do next).
     virtual ActionDecisionResult decide_action(
-        const std::string& text,
-        const std::vector<std::string>& available_actions) {
+        [[maybe_unused]] const std::string& text,
+        [[maybe_unused]] const std::vector<std::string>& available_actions) {
         ActionDecisionResult r;
         r.action = "none";
         r.confidence = 0.0;
@@ -471,10 +471,10 @@ public:
 
     // Decisions with persistent memory.
     virtual ConsultResult consult(
-        const std::string& question,
-        const std::map<std::string, std::string>& options,
-        const std::string& topic = "",
-        const std::string& context = "") {
+        [[maybe_unused]] const std::string& question,
+        [[maybe_unused]] const std::map<std::string, std::string>& options,
+        [[maybe_unused]] const std::string& topic = "",
+        [[maybe_unused]] const std::string& context = "") {
         ConsultResult r;
         r.choice = "";
         r.probability = 0.0;
@@ -485,9 +485,9 @@ public:
 
     // Full pipeline (token-efficient).
     virtual DecideProgramResult decide_program(
-        const std::string& program_json,
-        const std::string& state,
-        bool compact = true) {
+        [[maybe_unused]] const std::string& program_json,
+        [[maybe_unused]] const std::string& state,
+        [[maybe_unused]] bool compact = true) {
         DecideProgramResult r;
         r.results = "{}";
         r.tokens_saved = 0;

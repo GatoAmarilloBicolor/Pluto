@@ -58,7 +58,7 @@ public:
 	std::string preview(const std::string& input_json) const override {
 		return "serena_search_pattern " + input_json.substr(0, 80);
 	}
-	ToolResult execute(const std::string& input_json) override {
+	ToolResult execute([[maybe_unused]] const std::string& input_json) override {
 		ToolResult r;
 		r.output = "Use via MCP client: serena__serena_fs__search_for_pattern";
 		return r;

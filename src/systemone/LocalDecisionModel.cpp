@@ -199,9 +199,9 @@ VerifyResult LocalDecisionModel::verify(
 }
 
 GuardResult LocalDecisionModel::guard(
-    const std::string& text,
-    const std::map<std::string, std::string>& checks,
-    double threshold) {
+    [[maybe_unused]] const std::string& text,
+    [[maybe_unused]] const std::map<std::string, std::string>& checks,
+    [[maybe_unused]] double threshold) {
 
     GuardResult result;
     result.risk = "LOW";
@@ -235,7 +235,7 @@ GuardResult LocalDecisionModel::guard(
 SelectRelevantResult LocalDecisionModel::select_relevant(
     const std::string& question,
     const std::vector<std::string>& items,
-    const std::string& kind,
+    [[maybe_unused]] const std::string& kind,
     double min_p) {
 
     SelectRelevantResult result;
@@ -400,10 +400,10 @@ std::string LocalDecisionModel::best_route(const std::string& text,
 }
 
 TriageResult LocalDecisionModel::triage(
-    const std::string& text,
-    const std::map<std::string, std::string>& routes,
-    const std::map<std::string, std::string>& tags,
-    const std::string& urgent_question) {
+    [[maybe_unused]] const std::string& text,
+    [[maybe_unused]] const std::map<std::string, std::string>& routes,
+    [[maybe_unused]] const std::map<std::string, std::string>& tags,
+    [[maybe_unused]] const std::string& urgent_question) {
 
     TriageResult result;
     result.guard_risk = "LOW";
@@ -440,10 +440,10 @@ TriageResult LocalDecisionModel::triage(
 }
 
 FullTriageResult LocalDecisionModel::triage_full(
-    const std::string& text,
-    const std::map<std::string, std::string>& routes,
-    const std::map<std::string, std::string>& tags,
-    const std::string& urgent_question) {
+    [[maybe_unused]] const std::string& text,
+    [[maybe_unused]] const std::map<std::string, std::string>& routes,
+    [[maybe_unused]] const std::map<std::string, std::string>& tags,
+    [[maybe_unused]] const std::string& urgent_question) {
 
     FullTriageResult result;
     result.guard_risk = "LOW";
@@ -572,7 +572,7 @@ ActionDecisionResult LocalDecisionModel::decide_action(
 ConsultResult LocalDecisionModel::consult(
     const std::string& question,
     const std::map<std::string, std::string>& options,
-    const std::string& topic,
+    [[maybe_unused]] const std::string& topic,
     const std::string& context) {
 
     ConsultResult result;
@@ -604,9 +604,9 @@ ConsultResult LocalDecisionModel::consult(
 }
 
 DecideProgramResult LocalDecisionModel::decide_program(
-    const std::string& program_json,
-    const std::string& state,
-    bool compact) {
+    [[maybe_unused]] const std::string& program_json,
+    [[maybe_unused]] const std::string& state,
+    [[maybe_unused]] bool compact) {
 
     DecideProgramResult result;
     result.results = "{\"executed\":\"local\",\"steps\":0,\"note\":\"local heuristic model\"}";

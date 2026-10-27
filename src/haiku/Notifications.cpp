@@ -16,9 +16,9 @@ namespace pluto {
 
 void Notify(const std::string& title, const std::string& body,
             const std::string& /*icon*/) {
-	BNotification notification(static_cast<uint32>(1),
-	                           BString(title.c_str()),
-	                           BString(body.c_str()));
+	BNotification notification(B_INFORMATION_NOTIFICATION);
+	notification.SetTitle(title.c_str());
+	notification.SetContent(body.c_str());
 	notification.Send();
 }
 
@@ -55,7 +55,9 @@ void NotificationCenter::NotificationLooper::MessageReceived(BMessage* msg) {
 		msg->FindString("title", &title);
 		msg->FindString("body", &body);
 
-		BNotification notification(static_cast<uint32>(1), title, body);
+		BNotification notification(B_INFORMATION_NOTIFICATION);
+		notification.SetTitle(title);
+		notification.SetContent(body);
 		notification.Send();
 	} else {
 		BLooper::MessageReceived(msg);

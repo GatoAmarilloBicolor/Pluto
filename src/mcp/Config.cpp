@@ -20,10 +20,6 @@ namespace pluto {
 
 namespace {
 
-std::string home_dir() {
-	return HomeDir();
-}
-
 std::string settings_dir() {
 	return HomeDir() + "/config/settings";
 }

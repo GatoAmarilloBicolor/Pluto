@@ -6,16 +6,6 @@
 namespace pluto {
 namespace mcp {
 
-namespace {
-
-// Helper: get env var or default.
-std::string env_or_default(const char* name, const char* def) {
-	const char* v = std::getenv(name);
-	return v ? std::string(v) : std::string(def);
-}
-
-}  // namespace
-
 std::vector<BuiltinMcpServer> list_builtin_mcp_servers() {
 	std::vector<BuiltinMcpServer> servers;
 

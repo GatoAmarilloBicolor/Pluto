@@ -311,7 +311,7 @@ void SystemOneClient::register_tools(ToolRegistry& registry) {
         fModel->name().c_str());
 }
 
-std::string SystemOneClient::call_tool(const std::string& name, const std::string& args_json) {
+std::string SystemOneClient::call_tool([[maybe_unused]] const std::string& name, [[maybe_unused]] const std::string& args_json) {
     if (!fModel) return "{\"error\":\"no model\"}";
 
     if (name == "systemone_classify") {

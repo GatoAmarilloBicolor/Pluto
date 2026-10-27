@@ -56,7 +56,7 @@ namespace {
 
 // Rough token estimate: 4 chars per token. Used only for the local
 // truncation heuristic, not for billing.
-size_t estimate_tokens(const std::vector<Message>& msgs) {
+[[maybe_unused]] static size_t estimate_tokens(const std::vector<Message>& msgs) {
 	size_t chars = 0;
 	for (const auto& m : msgs) {
 		chars += m.role.size();

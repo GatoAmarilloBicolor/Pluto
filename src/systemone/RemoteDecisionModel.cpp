@@ -65,18 +65,6 @@ std::string array_to_json(const std::vector<std::string>& v) {
     return out;
 }
 
-std::string vector_int_to_json(const std::vector<int>& v) {
-    std::string out = "[";
-    bool first = true;
-    for (int i : v) {
-        if (!first) out += ",";
-        out += std::to_string(i);
-        first = false;
-    }
-    out += "]";
-    return out;
-}
-
 std::string json_str_value(const std::string& json, const std::string& key) {
     std::string search = "\"" + key + "\"";
     size_t pos = json.find(search);

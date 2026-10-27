@@ -10,6 +10,7 @@
 #include <map>
 #include <optional>
 #include <unistd.h>
+#include <iostream>
 #include <curl/curl.h>
 #include "../json.h"
 
@@ -378,7 +379,7 @@ Value make_error_result(const std::string& msg) {
     });
 }
 
-Value handle_initialize(const Value& params) {
+Value handle_initialize([[maybe_unused]] const Value& params) {
     return Value(Object{
         {"protocolVersion", Value("2024-11-05")},
         {"capabilities", Value(Object{
@@ -604,7 +605,6 @@ int main() {
     setvbuf(stdout, nullptr, _IONBF, 0);
     setvbuf(stderr, nullptr, _IONBF, 0);
 
-    int next_id = 1;
     char line[65536];
     
     while (fgets(line, sizeof(line), stdin)) {
@@ -629,27 +629,27 @@ int main() {
         Value params = req.find("params") ? *req.find("params") : Value();
 
         if (method == "initialize") {
-            if (id >= 0) send_response(id, mcp::handle_initialize(params));
+            if (id >= 0) mcp::send_response(id, mcp::handle_initialize(params));
         }
         else if (method == "notifications/initialized") {
             // No response needed for notifications
         }
         else if (method == "tools/list") {
-            if (id >= 0) send_response(id, mcp::handle_tools_list());
+            if (id >= 0) mcp::send_response(id, mcp::handle_tools_list());
         }
         else if (method == "tools/call") {
             std::string tool_name = params.find("name") ? params.find("name")->as_str() : "";
             Value args = params.find("arguments") ? *params.find("arguments") : Value();
             if (id >= 0) {
                 Value result = mcp::handle_tool_call(tool_name, args);
-                send_response(id, result);
+                mcp::send_response(id, result);
             }
         }
         else if (method == "ping") {
-            if (id >= 0) send_response(id, Value(Object{}));
+            if (id >= 0) mcp::send_response(id, Value(Object{}));
         }
         else {
-            if (id >= 0) send_error_response(id, -32601, "Method not found: " + method);
+            if (id >= 0) mcp::send_error_response(id, -32601, "Method not found: " + method);
         }
     }
     
