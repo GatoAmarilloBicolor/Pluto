@@ -67,4 +67,7 @@ public:
 
 BRoster* BRoster::be_roster = nullptr;
 
+// Global be_roster pointer (Haiku API)
+BRoster* be_roster = BRoster::be_roster;
+
 #endif

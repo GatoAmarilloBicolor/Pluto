@@ -4,10 +4,9 @@
 
 #include "SseTransport.h"
 #include "../version.h"
-
-#include <curl/curl.h>
-
+#include "curl_security.h"
 #include <cstdio>
+#include <curl/curl.h>
 #include <string>
 #include <utility>
 
@@ -133,11 +132,7 @@ bool SseTransport::start(std::string& err) {
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
-	curl_easy_setopt(curl, CURLOPT_CAINFO,
-		"/system/data/ssl/CARootCertificates.pem");
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
+	ApplyCurlSecurityWithPinning(curl, fSseUrl);
 
 	CURLcode rc = curl_easy_perform(curl);
 	curl_slist_free_all(headers);
@@ -177,7 +172,7 @@ std::string SseTransport::post(const std::string& body, std::string& err) {
 		headers = curl_slist_append(headers, line.c_str());
 	}
 
-	curl_easy_setopt(curl, CURLOPT_URL, fMessageUrl.c_str());
+curl_easy_setopt(curl, CURLOPT_URL, fMessageUrl.c_str());
 	curl_easy_setopt(curl, CURLOPT_POST, 1L);
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)body.size());
@@ -185,13 +180,8 @@ std::string SseTransport::post(const std::string& body, std::string& err) {
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, response_write_cb);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out);
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
-	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
-	curl_easy_setopt(curl, CURLOPT_CAINFO,
-		"/system/data/ssl/CARootCertificates.pem");
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
+	ApplyCurlSecurityWithPinning(curl, fMessageUrl);
 
 	CURLcode rc = curl_easy_perform(curl);
 	long http_code = 0;

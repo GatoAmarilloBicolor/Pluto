@@ -2,6 +2,7 @@
 #define MOCK_BASE64_H
 
 #include "SupportDefs.h"
+#include <string>
 
 #ifdef __cplusplus
 extern "C" {
@@ -55,6 +56,31 @@ public:
         size_t len = BBase64_DecodeURL(input, length, &out[0], max_size);
         out.resize(len);
         return out;
+    }
+    
+    // Mock implementations for cross-compilation
+    static size_t BBase64_Encode(const void* input, size_t input_length, char* output, size_t output_size) {
+        // Simple mock implementation for cross-compilation
+        return 0;
+    }
+    
+    static size_t BBase64_Decode(const char* input, size_t input_length, void* output, size_t output_size) {
+        return 0;
+    }
+    
+    static size_t BBase64_EncodeURL(const void* input, size_t input_length, char* output, size_t output_size) {
+        // Simple mock implementation for cross-compilation
+        // Just copy the input as a placeholder
+        size_t copy_len = std::min(input_length, output_size);
+        memcpy(output, input, copy_len);
+        return copy_len;
+    }
+    
+    static size_t BBase64_DecodeURL(const char* input, size_t input_length, void* output, size_t output_size) {
+        // Simple mock implementation for cross-compilation
+        size_t copy_len = std::min(input_length, output_size);
+        memcpy(output, input, copy_len);
+        return copy_len;
     }
 };
 

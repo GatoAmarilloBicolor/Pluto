@@ -42,7 +42,8 @@ inline bool ApplyCurlSecurity(CURL* curl, const std::string& url) {
 
     // Connection limits
     curl_easy_setopt(curl, CURLOPT_MAXCONNECTS, 10L);
-    curl_easy_setopt(curl, CURLOPT_MAX_HOST_CONNECTIONS, 5L);
+    // CURLOPT_MAX_HOST_CONNECTIONS is a multi handle option (CURLMOPT_MAX_HOST_CONNECTIONS)
+    // For easy handles, use CURLOPT_MAXCONNECTS
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
 
     // Timeouts (fail fast)
