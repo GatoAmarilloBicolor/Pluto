@@ -53,39 +53,10 @@ double LocalDecisionModel::keyword_overlap(const std::string& a, const std::stri
     return static_cast<double>(intersection) / static_cast<double>(std::min(ta.size(), tb.size()));
 }
 
-bool LocalDecisionModel::contains_urgent_keywords(const std::string& text) {
+bool LocalDecisionModel::contains_keyword(const std::string& text,
+                                          std::initializer_list<const char*> keywords) {
     std::string lt = to_lower(text);
-    const char* urgent[] = {
-        "urgent", "emergency", "immediate", "asap", "critical",
-        "production", "down", "outage", "breach", "security",
-        "human", "manager", "escalate", "now", "right now"
-    };
-    for (const char* kw : urgent) {
-        if (lt.find(kw) != std::string::npos) return true;
-    }
-    return false;
-}
-
-bool LocalDecisionModel::contains_toxic_keywords(const std::string& text) {
-    std::string lt = to_lower(text);
-    const char* toxic[] = {
-        "hate", "kill", "suicide", "abuse", "harass",
-        "threat", "violence", "attack", "stupid", "idiot"
-    };
-    for (const char* kw : toxic) {
-        if (lt.find(kw) != std::string::npos) return true;
-    }
-    return false;
-}
-
-bool LocalDecisionModel::contains_pii_keywords(const std::string& text) {
-    std::string lt = to_lower(text);
-    const char* pii[] = {
-        "ssn", "social security", "credit card", "password",
-        "api key", "secret", "token", "private key", "address",
-        "phone number", "email", "dob", "date of birth"
-    };
-    for (const char* kw : pii) {
+    for (const char* kw : keywords) {
         if (lt.find(kw) != std::string::npos) return true;
     }
     return false;
@@ -236,9 +207,14 @@ GuardResult LocalDecisionModel::guard(
     result.risk = "LOW";
     result.probability = 0.0;
 
-    bool toxic = contains_toxic_keywords(text);
-    bool pii = contains_pii_keywords(text);
-    bool urgent = contains_urgent_keywords(text);
+    bool toxic = contains_keyword(text, {"hate","kill","suicide","abuse","harass",
+        "threat","violence","attack","stupid","idiot"});
+    bool pii = contains_keyword(text, {"ssn","social security","credit card","password",
+        "api key","secret","token","private key","address",
+        "phone number","email","dob","date of birth"});
+    bool urgent = contains_keyword(text, {"urgent","emergency","immediate","asap","critical",
+        "production","down","outage","breach","security",
+        "human","manager","escalate","now","right now"});
 
     if (toxic || pii) {
         result.risk = "HIGH";
@@ -406,15 +382,9 @@ SameIntentResult LocalDecisionModel::same_intent(
 
 // ---------- Decision & Triage ----------
 
-TriageResult LocalDecisionModel::triage(
-    const std::string& text,
-    const std::map<std::string, std::string>& routes,
-    const std::map<std::string, std::string>& tags,
-    const std::string& urgent_question) {
-
-    TriageResult result;
-    result.guard_risk = "LOW";
-
+static std::string best_route(const std::string& text,
+                              const std::map<std::string, std::string>& routes,
+                              double& best_score_out) {
     std::string best_route;
     double best_score = 0.0;
     for (const auto& [route, desc] : routes) {
@@ -425,17 +395,38 @@ TriageResult LocalDecisionModel::triage(
             best_route = route;
         }
     }
-    result.route = best_route;
+    best_score_out = best_score;
+    return best_route;
+}
 
-    bool toxic = contains_toxic_keywords(text);
-    bool pii = contains_pii_keywords(text);
+TriageResult LocalDecisionModel::triage(
+    const std::string& text,
+    const std::map<std::string, std::string>& routes,
+    const std::map<std::string, std::string>& tags,
+    const std::string& urgent_question) {
+
+    TriageResult result;
+    result.guard_risk = "LOW";
+
+    double best_score = 0.0;
+    result.route = best_route(text, routes, best_score);
+
+    bool toxic = contains_keyword(text, {"hate","kill","suicide","abuse","harass",
+        "threat","violence","attack","stupid","idiot"});
+    bool pii = contains_keyword(text, {"ssn","social security","credit card","password",
+        "api key","secret","token","private key","address",
+        "phone number","email","dob","date of birth"});
     if (toxic || pii) {
         result.guard_risk = "HIGH";
-    } else if (contains_urgent_keywords(text)) {
+    } else if (contains_keyword(text, {"urgent","emergency","immediate","asap","critical",
+        "production","down","outage","breach","security",
+        "human","manager","escalate","now","right now"})) {
         result.guard_risk = "MEDIUM";
     }
 
-    result.urgent = contains_urgent_keywords(text);
+    result.urgent = contains_keyword(text, {"urgent","emergency","immediate","asap","critical",
+        "production","down","outage","breach","security",
+        "human","manager","escalate","now","right now"});
     result.probability = result.urgent ? 0.8 : 0.3;
 
     for (const auto& [tag, desc] : tags) {
@@ -457,27 +448,26 @@ FullTriageResult LocalDecisionModel::triage_full(
     FullTriageResult result;
     result.guard_risk = "LOW";
 
-    std::string best_route;
     double best_score = 0.0;
-    for (const auto& [route, desc] : routes) {
-        double score = keyword_overlap(text, route) * 0.6 +
-                       keyword_overlap(text, desc) * 0.4;
-        if (score > best_score) {
-            best_score = score;
-            best_route = route;
-        }
-    }
-    result.route = best_route;
+    (void)best_score;
+    result.route = best_route(text, routes, best_score);
 
-    bool toxic = contains_toxic_keywords(text);
-    bool pii = contains_pii_keywords(text);
+    bool toxic = contains_keyword(text, {"hate","kill","suicide","abuse","harass",
+        "threat","violence","attack","stupid","idiot"});
+    bool pii = contains_keyword(text, {"ssn","social security","credit card","password",
+        "api key","secret","token","private key","address",
+        "phone number","email","dob","date of birth"});
     if (toxic || pii) {
         result.guard_risk = "HIGH";
-    } else if (contains_urgent_keywords(text)) {
+    } else if (contains_keyword(text, {"urgent","emergency","immediate","asap","critical",
+        "production","down","outage","breach","security",
+        "human","manager","escalate","now","right now"})) {
         result.guard_risk = "MEDIUM";
     }
 
-    result.urgent = contains_urgent_keywords(text);
+    result.urgent = contains_keyword(text, {"urgent","emergency","immediate","asap","critical",
+        "production","down","outage","breach","security",
+        "human","manager","escalate","now","right now"});
     result.probability = result.urgent ? 0.8 : 0.3;
 
     for (const auto& [tag, desc] : tags) {
@@ -531,20 +521,11 @@ RouteDecisionResult LocalDecisionModel::decide_route(
     RouteDecisionResult result;
     result.confidence = 0.0;
 
-    std::string best_route;
-    double best_score = 0.0;
-    for (const auto& [route, desc] : routes) {
-        double score = keyword_overlap(text, route) * 0.6 +
-                       keyword_overlap(text, desc) * 0.4;
-        if (score > best_score) {
-            best_score = score;
-            best_route = route;
-        }
-    }
-    result.route = best_route;
-    result.confidence = best_score;
-    result.reasoning = "Selected route: " + best_route + " (score: " +
-        std::to_string(best_score) + ")";
+    double score = 0.0;
+    result.route = best_route(text, routes, score);
+    result.confidence = score;
+    result.reasoning = "Selected route: " + result.route + " (score: " +
+        std::to_string(score) + ")";
 
     return result;
 }

@@ -131,9 +131,8 @@ public:
 private:
     std::string to_lower(const std::string& s);
     double keyword_overlap(const std::string& a, const std::string& b);
-    bool contains_urgent_keywords(const std::string& text);
-    bool contains_toxic_keywords(const std::string& text);
-    bool contains_pii_keywords(const std::string& text);
+    bool contains_keyword(const std::string& text,
+                          std::initializer_list<const char*> keywords);
 };
 
 } // namespace systemone

@@ -9,7 +9,6 @@
 #include <Path.h>
 #include <Directory.h>
 #include <Entry.h>
-#include <Image.h>
 #include <OS.h>
 #include <kernel/image.h>
 #endif
