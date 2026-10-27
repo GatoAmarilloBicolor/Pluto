@@ -213,14 +213,16 @@ public:
 		NodeWatcher* watcher = new NodeWatcher();
 		BMessenger target(watcher);
 
-		uint32_t flags = B_WATCH_DIRECTORY | B_WATCH_NAME | B_WATCH_STAT;
-		if (watch_node(&nref, flags, target) != B_OK) {
-			watcher->Lock();
-			watcher->Quit();
-			r.is_error = true;
-			r.output = "watch_node failed";
-			return r;
-		}
+uint32_t flags = B_WATCH_DIRECTORY | B_WATCH_NAME | B_WATCH_STAT;
+	if (watch_node(&nref, flags, target) != B_OK) {
+		watcher->Lock();
+		watcher->Quit();
+		watcher->Unlock();
+		delete watcher;
+		r.is_error = true;
+		r.output = "watch_node failed";
+		return r;
+	}
 
 		snooze(static_cast<bigtime_t>(duration_ms) * 1000LL);
 
@@ -255,6 +257,8 @@ public:
 
 		watcher->Lock();
 		watcher->Quit();
+		watcher->Unlock();
+		delete watcher;
 
 		r.output = std::move(out);
 		return r;

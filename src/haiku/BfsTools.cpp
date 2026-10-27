@@ -631,6 +631,8 @@ public:
 		if (query.Fetch() != B_OK) {
 			listener->Lock();
 			listener->Quit();
+			listener->Unlock();
+			delete listener;
 			r.is_error = true;
 			r.output = "query fetch failed";
 			return r;
@@ -690,6 +692,8 @@ public:
 
 		listener->Lock();
 		listener->Quit();
+		listener->Unlock();
+		delete listener;
 
 		r.output = std::move(out);
 		return r;

@@ -6,12 +6,9 @@
 #pragma once
 
 #ifdef __HAIKU__
-#include <image.h>
-#ifndef image_id
-#define image_id int32_t
-#endif
+#include <kernel/image.h>
 #else
-#include "mock_headers/haiku/image.h"
+#include "mock_headers/haiku/kernel/image.h"
 #endif
 
 #include "tools/Tool.h"

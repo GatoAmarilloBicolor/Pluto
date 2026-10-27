@@ -30,6 +30,7 @@ NotificationCenter::~NotificationCenter() {
 	if (fLooper) {
 		fLooper->Lock();
 		fLooper->Quit();
+		fLooper->Unlock();
 		delete fLooper;
 		fLooper = nullptr;
 	}

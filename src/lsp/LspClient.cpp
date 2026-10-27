@@ -122,6 +122,9 @@ LspClient::Start(const std::string& command,
 	if (child < 0) {
 		close(inPipe[1]);
 		close(outPipe[0]);
+		close(savedStdin);
+		close(savedStdout);
+		close(savedStderr);
 		error = strerror(child);
 		return false;
 	}

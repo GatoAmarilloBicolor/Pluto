@@ -66,8 +66,6 @@ All rights reserved.
 #include <SupportDefs.h>
 #include <Window.h>
 
-#include <ObjectListPrivate.h>
-
 #include "ObjectList.h"
 
 
@@ -169,7 +167,7 @@ private:
 #endif
 
 
-class BRowContainer : public BObjectList<BRow>
+class BRowContainer : public BList<BRow*>
 {
 };
 
@@ -5129,8 +5127,9 @@ OutlineView::SortList(BRowContainer* list, bool isVisible)
 {
 	if (list) {
 		// Shellsort
-		BRow** items
-			= (BRow**) BObjectList<BRow>::Private(list).AsBList()->Items();
+		BRow** items = new BRow*[list->CountItems()];
+		for (int32 i = 0; i < list->CountItems(); i++)
+			items[i] = static_cast<BRow*>(list->ItemAt(i));
 		int32 numItems = list->CountItems();
 		int h;
 		for (h = 1; h < numItems / 9; h = 3 * h + 1)
@@ -5164,6 +5163,14 @@ OutlineView::SortList(BRowContainer* list, bool isVisible)
 					return false;	// Window is gone...
 		}
 	}
+
+	// Write sorted items back to list
+	for (int32 i = 0; i < numItems; i++)
+		list->RemoveItem(i);
+	for (int32 i = 0; i < numItems; i++)
+		list->AddItem(items[i], i);
+	delete[] items;
+
 	return true;
 }
 

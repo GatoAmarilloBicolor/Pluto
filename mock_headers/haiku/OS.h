@@ -46,12 +46,8 @@ inline bigtime_t real_time_clock_usecs() {
     return 0;
 }
 
-inline void srand(int seed) {
-    (void)seed;
-}
-
-inline int rand() {
-    return 0;
-}
+// srand/rand conflict with macOS stdlib.h - use system versions
+// inline void srand(int seed) { (void)seed; }
+// inline int rand() { return 0; }
 
 #endif
