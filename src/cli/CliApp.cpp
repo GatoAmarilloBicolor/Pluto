@@ -491,8 +491,7 @@ int CliApp::run() {
     
     // Wiki
     std::string wiki_dir = pluto::WikiDefaultDir();
-    int wiki_count = 0;
-    if (!wiki_dir.empty()) wiki_count = pluto::WikiInit(wiki_dir);
+    if (!wiki_dir.empty()) pluto::WikiInit(wiki_dir);
     
     // Apply CLI options to config
     if (!options_.provider.empty()) cfg_.provider = options_.provider;

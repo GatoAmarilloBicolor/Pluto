@@ -15,7 +15,7 @@ std::unique_ptr<Provider> ProviderFactory::create(const Config& cfg) {
     Credentials creds = ResolveCredentials(mutable_cfg);
     if (creds.empty()) return nullptr;
     
-    AuthType auth_type = (creds.type == Credentials::OAUTH) ? AuthType::OAUTH : AuthType::API_KEY;
+    [[maybe_unused]] AuthType auth_type = (creds.type == Credentials::OAUTH) ? AuthType::OAUTH : AuthType::API_KEY;
     
     if (mutable_cfg.provider == "anthropic") {
         return create_anthropic(mutable_cfg);

@@ -13,7 +13,7 @@
 
 namespace pluto {
 
-ToolRegistry ToolRegistryBuilder::build(const Config& cfg) {
+ToolRegistry ToolRegistryBuilder::build([[maybe_unused]] const Config& cfg) {
     ToolRegistry tools;
     
     add_builtin_tools(tools);
@@ -69,7 +69,7 @@ void ToolRegistryBuilder::add_web_tools(ToolRegistry& tools) {
     tools.add(MakeWebSearchTool());
 }
 
-void ToolRegistryBuilder::add_misc_tools(ToolRegistry& tools) {
+void ToolRegistryBuilder::add_misc_tools([[maybe_unused]] ToolRegistry& tools) {
     // No additional misc tools for now
 }
 
