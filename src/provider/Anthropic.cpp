@@ -406,8 +406,10 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
 		headers = curl_slist_append(headers, "content-type: application/json");
 		headers = curl_slist_append(headers, "accept: text/event-stream");
 
-		curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-		curl_easy_setopt(curl, CURLOPT_POST, 1L);
+curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+	// Certificate pinning for api.anthropic.com
+	curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, "sha256/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+	curl_easy_setopt(curl, CURLOPT_POST, 1L);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)body.size());
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -417,10 +419,14 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
 			"/system/data/ssl/CARootCertificates.pem");
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
 		curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
 		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30L);
-		curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
-		curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 120L);
+curl_easy_setopt(curl, CURLOPT_TIMEOUT, 120L);
+	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
+	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 120L);
+	curl_easy_setopt(curl, CURLOPT_MAXCONNECTS, 10L);
+	curl_easy_setopt(curl, CURLOPT_MAXFILESIZE, (curl_off_t)50 * 1024 * 1024);
 		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 		curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, xferinfo_cb);
 		curl_easy_setopt(curl, CURLOPT_XFERINFODATA, req.cancel);

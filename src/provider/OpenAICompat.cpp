@@ -555,8 +555,32 @@ void OpenAICompatProvider::_StreamImageGen(const CompletionRequest& req,
 	if (url.rfind("https://", 0) == 0) {
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
 		curl_easy_setopt(curl, CURLOPT_CAINFO,
 			"/system/data/ssl/CARootCertificates.pem");
+		curl_easy_setopt(curl, CURLOPT_MAXFILESIZE, (curl_off_t)50 * 1024 * 1024);
+		// Certificate pinning for known providers
+		size_t proto = url.find("://");
+		if (proto != std::string::npos) {
+			size_t start = proto + 3;
+			size_t end = url.find_first_of("/?#", start);
+			std::string host = url.substr(start, end != std::string::npos ? end - start : std::string::npos);
+			if (host == "api.openai.com") {
+				curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, "sha256/REPLACE_WITH_ACTUAL_PIN");
+			} else if (host == "api.openrouter.com" || host == "openrouter.ai") {
+				curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, "sha256/REPLACE_WITH_ACTUAL_PIN");
+			} else if (host == "generativelanguage.googleapis.com") {
+				curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, "sha256/REPLACE_WITH_ACTUAL_PIN");
+			} else if (host == "api.anthropic.com") {
+				curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, "sha256/REPLACE_WITH_ACTUAL_PIN");
+			} else if (host == "api.x.ai") {
+				curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, "sha256/REPLACE_WITH_ACTUAL_PIN");
+			} else if (host == "api.brave.com") {
+				curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, "sha256/REPLACE_WITH_ACTUAL_PIN");
+			} else if (host == "api.tavily.com") {
+				curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, "sha256/REPLACE_WITH_ACTUAL_PIN");
+			}
+		}
 	}
 
 	// Notify user that generation is in progress.
@@ -707,8 +731,32 @@ curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 	if (url.rfind("https://", 0) == 0) {
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
 		curl_easy_setopt(curl, CURLOPT_CAINFO,
 			"/system/data/ssl/CARootCertificates.pem");
+		curl_easy_setopt(curl, CURLOPT_MAXFILESIZE, (curl_off_t)50 * 1024 * 1024);
+		// Certificate pinning for known providers
+		size_t proto = url.find("://");
+		if (proto != std::string::npos) {
+			size_t start = proto + 3;
+			size_t end = url.find_first_of("/?#", start);
+			std::string host = url.substr(start, end != std::string::npos ? end - start : std::string::npos);
+			if (host == "api.openai.com") {
+				curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, "sha256/REPLACE_WITH_ACTUAL_PIN");
+			} else if (host == "api.openrouter.com" || host == "openrouter.ai") {
+				curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, "sha256/REPLACE_WITH_ACTUAL_PIN");
+			} else if (host == "generativelanguage.googleapis.com") {
+				curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, "sha256/REPLACE_WITH_ACTUAL_PIN");
+			} else if (host == "api.anthropic.com") {
+				curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, "sha256/REPLACE_WITH_ACTUAL_PIN");
+			} else if (host == "api.x.ai") {
+				curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, "sha256/REPLACE_WITH_ACTUAL_PIN");
+			} else if (host == "api.brave.com") {
+				curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, "sha256/REPLACE_WITH_ACTUAL_PIN");
+			} else if (host == "api.tavily.com") {
+				curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, "sha256/REPLACE_WITH_ACTUAL_PIN");
+			}
+		}
 	}
 
 		CURLcode rc = curl_easy_perform(curl);
