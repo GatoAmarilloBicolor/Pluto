@@ -100,6 +100,8 @@ std::string http_post_json(const std::string& url, const std::string& body) {
 	curl_easy_setopt(c, CURLOPT_USERAGENT, "pluto/0.3.0 (Haiku)");
 	curl_easy_setopt(c, CURLOPT_CAINFO,
 		"/system/data/ssl/CARootCertificates.pem");
+	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
+	curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
 	CURLcode rc = curl_easy_perform(c);
 	curl_slist_free_all(hdrs);
 	curl_easy_cleanup(c);
@@ -129,6 +131,8 @@ std::string http_get_auth(const std::string& url,
 	curl_easy_setopt(c, CURLOPT_USERAGENT, "pluto/0.3.0 (Haiku)");
 	curl_easy_setopt(c, CURLOPT_CAINFO,
 		"/system/data/ssl/CARootCertificates.pem");
+	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
+	curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
 	CURLcode rc = curl_easy_perform(c);
 	curl_slist_free_all(hdrs);
 	curl_easy_cleanup(c);

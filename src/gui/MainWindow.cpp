@@ -94,14 +94,20 @@ namespace gui {
 
 namespace {
 
-// Message constants that are NOT in ChatColors.h
 const uint32 kMsgSend         = 'plSd';
+const uint32 kMsgReset        = 'plRs';
+const uint32 kMsgAbout        = 'plAb';
 const uint32 kMsgMcpInfo      = 'plMi';
 const uint32 kMsgSaveSession  = 'plSv';
 const uint32 kMsgResumeLast   = 'plRl';
 const uint32 kMsgLoadSession  = 'plLd';
 const uint32 kMsgStop         = 'plSt';
+const uint32 kMsgZoomIn       = 'plZi';
+const uint32 kMsgZoomOut      = 'plZo';
+const uint32 kMsgZoomReset    = 'plZr';
 const uint32 kMsgPrefs        = 'plPr';
+const uint32 kMsgExportMd     = 'plEm';
+const uint32 kMsgExportJsonl  = 'plEj';
 const uint32 kMsgFind         = 'plFn';
 const uint32 kMsgFindNext     = 'plF>';
 const uint32 kMsgFindHide     = 'plFh';
@@ -125,6 +131,8 @@ const uint32 kMsgOAuthLogout         = 'plOo';
 const uint32 kMsgOAuthDone           = 'plOd';
 const uint32 kMsgPeerMenu           = 'plPm';
 const uint32 kMsgPeerSendPrompt     = 'plPs';
+const uint32 kMsgNewTab             = 'plNt';
+const uint32 kMsgCloseTab           = 'plCl';
 const uint32 kMsgTabChanged         = 'plTc';
 const uint32 kMsgNextTab            = 'plN>';
 const uint32 kMsgPrevTab            = 'plN<';
@@ -1005,6 +1013,13 @@ private:
 			curl_easy_setopt(c, CURLOPT_WRITEDATA, &body);
 			curl_easy_setopt(c, CURLOPT_TIMEOUT, 10L);
 			curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, 5L);
+			// Enable SSL verification for HTTPS URLs
+			if (url.rfind("https://", 0) == 0) {
+				curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
+				curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
+				curl_easy_setopt(c, CURLOPT_CAINFO,
+					"/system/data/ssl/CARootCertificates.pem");
+			}
 			CURLcode rc = curl_easy_perform(c);
 			long http = 0;
 			curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &http);
@@ -2918,12 +2933,12 @@ void MainWindow::MessageReceived(BMessage* msg) {
 		BDirectory dir(dst_dir.c_str());
 		if (dir.InitCheck() != B_OK) {
 			// Create directory hierarchy
-			BDirectory parent;
 			BPath path(dst_dir.c_str());
 			path.GetParent(&path);
-			status_t err = parent.CreateDirectory(path.Path(), dst_dir.c_str(), 0755);
+			status_t err = path.CreateDirectory(dst_dir.c_str(), 0755);
 			if (err != B_OK) {
-				_Append("Could not create Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
+				_Append("Could not create Tracker add-ons directory.
+", rgb_color{245, 101, 101, 255});
 				break;
 			}
 		}
@@ -2931,22 +2946,28 @@ void MainWindow::MessageReceived(BMessage* msg) {
 		// Copy the add-on file
 		BEntry srcEntry(src.c_str());
 		if (srcEntry.InitCheck() != B_OK) {
-			_Append("Could not find add-on binary.\n", rgb_color{245, 101, 101, 255});
+			_Append("Could not find add-on binary.
+", rgb_color{245, 101, 101, 255});
 			break;
 		}
 
 		BDirectory dstDir(dst_dir.c_str());
 		if (dstDir.InitCheck() == B_OK) {
 			BEntry dstEntry;
-			if (srcEntry.CopyTo(&dstDir, "Ask Pluto", &dstEntry) == B_OK) {
-				_Append("Tracker add-on \"Ask Pluto\" installed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
-				_Append("Right-click files in Tracker to use it.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+			if (srcEntry.Copy(&dstDir, "Ask Pluto", &dstEntry) == B_OK) {
+				_Append("Tracker add-on "Ask Pluto" installed.
+", ui_color(B_DOCUMENT_TEXT_COLOR));
+				_Append("Right-click files in Tracker to use it.
+", ui_color(B_DOCUMENT_TEXT_COLOR));
 			} else {
-				_Append("Could not copy add-on to Tracker directory.\n", rgb_color{245, 101, 101, 255});
-				_Append("Build it first: make \"Ask Pluto\"\n", rgb_color{245, 101, 101, 255});
+				_Append("Could not copy add-on to Tracker directory.
+", rgb_color{245, 101, 101, 255});
+				_Append("Build it first: make 'Ask Pluto'
+", rgb_color{245, 101, 101, 255});
 			}
 		} else {
-			_Append("Could not access Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
+			_Append("Could not access Tracker add-ons directory.
+", rgb_color{245, 101, 101, 255});
 		}
 		break;
 	}
@@ -3213,108 +3234,10 @@ void MainWindow::MessageReceived(BMessage* msg) {
 			break;
 		}
 
-		case B_KEY_DOWN: {
-			// Handle global keyboard shortcuts (Cmd/Ctrl+key combinations).
-			const char* bytes;
-			int32 numBytes;
-			if (msg->FindData("bytes", B_STRING_TYPE, (const void**)&bytes, &numBytes) != B_OK || numBytes <= 0)
-				break;
-
-			uint32 modifiers = 0;
-			msg->FindInt32("modifiers", (int32*)&modifiers);
-			bool cmd = (modifiers & B_COMMAND_KEY) != 0;
-			bool ctrl = (modifiers & B_CONTROL_KEY) != 0;
-			bool shift = (modifiers & B_SHIFT_KEY) != 0;
-
-			// Global shortcuts (work regardless of focused view).
-			if (cmd || ctrl) {
-				switch (bytes[0]) {
-					case 'n':
-						_CreateTab();
-						return;
-					case 'w':
-						_CloseTab();
-						return;
-					case 't':
-						_CreateTab();
-						return;
-					case '1': case '2': case '3': case '4': case '5':
-					case '6': case '7': case '8': case '9': {
-						int32 tab = bytes[0] - '1';
-						if (fTabView && tab < fTabView->CountTabs()) {
-							fTabView->Select(tab);
-						}
-						return;
-					}
-					case '/':
-						if (fInput) {
-							fInput->MakeFocus(true);
-							if (shift) fInput->SelectAll();
-						}
-						return;
-					case ',':
-						BMessenger(this).SendMessage(static_cast<uint32>('plPr'));
-						return;
-					case 'q':
-						PostMessage(B_QUIT_REQUESTED);
-						return;
-					case 'p':
-						_ExportMarkdown();
-						return;
-					case 'f':
-						_ShowFindBar();
-						return;
-					case 'l':
-						if (_ActiveConv()) _ActiveConv()->Reset();
-						return;
-					case 'r':
-						if (!shift) _ResetConversation();
-						return;
-					case 'm':
-						_OpenModelPicker();
-						return;
-					case 's':
-						if (_ActiveConv()) _ActiveConv()->SaveSession();
-						return;
-					case '+':
-						fFontDelta += 1;
-						fConfig->font_delta = fFontDelta;
-						pluto::SaveConfig(*fConfig);
-						_ApplyFontZoom();
-						return;
-					case '-':
-						fFontDelta -= 1;
-						fConfig->font_delta = fFontDelta;
-						pluto::SaveConfig(*fConfig);
-						_ApplyFontZoom();
-						return;
-					case '0':
-						fFontDelta = 0;
-						fConfig->font_delta = fFontDelta;
-						pluto::SaveConfig(*fConfig);
-						_ApplyFontZoom();
-						return;
-				}
-			}
-
-			// F-keys for fullscreen toggle
-			if (msg->FindInt32("key") == B_FUNCTION_KEY) {
-				if (IsHidden() || !IsActive()) return;
-				BRect frame = Frame();
-				BRect screen = BScreen().Frame();
-				if (frame == screen) {
-					ResizeTo(1020, 720);
-					MoveTo((screen.Width() - 1020) / 2, (screen.Height() - 720) / 2);
-				} else {
-					MoveTo(0, 0);
-					ResizeTo(screen.Width(), screen.Height());
-				}
-				return;
-			}
-			break;
-		}
-
 		default:
+			// Live theme update: Haiku posts B_COLORS_UPDATED when the user
+			// changes the system color scheme. Recompute our palette and
+			// update view background colors so pluto matches instantly.
 			if (msg->what == B_COLORS_UPDATED) {
 				_InitPalette();
 				_UpdateStatus();
@@ -3322,6 +3245,185 @@ void MainWindow::MessageReceived(BMessage* msg) {
 			BWindow::MessageReceived(msg);
 	}
 }
+
+void MainWindow::KeyDown(const char* bytes, int32 numBytes) {
+	if (numBytes != 1) {
+		BWindow::KeyDown(bytes, numBytes);
+		return;
+	}
+
+	uint32 modifiers = 0;
+	if (CurrentMessage())
+		CurrentMessage()->FindInt32("modifiers", (int32*)&modifiers);
+	bool cmd = (modifiers & B_COMMAND_KEY) != 0;
+	bool ctrl = (modifiers & B_CONTROL_KEY) != 0;
+	bool shift = (modifiers & B_SHIFT_KEY) != 0;
+
+	// Global shortcuts (work regardless of focused view).
+	if (cmd || ctrl) {
+		switch (bytes[0]) {
+			case 'n':  // Cmd/Ctrl+N — new tab
+				if (!shift) _CreateTab();
+				else _CreateTab();  // always new tab
+				return;
+			case 'w':  // Cmd/Ctrl+W — close tab
+				_CloseTab();
+				return;
+			case 't':  // Cmd/Ctrl+T — new tab (alias)
+				_CreateTab();
+				return;
+			case '1': case '2': case '3': case '4': case '5':
+			case '6': case '7': case '8': case '9': {
+				// Cmd/Ctrl+1-9 — select tab by number.
+				int32 tab = bytes[0] - '1';
+				if (fTabView && tab < fTabView->CountTabs()) {
+					fTabView->Select(tab);
+				}
+				return;
+			}
+			case '/':  // Cmd/Ctrl+/ — focus input
+				if (fInput) {
+					fInput->MakeFocus(true);
+					// Select all if shift held.
+					if (shift) fInput->SelectAll();
+				}
+				return;
+			case ',':  // Cmd/Ctrl+, — settings
+				BMessenger(this).SendMessage(static_cast<uint32>('plPr'));
+				return;
+			case 'q':  // Cmd/Ctrl+Q — quit
+				PostMessage(B_QUIT_REQUESTED);
+				return;
+			case 'p':  // Cmd/Ctrl+P — print/export
+				_ExportMarkdown();
+				return;
+			case 'f':  // Cmd/Ctrl+F — find
+				_ShowFindBar();
+				return;
+			case 'l':  // Cmd/Ctrl+L — clear conversation
+				if (_ActiveConv()) _ActiveConv()->Reset();
+				return;
+			case 'r':  // Cmd/Ctrl+R — reset session
+				if (!shift) _ResetConversation();
+				return;
+			case 'm':  // Cmd/Ctrl+M — model picker
+				_OpenModelPicker();
+				return;
+			case 'f':  // Cmd/Ctrl+F — find (already handled above)
+				return;
+			case '+':  // Cmd/Ctrl++ — zoom in
+				fFontDelta += 1;
+				fConfig->font_delta = fFontDelta;
+				pluto::SaveConfig(*fConfig);
+				_ApplyFontZoom();
+				return;
+			case '-':  // Cmd/Ctrl+- — zoom out
+				fFontDelta -= 1;
+				fConfig->font_delta = fFontDelta;
+				pluto::SaveConfig(*fConfig);
+				_ApplyFontZoom();
+				return;
+			case '0':  // Cmd/Ctrl+0 — zoom reset
+				fFontDelta = 0;
+				fConfig->font_delta = fFontDelta;
+				pluto::SaveConfig(*fConfig);
+				_ApplyFontZoom();
+				return;
+			case 's':  // Cmd/Ctrl+S — save session
+				if (_ActiveConv()) _ActiveConv()->SaveSession();
+				return;
+		}
+	}
+
+	// F11 — full screen toggle.
+	if (bytes[0] == B_FUNCTION_KEY) {
+		// B_FUNCTION_KEY is a prefix; check the actual function key in
+		// the message's "key" field or just toggle fullscreen.
+		// For simplicity, toggle fullscreen on any F-key.
+		if (IsHidden() || !IsActive()) return;
+		BRect frame = Frame();
+		BRect screen = BScreen().Frame();
+		if (frame == screen) {
+			// Restore to windowed.
+			ResizeTo(1020, 720);
+			MoveTo((screen.Width() - 1020) / 2, (screen.Height() - 720) / 2);
+		} else {
+			// Go full screen.
+			MoveTo(0, 0);
+			ResizeTo(screen.Width(), screen.Height());
+		}
+		return;
+	}
+
+	BWindow::KeyDown(bytes, numBytes);
+}
+	if (_ActiveConv()->IsBusy()) return;
+	std::string text = trim(fInput->Text() ? fInput->Text() : "");
+	if (text.empty() && fPendingImages.empty()) return;
+
+	// Add to input history.
+	static_cast<ChatInput*>(fInput)->AddToHistory(text);
+
+	// Handle slash commands.
+	if (fPendingImages.empty() && _HandleSlashCommand(text)) {
+		fInput->SetText("");
+		return;
+	}
+
+	_ActiveConv()->AppendText("You\n", ui_color(B_CONTROL_TEXT_COLOR), B_BOLD_FACE);
+	if (!text.empty())
+		_Append(text + "\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+	// Show attached images inline in the chat.
+	for (const auto& img : fPendingImages) {
+		if (img.kind == "audio") {
+			_Append("\xf0\x9f\x94\x8a [" + img.filename + "]", ui_color(B_DOCUMENT_TEXT_COLOR));
+			_Append("  (audio not processed by model)\n", {255, 180, 0, 255});
+		} else if (img.kind == "pdf") {
+			_Append("\xf0\x9f\x93\x84 [" + img.filename + "]\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		} else if (!img.base64_data.empty()) {
+			_ActiveConv()->InsertInlineImage(img.base64_data);
+		} else {
+			_Append("\xf0\x9f\x96\xbc [" + img.filename + "]\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		}
+	}
+	_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+
+fInput->SetText("");
+
+// Fire user_prompt hooks before turn (from tab's config).
+const auto& hooks = _ActiveConv()
+	? _ActiveConv()->GetConfig().hooks_user_prompt
+	: fConfig->hooks_user_prompt;
+pluto::RunHooksSafe(hooks, "user_prompt", text);
+
+	// Build content blocks for the message.
+	// Process @file and @image mentions in the text.
+	std::vector<ContentBlock> blocks;
+	if (!text.empty()) {
+		pluto::build_user_content(text, blocks);
+	}
+	for (auto& img : fPendingImages) {
+		ContentBlock ib;
+		if (img.kind == "audio") {
+			ib.type = ContentBlock::AUDIO;
+			ib.audio_format = std::move(img.media_type);
+			ib.audio_data = std::move(img.base64_data);
+		} else if (img.kind == "pdf") {
+			ib.type = ContentBlock::DOCUMENT;
+			ib.doc_media_type = std::move(img.media_type);
+			ib.doc_data = std::move(img.base64_data);
+		} else {
+			ib.type = ContentBlock::IMAGE;
+			ib.image_media_type = std::move(img.media_type);
+			ib.image_data = std::move(img.base64_data);
+		}
+		blocks.push_back(std::move(ib));
+	}
+	_ClearPendingImages();
+
+	_ActiveConv()->SendInput(std::move(blocks));
+}
+
 
 void MainWindow::_ResetConversation() {
 	auto* c = _ActiveConv();

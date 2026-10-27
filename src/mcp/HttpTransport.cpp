@@ -44,6 +44,8 @@ std::string HttpTransport::post(const std::string& body, std::string& err) {
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
 	curl_easy_setopt(curl, CURLOPT_CAINFO, "/system/data/ssl/CARootCertificates.pem");
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
 
 	CURLcode rc = curl_easy_perform(curl);
 	long http_code = 0;

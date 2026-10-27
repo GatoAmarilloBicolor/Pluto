@@ -40,6 +40,13 @@ std::string http_get_json(const std::string& url) {
 	curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, 3L);
 	curl_easy_setopt(c, CURLOPT_USERAGENT, "pluto/0.7.1 (Haiku)");
 	curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
+	// Enable SSL verification for HTTPS URLs
+	if (url.rfind("https://", 0) == 0) {
+		curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
+		curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
+		curl_easy_setopt(c, CURLOPT_CAINFO,
+			"/system/data/ssl/CARootCertificates.pem");
+	}
 	CURLcode rc = curl_easy_perform(c);
 	curl_easy_cleanup(c);
 	if (rc != CURLE_OK) return {};

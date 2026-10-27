@@ -552,9 +552,12 @@ void OpenAICompatProvider::_StreamImageGen(const CompletionRequest& req,
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 120L);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
-	if (url.rfind("http://", 0) != 0)
+	if (url.rfind("https://", 0) == 0) {
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
 		curl_easy_setopt(curl, CURLOPT_CAINFO,
 			"/system/data/ssl/CARootCertificates.pem");
+	}
 
 	// Notify user that generation is in progress.
 	{
@@ -689,21 +692,24 @@ void OpenAICompatProvider::stream(const CompletionRequest& req,
 		headers = curl_slist_append(headers, "HTTP-Referer: https://codeberg.org/atomozero/Pluto");
 		headers = curl_slist_append(headers, "X-Title: Pluto");
 
-		curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-		curl_easy_setopt(curl, CURLOPT_POST, 1L);
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)body.size());
-		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, oai_write_cb);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &st);
-		curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
-		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
-		curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, oai_xferinfo);
-		curl_easy_setopt(curl, CURLOPT_XFERINFODATA, req.cancel);
-		// Ollama/local servers may not have TLS.
-		if (url.rfind("http://", 0) != 0)
-			curl_easy_setopt(curl, CURLOPT_CAINFO,
-				"/system/data/ssl/CARootCertificates.pem");
+curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+	curl_easy_setopt(curl, CURLOPT_POST, 1L);
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)body.size());
+	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, oai_write_cb);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &st);
+	curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
+	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+	curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, oai_xferinfo);
+	curl_easy_setopt(curl, CURLOPT_XFERINFODATA, req.cancel);
+	// Enable SSL verification for HTTPS URLs
+	if (url.rfind("https://", 0) == 0) {
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+		curl_easy_setopt(curl, CURLOPT_CAINFO,
+			"/system/data/ssl/CARootCertificates.pem");
+	}
 
 		CURLcode rc = curl_easy_perform(curl);
 		long http_code = 0;

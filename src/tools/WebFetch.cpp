@@ -205,6 +205,8 @@ public:
 			"Mozilla/5.0 (compatible; pluto/0.5.0; +https://haiku-os.org)");
 		curl_easy_setopt(c, CURLOPT_CAINFO,
 			"/system/data/ssl/CARootCertificates.pem");
+		curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
+		curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
 		// Accept compressed responses.
 		curl_easy_setopt(c, CURLOPT_ACCEPT_ENCODING, "");
 

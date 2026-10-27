@@ -927,6 +927,13 @@ int32 SettingsDialog::_FetchThread(void* data) {
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, "pluto/0.3.0 (Haiku)");
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
+	// Enable SSL verification for HTTPS URLs
+	if (url.rfind("https://", 0) == 0) {
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+		curl_easy_setopt(curl, CURLOPT_CAINFO,
+			"/system/data/ssl/CARootCertificates.pem");
+	}
 
 	CURLcode rc = curl_easy_perform(curl);
 	long http_code = 0;
@@ -977,6 +984,13 @@ int32 SettingsDialog::_FetchThread(void* data) {
 	body.clear();
 	url = base_url + "/v1/models";
 	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+	// Enable SSL verification for HTTPS URLs
+	if (url.rfind("https://", 0) == 0) {
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+		curl_easy_setopt(curl, CURLOPT_CAINFO,
+			"/system/data/ssl/CARootCertificates.pem");
+	}
 
 	struct curl_slist* auth_hdrs = nullptr;
 	std::string env_name = self->fApiKeyEnv->Text() ? self->fApiKeyEnv->Text() : "";

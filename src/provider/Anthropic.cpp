@@ -415,6 +415,8 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &st);
 		curl_easy_setopt(curl, CURLOPT_CAINFO,
 			"/system/data/ssl/CARootCertificates.pem");
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
 		curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
 		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30L);
 		curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);

@@ -395,12 +395,20 @@ std::vector<DiscoveredServer> DiscoverMcpServers() {
 		if (known_hosts.count(hp)) continue;    // already configured
 		if (found_hosts.count(hp)) continue;     // already found via other path
 
-		curl_easy_setopt(curl, CURLOPT_URL, p.url);
-		curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
-		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 2L);
-		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 1L);
-		curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
-		CURLcode rc = curl_easy_perform(curl);
+curl_easy_setopt(curl, CURLOPT_URL, p.url);
+	curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
+	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 2L);
+	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 1L);
+	curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
+	// Enable SSL verification for HTTPS URLs
+	std::string probe_url(p.url);
+	if (probe_url.rfind("https://", 0) == 0) {
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+		curl_easy_setopt(curl, CURLOPT_CAINFO,
+			"/system/data/ssl/CARootCertificates.pem");
+	}
+	CURLcode rc = curl_easy_perform(curl);
 		long code = 0;
 		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
 		curl_easy_reset(curl);  // reset for next probe, keep connection pool
