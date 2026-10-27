@@ -9,8 +9,9 @@
 #include "json.h"
 #include "util.h"
 
-#include <openssl/evp.h>
-#include <openssl/rand.h>
+#include <Hash.h>
+#include <Random.h>
+#include <Base64.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -45,22 +46,9 @@ std::string home_dir() {
 	return HomeDir();
 }
 
-// base64url encode (no padding).
+// base64url encode (no padding) - uses Haiku's BBase64
 std::string base64url_encode(const unsigned char* data, size_t len) {
-	static const char table[] =
-		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-	std::string out;
-	out.reserve((len * 4 + 2) / 3);
-	for (size_t i = 0; i < len; i += 3) {
-		unsigned int b = (unsigned int)data[i] << 16;
-		if (i + 1 < len) b |= (unsigned int)data[i + 1] << 8;
-		if (i + 2 < len) b |= (unsigned int)data[i + 2];
-		out += table[(b >> 18) & 0x3f];
-		out += table[(b >> 12) & 0x3f];
-		if (i + 1 < len) out += table[(b >> 6) & 0x3f];
-		if (i + 2 < len) out += table[b & 0x3f];
-	}
-	return out;
+	return BBase64::EncodeURL(data, len);
 }
 
 std::string url_encode(const std::string& s) {
@@ -162,22 +150,15 @@ std::string GenerateCodeVerifier() {
 
 std::string GenerateCodeChallenge(const std::string& verifier) {
 	unsigned char hash[32];
-	unsigned int hlen = 0;
-	EVP_Digest(verifier.data(), verifier.size(),
-	           hash, &hlen, EVP_sha256(), nullptr);
-	return base64url_encode(hash, hlen);
+	size_t hlen = 0;
+	BHash::Hash(B_HASH_SHA256, verifier.data(), verifier.size(), hash, &hlen);
+return BBase64::EncodeURL(hash, hlen);
 }
 
 std::string GenerateState() {
 	unsigned char buf[16];
-	RAND_bytes(buf, sizeof(buf));
-	std::string out;
-	for (int i = 0; i < 16; ++i) {
-		char hex[3];
-		std::snprintf(hex, sizeof(hex), "%02x", buf[i]);
-		out += hex;
-	}
-	return out;
+	BRandom::GetRandomBytes(buf, sizeof(buf));
+	return BBase64::EncodeURL(buf, sizeof(buf));
 }
 
 // ---- Token storage ----
