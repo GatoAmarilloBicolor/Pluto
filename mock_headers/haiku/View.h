@@ -8,6 +8,15 @@
 
 struct BFont;
 
+struct rgb_color {
+    uint8_t red;
+    uint8_t green;
+    uint8_t blue;
+    uint8_t alpha;
+};
+
+class BWindow;  // forward declaration
+
 class BView : public BHandler {
 public:
     BView(BRect frame, const char* name, uint32 resizingMode, uint32 flags)
@@ -63,13 +72,6 @@ public:
     virtual BWindow* Window() const { return nullptr; }
     virtual void SetTarget(BHandler* target) { (void)target; }
     virtual BHandler* Target() const { return nullptr; }
-    
-    struct rgb_color {
-        uint8_t red;
-        uint8_t green;
-        uint8_t blue;
-        uint8_t alpha;
-    };
     
     enum drawing_mode {
         B_OP_COPY = 0,

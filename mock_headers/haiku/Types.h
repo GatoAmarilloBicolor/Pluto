@@ -130,6 +130,8 @@ struct attr_info {
 
 const int B_FILE_NAME_LENGTH = 255;
 
+typedef uint32_t type_code;
+
 // POSIX environ
 extern char** environ;
 

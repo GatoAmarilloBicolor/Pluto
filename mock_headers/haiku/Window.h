@@ -8,6 +8,31 @@
 #include "Message.h"
 #include "Rect.h"
 
+enum window_type {
+    B_TITLED_WINDOW = 0,
+    B_DOCUMENT_WINDOW = 1,
+    B_MODAL_WINDOW = 2,
+    B_BORDERED_WINDOW = 3,
+    B_FLOATING_WINDOW = 4,
+    B_NO_BORDER_WINDOW_LOOK = 5
+};
+
+enum window_feel {
+    B_NORMAL_WINDOW_FEEL = 0,
+    B_MODAL_WINDOW_FEEL = 1,
+    B_FLOATING_WINDOW_FEEL = 2,
+    B_DOCK_WINDOW_FEEL = 3
+};
+
+enum color_space {
+    B_RGB32 = 0,
+    B_RGB16 = 1,
+    B_RGB15 = 2,
+    B_CMAP8 = 3,
+    B_GRAY8 = 4,
+    B_NO_COLOR_SPACE = 5
+};
+
 class BWindow : public BLooper {
 public:
     BWindow(BRect frame, const char* title, window_type type, uint32 flags,
@@ -46,9 +71,6 @@ public:
     virtual bool IsActive() const { return false; }
     virtual void AddChild(BView* view) { (void)view; }
     virtual void RemoveChild(BView* view) { (void)view; }
-    virtual BView* FindView(const char* name) { (void)name; return nullptr; }
-    virtual int32 CountChildren() const { return 0; }
-    virtual BView* ChildAt(int32 index) const { (void)index; return nullptr; }
     virtual BView* CurrentFocus() const { return nullptr; }
     virtual status_t Lock() { return B_OK; }
     virtual void Unlock() {}
@@ -57,22 +79,6 @@ public:
     virtual void UpdateIfNeeded() {}
     virtual void Invalidate(BRect rect) { (void)rect; }
     virtual void Invalidate() {}
-    
-    enum window_type {
-        B_TITLED_WINDOW = 0,
-        B_DOCUMENT_WINDOW = 1,
-        B_MODAL_WINDOW = 2,
-        B_BORDERED_WINDOW = 3,
-        B_FLOATING_WINDOW = 4,
-        B_NO_BORDER_WINDOW_LOOK = 5
-    };
-    
-    enum window_feel {
-        B_NORMAL_WINDOW_FEEL = 0,
-        B_MODAL_WINDOW_FEEL = 1,
-        B_FLOATING_WINDOW_FEEL = 2,
-        B_DOCK_WINDOW_FEEL = 3
-    };
     
     static const uint32 B_CURRENT_WORKSPACE = 0;
     static const uint32 B_ALL_WORKSPACES = 0xFFFFFFFF;
