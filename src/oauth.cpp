@@ -47,25 +47,11 @@ std::string home_dir() {
 }
 
 // base64url encode (no padding) - uses Haiku's BBase64
+// base64url encode (no padding) - uses Haiku's BBase64
 std::string base64url_encode(const unsigned char* data, size_t len) {
 	return BBase64::EncodeURL(data, len);
 }
 
-std::string url_encode(const std::string& s) {
-	std::string out;
-	for (unsigned char c : s) {
-		if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
-		    || (c >= '0' && c <= '9') || c == '-' || c == '_'
-		    || c == '.' || c == '~') {
-			out += (char)c;
-		} else {
-			char buf[4];
-			std::snprintf(buf, sizeof(buf), "%%%02X", c);
-			out += buf;
-		}
-	}
-	return out;
-}
 
 size_t curl_collect_cb(char* ptr, size_t size, size_t nmemb, void* ud) {
 	static_cast<std::string*>(ud)->append(ptr, size * nmemb);
@@ -144,22 +130,25 @@ void open_url_in_browser(const std::string& url) {
 
 std::string GenerateCodeVerifier() {
 	unsigned char buf[48];
-	RAND_bytes(buf, sizeof(buf));
-	return base64url_encode(buf, sizeof(buf));  // 64 chars
+	BRandom::GetRandomBytes(buf, sizeof(buf));
+	return BBase64::EncodeURL(buf, sizeof(buf)); // 64 chars
 }
+
 
 std::string GenerateCodeChallenge(const std::string& verifier) {
 	unsigned char hash[32];
 	size_t hlen = 0;
 	BHash::Hash(B_HASH_SHA256, verifier.data(), verifier.size(), hash, &hlen);
-return BBase64::EncodeURL(hash, hlen);
+	return BBase64::EncodeURL(hash, hlen);
 }
+
 
 std::string GenerateState() {
 	unsigned char buf[16];
 	BRandom::GetRandomBytes(buf, sizeof(buf));
 	return BBase64::EncodeURL(buf, sizeof(buf));
 }
+
 
 // ---- Token storage ----
 

@@ -51,6 +51,7 @@ HttpResponse post_json(const std::string& url, const std::string& json_body, lon
     curl_easy_setopt(curl, CURLOPT_CAINFO, "/system/data/ssl/CARootCertificates.pem");
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
     
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {

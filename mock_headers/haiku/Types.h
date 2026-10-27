@@ -132,6 +132,30 @@ const int B_FILE_NAME_LENGTH = 255;
 
 typedef uint32_t type_code;
 
+// Missing Haiku types
+typedef enum {
+	B_WHICH_0 = 0,
+	B_WHICH_1 = 1,
+	B_WHICH_2 = 2,
+	B_WHICH_3 = 3,
+} color_which;
+
+#ifndef uint8
+typedef unsigned char uint8;
+#endif
+
+#ifndef uint16
+typedef unsigned short uint16;
+#endif
+
+#ifndef uint32
+typedef uint32_t uint32;
+#endif
+
+#ifndef uint64
+typedef unsigned long long uint64;
+#endif
+
 // POSIX environ
 extern char** environ;
 

@@ -207,6 +207,7 @@ public:
 			"/system/data/ssl/CARootCertificates.pem");
 		curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
 		curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
+		curl_easy_setopt(c, CURLOPT_SSL_VERIFYSTATUS, 1L);
 		// Accept compressed responses.
 		curl_easy_setopt(c, CURLOPT_ACCEPT_ENCODING, "");
 

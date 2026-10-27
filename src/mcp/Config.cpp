@@ -405,6 +405,7 @@ curl_easy_setopt(curl, CURLOPT_URL, p.url);
 	if (probe_url.rfind("https://", 0) == 0) {
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
 		curl_easy_setopt(curl, CURLOPT_CAINFO,
 			"/system/data/ssl/CARootCertificates.pem");
 	}

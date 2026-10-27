@@ -137,6 +137,7 @@ bool SseTransport::start(std::string& err) {
 		"/system/data/ssl/CARootCertificates.pem");
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
 
 	CURLcode rc = curl_easy_perform(curl);
 	curl_slist_free_all(headers);
@@ -190,6 +191,7 @@ std::string SseTransport::post(const std::string& body, std::string& err) {
 		"/system/data/ssl/CARootCertificates.pem");
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
 
 	CURLcode rc = curl_easy_perform(curl);
 	long http_code = 0;

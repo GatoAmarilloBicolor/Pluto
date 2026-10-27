@@ -47,11 +47,12 @@ public:
         return BHash_Hash(algorithm, data, length, digest, digest_length);
     }
     
-    static const hash_algorithm B_HASH_MD5    = B_HASH_MD5;
-    static const hash_algorithm B_HASH_SHA1   = B_HASH_SHA1;
-    static const hash_algorithm B_HASH_SHA256 = B_HASH_SHA256;
-    static const hash_algorithm B_HASH_SHA384 = B_HASH_SHA384;
-    static const hash_algorithm B_HASH_SHA512 = B_HASH_SHA512;
+    // Expose enum values
+    static const hash_algorithm kMD5    = B_HASH_MD5;
+    static const hash_algorithm kSHA1   = B_HASH_SHA1;
+    static const hash_algorithm kSHA256 = B_HASH_SHA256;
+    static const hash_algorithm kSHA384 = B_HASH_SHA384;
+    static const hash_algorithm kSHA512 = B_HASH_SHA512;
 
 private:
     BHash fHash;

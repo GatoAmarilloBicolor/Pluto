@@ -40,6 +40,7 @@ std::string http_get(const std::string& url,
 		"/system/data/ssl/CARootCertificates.pem");
 	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
 	curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
+		curl_easy_setopt(c, CURLOPT_SSL_VERIFYSTATUS, 1L);
 	CURLcode rc = curl_easy_perform(c);
 	curl_slist_free_all(hdrs);
 	curl_easy_cleanup(c);
@@ -67,6 +68,7 @@ std::string http_post(const std::string& url, const std::string& body,
 		"/system/data/ssl/CARootCertificates.pem");
 	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
 	curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
+		curl_easy_setopt(c, CURLOPT_SSL_VERIFYSTATUS, 1L);
 	CURLcode rc = curl_easy_perform(c);
 	curl_slist_free_all(hdrs);
 	curl_easy_cleanup(c);
