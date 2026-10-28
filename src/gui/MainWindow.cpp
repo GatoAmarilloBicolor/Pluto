@@ -95,12 +95,19 @@ namespace gui {
 namespace {
 
 const uint32 kMsgSend         = 'plSd';
+const uint32 kMsgReset        = 'plRs';
+const uint32 kMsgAbout        = 'plAb';
 const uint32 kMsgMcpInfo      = 'plMi';
 const uint32 kMsgSaveSession  = 'plSv';
 const uint32 kMsgResumeLast   = 'plRl';
 const uint32 kMsgLoadSession  = 'plLd';
 const uint32 kMsgStop         = 'plSt';
+const uint32 kMsgZoomIn       = 'plZi';
+const uint32 kMsgZoomOut      = 'plZo';
+const uint32 kMsgZoomReset    = 'plZr';
 const uint32 kMsgPrefs        = 'plPr';
+const uint32 kMsgExportMd     = 'plEm';
+const uint32 kMsgExportJsonl  = 'plEj';
 const uint32 kMsgFind         = 'plFn';
 const uint32 kMsgFindNext     = 'plF>';
 const uint32 kMsgFindHide     = 'plFh';
@@ -124,6 +131,8 @@ const uint32 kMsgOAuthLogout         = 'plOo';
 const uint32 kMsgOAuthDone           = 'plOd';
 const uint32 kMsgPeerMenu           = 'plPm';
 const uint32 kMsgPeerSendPrompt     = 'plPs';
+const uint32 kMsgNewTab             = 'plNt';
+const uint32 kMsgCloseTab           = 'plCl';
 const uint32 kMsgTabChanged         = 'plTc';
 const uint32 kMsgNextTab            = 'plN>';
 const uint32 kMsgPrevTab            = 'plN<';
@@ -1701,7 +1710,7 @@ void MainWindow::OnTitleChanged(const std::string& /*title*/) {
 
 void MainWindow::OnError(const std::string& error) {
 	// Show native Haiku notification for errors.
-	BNotification n(B_ERROR_NOTIFICATION);
+	BNotification n(B_WARNING_NOTIFICATION);
 	n.SetGroup("Pluto");
 	n.SetTitle("Pluto — error");
 	std::string text = error;
