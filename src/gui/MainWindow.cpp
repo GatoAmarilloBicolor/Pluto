@@ -95,7 +95,6 @@ namespace gui {
 namespace {
 
 const uint32 kMsgSend         = 'plSd';
-
 const uint32 kMsgMcpInfo      = 'plMi';
 const uint32 kMsgSaveSession  = 'plSv';
 const uint32 kMsgResumeLast   = 'plRl';
