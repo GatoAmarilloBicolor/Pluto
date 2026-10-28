@@ -16,6 +16,7 @@
 #include <DataIO.h>
 #include <File.h>
 #include <fs_attr.h>
+#include <fs_attr.h>
 #include <FilePanel.h>
 #include <Directory.h>
 #include <SeparatorView.h>
