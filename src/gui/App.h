@@ -23,6 +23,12 @@ class MainWindow;
 
 class App : public BApplication {
 public:
+    void RegisterMainWindow(MainWindow* win);
+    void UnregisterMainWindow(MainWindow* win);
+
+private:
+    std::vector<MainWindow*> fMainWindows;
+public:
 	App(Config* cfg, ToolRegistry* tools, std::string initial_key);
 	~App() override;
 
@@ -49,6 +55,7 @@ private:
 	std::unique_ptr<McpManager> fMcp;
 	BMessage      fPendingRefs;          // stashed B_REFS_RECEIVED
 	bool          fHasPendingRefs = false;
+	std::vector<MainWindow*> fMainWindows;
 };
 
 }  // namespace gui

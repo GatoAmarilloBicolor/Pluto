@@ -244,7 +244,7 @@ BStringColumn::CompareFields(BField* field1, BField* field2)
 bool
 BStringColumn::AcceptsField(const BField *field) const
 {
-	return static_cast<bool>(dynamic_cast<const BStringField*>(field));
+	return field && strcmp(field->FieldType(), "BStringField") == 0;
 }
 
 
@@ -678,5 +678,5 @@ BBitmapColumn::CompareFields(BField* /*field1*/, BField* /*field2*/)
 bool
 BBitmapColumn::AcceptsField(const BField *field) const
 {
-	return static_cast<bool>(dynamic_cast<const BBitmapField*>(field));
+	return field && strcmp(field->FieldType(), "BBitmapField") == 0;
 }

@@ -26,3 +26,30 @@ enum drawing_mode {
 };
 
 #endif
+// Mock BField hierarchy for ColumnTypes.cpp
+class BField {
+public:
+    virtual ~BField() = default;
+    virtual const char* FieldType() const { return "BField"; }
+};
+
+class BStringField : public BField {
+public:
+    BStringField(const char* str = "") : fString(str) {}
+    const char* FieldType() const override { return "BStringField"; }
+    const char* String() const { return fString.String(); }
+private:
+    class BString {  // minimal BString mock
+    public:
+        BString(const char* s = "") : str(s) {}
+        const char* String() const { return str.c_str(); }
+        std::string str;
+    } fString;
+};
+
+class BBitmapField : public BField {
+public:
+    BBitmapField() = default;
+    const char* FieldType() const override { return "BBitmapField"; }
+};
+

@@ -74,7 +74,7 @@ void MainWindow::_SaveWorkspace() {
 	int32 count = fTabView ? fTabView->CountTabs() : 0;
 	for (int32 i = 0; i < count; ++i) {
 		BView* v = fTabView->ViewForTab(i);
-		auto* conv = dynamic_cast<ConversationView*>(v);
+		auto* conv = static_cast<ConversationView*>(v);
 		if (!conv) continue;
 		json::Value tab;
 		std::string sp = conv->GetSessionPath();

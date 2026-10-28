@@ -48,6 +48,47 @@ inline constexpr uint32 kMsgAbout          = 'plAb';
 inline constexpr uint32 kMsgExportMd       = 'plEm';
 inline constexpr uint32 kMsgExportJsonl    = 'plEj';
 
+// MainWindow kMsg constants (single source of truth).
+inline constexpr uint32 kMsgSend             = 'plSd';
+inline constexpr uint32 kMsgMcpInfo          = 'plMi';
+inline constexpr uint32 kMsgSaveSession      = 'plSv';
+inline constexpr uint32 kMsgResumeLast       = 'plRl';
+inline constexpr uint32 kMsgLoadSession      = 'plLd';
+inline constexpr uint32 kMsgStop               = 'plSt';
+inline constexpr uint32 kMsgPrefs              = 'plPr';
+inline constexpr uint32 kMsgFind               = 'plFn';
+inline constexpr uint32 kMsgFindNext           = 'plF>';
+inline constexpr uint32 kMsgFindHide           = 'plFh';
+inline constexpr uint32 kMsgMcpDiscover        = 'plMd';
+inline constexpr uint32 kMsgUserGuide         = 'plUg';
+inline constexpr uint32 kMsgSideLink          = 'plSl';
+inline constexpr uint32 kMsgDeskbarInstall    = 'plDi';
+inline constexpr uint32 kMsgDeskbarRemove     = 'plDr';
+inline constexpr uint32 kMsgTrackerAddonInstall = 'plTi';
+inline constexpr uint32 kMsgTrackerAddonRemove  = 'plTR';
+inline constexpr uint32 kMsgScheduleDialog     = 'plSc';
+inline constexpr uint32 kMsgRoutineDialog      = 'plRd';
+inline constexpr uint32 kMsgAgentDialog        = 'plAg';
+inline constexpr uint32 kMsgImageClear         = 'plIc';
+inline constexpr uint32 kMsgImageRemove        = 'plIr';
+inline constexpr uint32 kMsgSessionBrowser     = 'plSb';
+inline constexpr uint32 kMsgModelQuickSwitch   = 'plMq';
+inline constexpr uint32 kMsgRunRoutine         = 'plRr';
+inline constexpr uint32 kMsgOAuthLogin         = 'plOl';
+inline constexpr uint32 kMsgOAuthLogout        = 'plOo';
+inline constexpr uint32 kMsgOAuthDone          = 'plOd';
+inline constexpr uint32 kMsgPeerMenu           = 'plPm';
+inline constexpr uint32 kMsgPeerSendPrompt     = 'plPs';
+inline constexpr uint32 kMsgTabChanged         = 'plTc';
+inline constexpr uint32 kMsgNextTab            = 'plN>';
+inline constexpr uint32 kMsgPrevTab            = 'plN<';
+inline constexpr uint32 kMsgTabCtxClose        = 'tCtC';
+inline constexpr uint32 kMsgTabCtxCloseOthers  = 'tCtO';
+inline constexpr uint32 kMsgTabCtxRename       = 'tCtR';
+inline constexpr uint32 kMsgOpenNewTab         = 'plOT';  // from peer: open a new tab
+inline constexpr uint32 kMsgPlayerPlay         = 'plPP';  // mini player: play/pause
+inline constexpr uint32 kMsgPlayerStop         = 'plPS';  // mini player: stop
+
 // ---------------------------------------------------------------------------
 // Native Haiku color palette using ui_color() for true dark/light support.
 // These are computed once at startup from the system colors.

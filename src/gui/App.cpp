@@ -8,6 +8,7 @@
 
 #include <curl/curl.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <unistd.h>
 
@@ -98,12 +99,9 @@ void App::RefsReceived(BMessage* msg) {
 	}
 
 	// Forward to MainWindow if it exists.
-	for (int32 i = 0; i < CountWindows(); ++i) {
-		BWindow* win = WindowAt(i);
-		if (dynamic_cast<MainWindow*>(win)) {
-			BMessenger(win).SendMessage(msg);
-			return;
-		}
+	for (MainWindow* mw : fMainWindows) {
+		BMessenger(mw).SendMessage(msg);
+		return;
 	}
 	// MainWindow not yet created — stash for later delivery.
 	fPendingRefs = *msg;
@@ -239,11 +237,17 @@ static property_info sPlutoProperties[] = {
 };
 #pragma GCC diagnostic pop
 
+void App::RegisterMainWindow(MainWindow* win) {
+	fMainWindows.push_back(win);
+}
+
+void App::UnregisterMainWindow(MainWindow* win) {
+	auto it = std::find(fMainWindows.begin(), fMainWindows.end(), win);
+	if (it != fMainWindows.end()) fMainWindows.erase(it);
+}
+
 MainWindow* App::_FindMainWindow() {
-	for (int32 i = 0; i < CountWindows(); ++i) {
-		auto* mw = dynamic_cast<MainWindow*>(WindowAt(i));
-		if (mw) return mw;
-	}
+	if (!fMainWindows.empty()) return fMainWindows[0];
 	return nullptr;
 }
 
@@ -482,6 +486,7 @@ fMcp = std::make_unique<McpManager>(*fTools,
 	}
 
 	auto* win = new MainWindow(fProvider.get(), fConfig, fTools, fMcp->clients());
+	RegisterMainWindow(win);
 	win->Show();
 
 	// Open Preferences if the user chose manual setup.

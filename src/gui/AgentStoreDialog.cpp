@@ -509,7 +509,7 @@ void AgentStoreDialog::_InstallWithReview(const char* source) {
 		_UpdateTitle();
 		// Select the newly installed agent.
 		for (int32 i = 0; i < fList->CountItems(); ++i) {
-			auto* item = dynamic_cast<AgentListItem*>(fList->ItemAt(i));
+			auto* item = static_cast<AgentListItem*>(fList->ItemAt(i));
 			if (item && item->Name() == preview_a.name) {
 				fList->Select(i);
 				break;
@@ -588,7 +588,7 @@ void AgentStoreDialog::_UpdateSelected() {
 		_UpdateTitle();
 		// Re-select the agent.
 		for (int32 i = 0; i < fList->CountItems(); ++i) {
-			auto* item = dynamic_cast<AgentListItem*>(fList->ItemAt(i));
+			auto* item = static_cast<AgentListItem*>(fList->ItemAt(i));
 			if (item && item->Name() == name) {
 				fList->Select(i);
 				break;
