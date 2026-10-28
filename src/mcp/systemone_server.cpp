@@ -47,11 +47,12 @@ HttpResponse post_json(const std::string& url, const std::string& json_body, lon
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &resp.body);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout_secs);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "systemone/1.0");
-    curl_easy_setopt(curl, CURLOPT_CAINFO, "/system/data/ssl/CARootCertificates.pem");
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
+curl_easy_setopt(curl, CURLOPT_USERAGENT, "systemone/1.0");
+	curl_easy_setopt(curl, CURLOPT_CAINFO, "/system/data/ssl/CARootCertificates.pem");
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
+	curl_easy_setopt(curl, CURLOPT_MAXFILESIZE, (curl_off_t)10 * 1024 * 1024); // 10MB
     
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {

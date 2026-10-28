@@ -203,12 +203,13 @@ public:
 		curl_easy_setopt(c, CURLOPT_TIMEOUT, 30L);
 		curl_easy_setopt(c, CURLOPT_USERAGENT,
 			"Mozilla/5.0 (compatible; pluto/0.5.0; +https://haiku-os.org)");
-		curl_easy_setopt(c, CURLOPT_CAINFO,
+curl_easy_setopt(c, CURLOPT_CAINFO,
 			"/system/data/ssl/CARootCertificates.pem");
-		curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
-		curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
-		curl_easy_setopt(c, CURLOPT_SSL_VERIFYSTATUS, 1L);
-		// Accept compressed responses.
+	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
+	curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
+	curl_easy_setopt(c, CURLOPT_SSL_VERIFYSTATUS, 1L);
+	curl_easy_setopt(c, CURLOPT_MAXFILESIZE, (curl_off_t)50 * 1024 * 1024); // 50MB
+	// Accept compressed responses.
 		curl_easy_setopt(c, CURLOPT_ACCEPT_ENCODING, "");
 
 		CURLcode rc = curl_easy_perform(c);

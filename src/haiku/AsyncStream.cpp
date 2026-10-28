@@ -115,6 +115,7 @@ int64_t AsyncStreamManager::PostStream(const std::string& url,
 		curl_easy_setopt(easy, CURLOPT_SSL_VERIFYSTATUS, 1L);
 		curl_easy_setopt(easy, CURLOPT_CAINFO,
 			"/system/data/ssl/CARootCertificates.pem");
+		curl_easy_setopt(easy, CURLOPT_MAXFILESIZE, (curl_off_t)50 * 1024 * 1024); // 50MB
 	}
 
 	struct curl_slist* hlist = nullptr;

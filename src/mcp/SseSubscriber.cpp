@@ -1,5 +1,6 @@
 #include "SseSubscriber.h"
 #include "../version.h"
+#include "curl_security.h"
 
 #include <curl/curl.h>
 
@@ -114,7 +115,7 @@ void SseSubscriber::run() {
 	headers = curl_slist_append(headers, "accept: text/event-stream");
 	headers = curl_slist_append(headers, "cache-control: no-cache");
 
-	curl_easy_setopt(curl, CURLOPT_URL, fUrl.c_str());
+curl_easy_setopt(curl, CURLOPT_URL, fUrl.c_str());
 	curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
@@ -125,10 +126,7 @@ void SseSubscriber::run() {
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 0L);        // no overall deadline
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
-	curl_easy_setopt(curl, CURLOPT_CAINFO, "/system/data/ssl/CARootCertificates.pem");
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
+	ApplyCurlSecurityWithPinning(curl, fUrl);
 
 	CURLcode rc = curl_easy_perform(curl);
 	if (rc != CURLE_OK && rc != CURLE_ABORTED_BY_CALLBACK) {

@@ -408,6 +408,7 @@ curl_easy_setopt(curl, CURLOPT_URL, p.url);
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
 		curl_easy_setopt(curl, CURLOPT_CAINFO,
 			"/system/data/ssl/CARootCertificates.pem");
+		curl_easy_setopt(curl, CURLOPT_MAXFILESIZE, (curl_off_t)1024 * 1024); // 1MB for probe
 	}
 	CURLcode rc = curl_easy_perform(curl);
 		long code = 0;
