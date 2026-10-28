@@ -55,7 +55,6 @@ private:
 	std::unique_ptr<McpManager> fMcp;
 	BMessage      fPendingRefs;          // stashed B_REFS_RECEIVED
 	bool          fHasPendingRefs = false;
-	std::vector<MainWindow*> fMainWindows;
 };
 
 }  // namespace gui
