@@ -94,56 +94,6 @@ namespace pluto {
 namespace gui {
 
 namespace {
-
-const uint32 kMsgSend         = 'plSd';
-const uint32 kMsgReset        = 'plRs';
-const uint32 kMsgAbout        = 'plAb';
-const uint32 kMsgMcpInfo      = 'plMi';
-const uint32 kMsgSaveSession  = 'plSv';
-const uint32 kMsgResumeLast   = 'plRl';
-const uint32 kMsgLoadSession  = 'plLd';
-const uint32 kMsgStop         = 'plSt';
-const uint32 kMsgZoomIn       = 'plZi';
-const uint32 kMsgZoomOut      = 'plZo';
-const uint32 kMsgZoomReset    = 'plZr';
-const uint32 kMsgPrefs        = 'plPr';
-const uint32 kMsgExportMd     = 'plEm';
-const uint32 kMsgExportJsonl  = 'plEj';
-const uint32 kMsgFind         = 'plFn';
-const uint32 kMsgFindNext     = 'plF>';
-const uint32 kMsgFindHide     = 'plFh';
-const uint32 kMsgMcpDiscover  = 'plMd';
-const uint32 kMsgUserGuide   = 'plUg';
-const uint32 kMsgSideLink     = 'plSl';
-const uint32 kMsgDeskbarInstall = 'plDi';
-const uint32 kMsgDeskbarRemove  = 'plDr';
-const uint32 kMsgTrackerAddonInstall = 'plTi';
-const uint32 kMsgTrackerAddonRemove  = 'plTR';
-const uint32 kMsgScheduleDialog      = 'plSc';
-const uint32 kMsgRoutineDialog       = 'plRd';
-const uint32 kMsgAgentDialog         = 'plAg';
-const uint32 kMsgImageClear          = 'plIc';
-const uint32 kMsgImageRemove         = 'plIr';
-const uint32 kMsgSessionBrowser      = 'plSb';
-const uint32 kMsgModelQuickSwitch    = 'plMq';
-const uint32 kMsgRunRoutine          = 'plRr';
-const uint32 kMsgOAuthLogin          = 'plOl';
-const uint32 kMsgOAuthLogout         = 'plOo';
-const uint32 kMsgOAuthDone           = 'plOd';
-const uint32 kMsgPeerMenu           = 'plPm';
-const uint32 kMsgPeerSendPrompt     = 'plPs';
-const uint32 kMsgNewTab             = 'plNt';
-const uint32 kMsgCloseTab           = 'plCl';
-const uint32 kMsgTabChanged         = 'plTc';
-const uint32 kMsgNextTab            = 'plN>';
-const uint32 kMsgPrevTab            = 'plN<';
-const uint32 kMsgTabCtxClose        = 'tCtC';
-const uint32 kMsgTabCtxCloseOthers  = 'tCtO';
-const uint32 kMsgTabCtxRename       = 'tCtR';
-const uint32 kMsgOpenNewTab         = 'plOT';  // from peer: open a new tab
-const uint32 kMsgPlayerPlay        = 'plPP';  // mini player: play/pause
-const uint32 kMsgPlayerStop        = 'plPS';  // mini player: stop
-
 // Palette colors are now defined in ChatColors.cpp and declared in
 // ChatColors.h. _InitPalette() still modifies them via the extern refs.
 
@@ -203,23 +153,6 @@ std::string trim(const std::string& s) {
 	while (a < b && std::isspace(static_cast<unsigned char>(s[a]))) ++a;
 	while (b > a && std::isspace(static_cast<unsigned char>(s[b - 1]))) --b;
 	return s.substr(a, b - a);
-}
-
-// Create directory hierarchy recursively
-status_t create_directory_hierarchy(const char* path, mode_t mode) {
-	if (!path || !*path) return B_BAD_VALUE;
-	
-	BPath p(path);
-	BPath parent;
-	p.GetParent(&parent);
-	
-	BDirectory dir(parent.Path());
-	if (dir.InitCheck() != B_OK) {
-		status_t err = create_directory_hierarchy(parent.Path(), mode);
-		if (err != B_OK) return err;
-		dir.SetTo(parent.Path());
-	}
-	return dir.CreateDirectory(p.Leaf(), NULL);
 }
 
 // Copy a file (contents, permissions and attributes) using native storage APIs.
@@ -3011,52 +2944,31 @@ void MainWindow::MessageReceived(BMessage* msg) {
 		}
 
 		std::string dst_dir = HomeDir() + "/config/non-packaged/add-ons/Tracker";
-		// Use native Haiku APIs instead of system() for security
-		BDirectory dir(dst_dir.c_str());
-		if (dir.InitCheck() != B_OK) {
-			// Create directory hierarchy
-			BPath path(dst_dir.c_str());
-			path.GetParent(&path);
-			status_t err = path.CreateDirectory(dst_dir.c_str(), 0755);
-			if (err != B_OK) {
-				_Append("Could not create Tracker add-ons directory.
-", rgb_color{245, 101, 101, 255});
-				break;
-			}
+		if (create_directory(dst_dir.c_str(), 0755) != B_OK) {
+			_Append("Could not create Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
+			break;
 		}
 
-		// Copy the add-on file
 		BEntry srcEntry(src.c_str());
 		if (srcEntry.InitCheck() != B_OK) {
-			_Append("Could not find add-on binary.
-", rgb_color{245, 101, 101, 255});
+			_Append("Could not find add-on binary.\n", rgb_color{245, 101, 101, 255});
 			break;
 		}
 
 		BDirectory dstDir(dst_dir.c_str());
 		if (dstDir.InitCheck() == B_OK) {
-			BEntry dstEntry;
-			if (srcEntry.Copy(&dstDir, "Ask Pluto", &dstEntry) == B_OK) {
-				_Append("Tracker add-on "Ask Pluto" installed.
-", ui_color(B_DOCUMENT_TEXT_COLOR));
-				_Append("Right-click files in Tracker to use it.
-", ui_color(B_DOCUMENT_TEXT_COLOR));
+			if (copy_file_to(src.c_str(), dstDir, "Ask Pluto") == B_OK) {
+				_Append("Tracker add-on \"Ask Pluto\" installed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+				_Append("Right-click files in Tracker to use it.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			} else {
-				_Append("Could not copy add-on to Tracker directory.
-", rgb_color{245, 101, 101, 255});
-				_Append("Build it first: make 'Ask Pluto'
-", rgb_color{245, 101, 101, 255});
+				_Append("Could not copy add-on to Tracker directory.\n", rgb_color{245, 101, 101, 255});
+				_Append("Build it first: make \"Ask Pluto\"\n", rgb_color{245, 101, 101, 255});
 			}
 		} else {
-			_Append("Could not access Tracker add-ons directory.
-", rgb_color{245, 101, 101, 255});
+			_Append("Could not access Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
 		}
 		break;
 	}
-					}
-				}
-			}
-		}
 
 		case kMsgTrackerAddonRemove: {
 			std::string path = HomeDir()
