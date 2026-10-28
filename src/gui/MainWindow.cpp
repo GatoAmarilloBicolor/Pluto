@@ -46,6 +46,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <set>
 
@@ -84,6 +85,8 @@
 
 #include <ctime>
 #include <fstream>
+#include <fs_attr.h>
+#include <vector>
 #include <sstream>
 #include <thread>
 
@@ -95,19 +98,12 @@ namespace gui {
 namespace {
 
 const uint32 kMsgSend         = 'plSd';
-const uint32 kMsgReset        = 'plRs';
-const uint32 kMsgAbout        = 'plAb';
 const uint32 kMsgMcpInfo      = 'plMi';
 const uint32 kMsgSaveSession  = 'plSv';
 const uint32 kMsgResumeLast   = 'plRl';
 const uint32 kMsgLoadSession  = 'plLd';
 const uint32 kMsgStop         = 'plSt';
-const uint32 kMsgZoomIn       = 'plZi';
-const uint32 kMsgZoomOut      = 'plZo';
-const uint32 kMsgZoomReset    = 'plZr';
 const uint32 kMsgPrefs        = 'plPr';
-const uint32 kMsgExportMd     = 'plEm';
-const uint32 kMsgExportJsonl  = 'plEj';
 const uint32 kMsgFind         = 'plFn';
 const uint32 kMsgFindNext     = 'plF>';
 const uint32 kMsgFindHide     = 'plFh';
@@ -131,8 +127,6 @@ const uint32 kMsgOAuthLogout         = 'plOo';
 const uint32 kMsgOAuthDone           = 'plOd';
 const uint32 kMsgPeerMenu           = 'plPm';
 const uint32 kMsgPeerSendPrompt     = 'plPs';
-const uint32 kMsgNewTab             = 'plNt';
-const uint32 kMsgCloseTab           = 'plCl';
 const uint32 kMsgTabChanged         = 'plTc';
 const uint32 kMsgNextTab            = 'plN>';
 const uint32 kMsgPrevTab            = 'plN<';
@@ -202,6 +196,69 @@ std::string trim(const std::string& s) {
 	while (a < b && std::isspace(static_cast<unsigned char>(s[a]))) ++a;
 	while (b > a && std::isspace(static_cast<unsigned char>(s[b - 1]))) --b;
 	return s.substr(a, b - a);
+}
+
+// Copy a file (contents, permissions and attributes) using native storage APIs.
+status_t copy_file_to(const char* from, BDirectory& dir, const char* name) {
+	BFile src(from, B_READ_ONLY);
+	status_t err = src.InitCheck();
+	if (err != B_OK)
+		return err;
+
+	BFile dst(&dir, name, B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+	err = dst.InitCheck();
+	if (err != B_OK)
+		return err;
+
+	char buffer[64 * 1024];
+	ssize_t bytesRead;
+	while ((bytesRead = src.Read(buffer, sizeof(buffer))) > 0) {
+		ssize_t offset = 0;
+		while (offset < bytesRead) {
+			ssize_t written = dst.Write(buffer + offset, bytesRead - offset);
+			if (written < 0)
+				return static_cast<status_t>(written);
+			if (written == 0)
+				return B_IO_ERROR;
+			offset += written;
+		}
+	}
+	if (bytesRead < 0)
+		return static_cast<status_t>(bytesRead);
+
+	struct stat st;
+	if (src.GetStat(&st) == B_OK) {
+		err = dst.SetPermissions(st.st_mode);
+		if (err != B_OK)
+			return err;
+	}
+
+	err = src.RewindAttrs();
+	if (err != B_OK)
+		return err;
+
+	char attrName[B_ATTR_NAME_LENGTH];
+	while ((err = src.GetNextAttrName(attrName)) == B_OK) {
+		struct attr_info info;
+		if (src.GetAttrInfo(attrName, &info) != B_OK || info.size < 0)
+			continue;
+		std::vector<char> data(static_cast<size_t>(info.size));
+		if (info.size > 0) {
+			ssize_t read = src.ReadAttr(attrName, info.type, 0, data.data(),
+				static_cast<size_t>(info.size));
+			if (read != info.size)
+				continue;
+		}
+		ssize_t written = dst.WriteAttr(attrName, info.type, 0,
+			data.empty() ? nullptr : data.data(),
+			static_cast<size_t>(info.size));
+		if (written < 0)
+			return static_cast<status_t>(written);
+	}
+	if (err != B_ENTRY_NOT_FOUND)
+		return err;
+
+	return dst.Sync();
 }
 
 // Slash-command completion entry: /name — description [group].
@@ -1710,7 +1767,7 @@ void MainWindow::OnTitleChanged(const std::string& /*title*/) {
 
 void MainWindow::OnError(const std::string& error) {
 	// Show native Haiku notification for errors.
-	BNotification n(B_WARNING_NOTIFICATION);
+	BNotification n(B_ERROR_NOTIFICATION);
 	n.SetGroup("Pluto");
 	n.SetTitle("Pluto — error");
 	std::string text = error;
@@ -2024,7 +2081,7 @@ void MainWindow::_RebuildMcpMenu() {
 
 void MainWindow::_ShowMcpServerInfo(int32 index) {
 	if (index < 0 || (size_t)index >= fMcpClients.size()) return;
-	auto* c = fMcpClients[index];
+	auto c = fMcpClients[index];
 
 	// Build a markdown document and render in the side panel.
 	std::string md;
@@ -2189,12 +2246,13 @@ void MainWindow::_UpdateSidePanel(const std::string& title,
 		BFont bold_f = *be_plain_font;
 		bold_f.SetFace(B_BOLD_FACE);
 		bold_f.SetSize(bold_f.Size() + fFontDelta + 2);
-		fSideView->SetFontAndColor(0, header_end, &bold_f, B_FONT_ALL, &rgb_color{245, 101, 101, 255});
+		rgb_color err_color{245, 101, 101, 255};
+		fSideView->SetFontAndColor(0, header_end, &bold_f, B_FONT_ALL, &err_color);
 		// Style the body.
 		int32 n = fSideView->TextLength();
 		BFont mono_f = *be_fixed_font;
 		mono_f.SetSize(mono_f.Size() + fFontDelta);
-		fSideView->SetFontAndColor(header_end, n, &mono_f, B_FONT_ALL, &rgb_color{245, 101, 101, 255});
+		fSideView->SetFontAndColor(header_end, n, &mono_f, B_FONT_ALL, &err_color);
 		fSideView->ScrollToOffset(0);
 	} else {
 		// Render as markdown — tool output often contains structured text.
@@ -2911,69 +2969,48 @@ void MainWindow::MessageReceived(BMessage* msg) {
 			break;
 
 		case kMsgTrackerAddonInstall: {
-		std::string src = "Ask Pluto";
-		// Try to find the add-on binary near the Pluto-gui binary.
-		image_info info;
-		int32 cookie = 0;
-		while (get_next_image_info(B_CURRENT_TEAM, &cookie, &info) == B_OK) {
-			if (info.type == B_APP_IMAGE) {
-				BPath dir(info.name);
-				dir.GetParent(&dir);
-				BPath addon(dir.Path(), "Ask Pluto");
-				struct stat st;
-				if (stat(addon.Path(), &st) == 0) {
-					src = addon.Path();
-					break;
-				}
-			}
-		}
-
-		std::string dst_dir = HomeDir() + "/config/non-packaged/add-ons/Tracker";
-		// Use native Haiku APIs instead of system() for security
-		BDirectory dir(dst_dir.c_str());
-		if (dir.InitCheck() != B_OK) {
-			// Create directory hierarchy
-			BPath path(dst_dir.c_str());
-			path.GetParent(&path);
-			status_t err = path.CreateDirectory(dst_dir.c_str(), 0755);
-			if (err != B_OK) {
-				_Append("Could not create Tracker add-ons directory.
-", rgb_color{245, 101, 101, 255});
-				break;
-			}
-		}
-
-		// Copy the add-on file
-		BEntry srcEntry(src.c_str());
-		if (srcEntry.InitCheck() != B_OK) {
-			_Append("Could not find add-on binary.
-", rgb_color{245, 101, 101, 255});
-			break;
-		}
-
-		BDirectory dstDir(dst_dir.c_str());
-		if (dstDir.InitCheck() == B_OK) {
-			BEntry dstEntry;
-			if (srcEntry.Copy(&dstDir, "Ask Pluto", &dstEntry) == B_OK) {
-				_Append("Tracker add-on "Ask Pluto" installed.
-", ui_color(B_DOCUMENT_TEXT_COLOR));
-				_Append("Right-click files in Tracker to use it.
-", ui_color(B_DOCUMENT_TEXT_COLOR));
-			} else {
-				_Append("Could not copy add-on to Tracker directory.
-", rgb_color{245, 101, 101, 255});
-				_Append("Build it first: make 'Ask Pluto'
-", rgb_color{245, 101, 101, 255});
-			}
-		} else {
-			_Append("Could not access Tracker add-ons directory.
-", rgb_color{245, 101, 101, 255});
-		}
-		break;
-	}
+			std::string src = "Ask Pluto";
+			// Try to find the add-on binary near the Pluto-gui binary.
+			image_info info;
+			int32 cookie = 0;
+			while (get_next_image_info(B_CURRENT_TEAM, &cookie, &info) == B_OK) {
+				if (info.type == B_APP_IMAGE) {
+					BPath dir(info.name);
+					dir.GetParent(&dir);
+					BPath addon(dir.Path(), "Ask Pluto");
+					struct stat st;
+					if (stat(addon.Path(), &st) == 0) {
+						src = addon.Path();
+						break;
 					}
 				}
 			}
+
+			std::string dst_dir = HomeDir() + "/config/non-packaged/add-ons/Tracker";
+			if (create_directory(dst_dir.c_str(), 0755) != B_OK) {
+				_Append("Could not create Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
+				break;
+			}
+
+			BEntry srcEntry(src.c_str());
+			if (srcEntry.InitCheck() != B_OK) {
+				_Append("Could not find add-on binary.\n", rgb_color{245, 101, 101, 255});
+				break;
+			}
+
+			BDirectory dstDir(dst_dir.c_str());
+			if (dstDir.InitCheck() == B_OK) {
+				if (copy_file_to(src.c_str(), dstDir, "Ask Pluto") == B_OK) {
+					_Append("Tracker add-on \"Ask Pluto\" installed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+					_Append("Right-click files in Tracker to use it.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+				} else {
+					_Append("Could not copy add-on to Tracker directory.\n", rgb_color{245, 101, 101, 255});
+					_Append("Build it first: make \"Ask Pluto\"\n", rgb_color{245, 101, 101, 255});
+				}
+			} else {
+				_Append("Could not access Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
+			}
+			break;
 		}
 
 		case kMsgTrackerAddonRemove: {
@@ -3309,8 +3346,6 @@ void MainWindow::KeyDown(const char* bytes, int32 numBytes) {
 			case 'm':  // Cmd/Ctrl+M — model picker
 				_OpenModelPicker();
 				return;
-			case 'f':  // Cmd/Ctrl+F — find (already handled above)
-				return;
 			case '+':  // Cmd/Ctrl++ — zoom in
 				fFontDelta += 1;
 				fConfig->font_delta = fFontDelta;
@@ -3357,6 +3392,8 @@ void MainWindow::KeyDown(const char* bytes, int32 numBytes) {
 
 	BWindow::KeyDown(bytes, numBytes);
 }
+
+void MainWindow::_SendCurrentInput() {
 	if (_ActiveConv()->IsBusy()) return;
 	std::string text = trim(fInput->Text() ? fInput->Text() : "");
 	if (text.empty() && fPendingImages.empty()) return;
@@ -4597,6 +4634,7 @@ static std::string _ProbeMediaInfo(const std::string& path,
 
 	if (kind == "audio" || kind == "video") {
 		// Use ffprobe for duration, codec, sample rate, channels.
+		std::string duration, codec, sample_rate, channels, bit_rate;
 		std::string cmd = "ffprobe -v quiet -print_format flat "
 			"-show_format -show_streams '";
 		// Escape single quotes in path.
@@ -4648,7 +4686,6 @@ static std::string _ProbeMediaInfo(const std::string& path,
 				if (kbps > 0)
 					info += "Bitrate: " + std::to_string(kbps) + " kbps\n";
 			}
-		}
 	} else if (kind == "pdf") {
 		// Count pages via pdfinfo if available, otherwise note.
 		FILE* p = popen(("pdfinfo '" + path + "' 2>/dev/null").c_str(), "r");

@@ -3,10 +3,10 @@ CXX      = g++
 UNAME := $(shell uname -s)
 ifeq ($(UNAME),Haiku)
     # On Haiku, use real SDK headers
-    CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -Os -pipe -fno-rtti -fno-threadsafe-statics -ftemplate-depth=64 -Isrc -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
+    CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -Os -pipe -Isrc -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
 else
     # On macOS/Linux, use mock headers for cross-compilation
-    CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -Os -pipe -fno-rtti -fno-threadsafe-statics -ftemplate-depth=64 -Isrc -Imock_headers/haiku -I/opt/homebrew/include -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
+    CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -Os -pipe -Isrc -Imock_headers/haiku -I/opt/homebrew/include -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
 endif
 LDLIBS   = -lcurl -lbe -lcrypto -lnetwork -ledit
 

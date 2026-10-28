@@ -14,6 +14,7 @@ class BPopUpMenu;
 class BScrollView;
 class BStringView;
 class BTextControl;
+class BTextView;
 
 namespace pluto {
 namespace gui {
@@ -27,6 +28,9 @@ using UserProvider = pluto::ProviderConf;
 class SettingsDialog : public BWindow {
 public:
 	SettingsDialog(BMessenger target, const Config& current);
+
+	void MessageReceived(BMessage* msg) override;
+	bool QuitRequested() override;
 
 	// Returns the modified config (only valid if fAccepted is true).
 	Config GetResult() const { return fResult; }
