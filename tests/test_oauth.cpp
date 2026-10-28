@@ -9,6 +9,11 @@
 #include <fstream>
 #include <string>
 
+// mkdtemp not available in mock headers on cross-compile
+#ifdef __HAIKU__
+extern "C" char* mkdtemp(char* template_path);
+#endif
+
 static int g_failures = 0;
 
 #define CHECK(cond) do { \

@@ -98,36 +98,39 @@ const uint32 kMsgSend         = 'plSd';
 const uint32 kMsgReset        = 'plRs';
 const uint32 kMsgAbout        = 'plAb';
 const uint32 kMsgMcpInfo      = 'plMi';
-const uint32 kMsgSaveSession      = 'plSv';
-const uint32 kMsgResumeLast       = 'plRl';
-const uint32 kMsgLoadSession      = 'plLd';
-const uint32 kMsgStop             = 'plSt';
-const uint32 kMsgPrefs            = 'plPr';
-const uint32 kMsgFind             = 'plFn';
-const uint32 kMsgFindNext         = 'plF>';
-const uint32 kMsgFindHide         = 'plFh';
-const uint32 kMsgMcpDiscover      = 'plMd';
-const uint32 kMsgUserGuide        = 'plUg';
-const uint32 kMsgSideLink         = 'plSl';
-const uint32 kMsgDeskbarInstall   = 'plDi';
-const uint32 kMsgDeskbarRemove    = 'plDr';
+const uint32 kMsgSaveSession  = 'plSv';
+const uint32 kMsgResumeLast   = 'plRl';
+const uint32 kMsgLoadSession  = 'plLd';
+const uint32 kMsgStop         = 'plSt';
+const uint32 kMsgZoomIn       = 'plZi';
+const uint32 kMsgZoomOut      = 'plZo';
+const uint32 kMsgZoomReset    = 'plZr';
+const uint32 kMsgPrefs        = 'plPr';
+const uint32 kMsgExportMd     = 'plEm';
+const uint32 kMsgExportJsonl  = 'plEj';
+const uint32 kMsgFind         = 'plFn';
+const uint32 kMsgFindNext     = 'plF>';
+const uint32 kMsgFindHide     = 'plFh';
+const uint32 kMsgMcpDiscover  = 'plMd';
+const uint32 kMsgUserGuide   = 'plUg';
+const uint32 kMsgSideLink     = 'plSl';
+const uint32 kMsgDeskbarInstall = 'plDi';
+const uint32 kMsgDeskbarRemove  = 'plDr';
 const uint32 kMsgTrackerAddonInstall = 'plTi';
 const uint32 kMsgTrackerAddonRemove  = 'plTR';
-const uint32 kMsgScheduleDialog   = 'plSc';
-const uint32 kMsgRoutineDialog    = 'plRd';
-const uint32 kMsgAgentDialog      = 'plAg';
-const uint32 kMsgImageClear       = 'plIc';
-const uint32 kMsgImageRemove      = 'plIr';
-const uint32 kMsgSessionBrowser   = 'plSb';
-const uint32 kMsgModelQuickSwitch = 'plMq';
-const uint32 kMsgRunRoutine       = 'plRr';
-const uint32 kMsgOAuthLogin       = 'plOl';
-const uint32 kMsgOAuthLogout      = 'plOo';
+const uint32 kMsgScheduleDialog      = 'plSc';
+const uint32 kMsgRoutineDialog       = 'plRd';
+const uint32 kMsgAgentDialog         = 'plAg';
+const uint32 kMsgImageClear          = 'plIc';
+const uint32 kMsgImageRemove         = 'plIr';
+const uint32 kMsgSessionBrowser      = 'plSb';
+const uint32 kMsgModelQuickSwitch    = 'plMq';
+const uint32 kMsgRunRoutine          = 'plRr';
+const uint32 kMsgOAuthLogin          = 'plOl';
+const uint32 kMsgOAuthLogout         = 'plOo';
 const uint32 kMsgOAuthDone           = 'plOd';
 const uint32 kMsgPeerMenu           = 'plPm';
 const uint32 kMsgPeerSendPrompt     = 'plPs';
-const uint32 kMsgNewTab             = 'plNt';
-const uint32 kMsgCloseTab           = 'plCl';
 const uint32 kMsgTabChanged         = 'plTc';
 const uint32 kMsgNextTab            = 'plN>';
 const uint32 kMsgPrevTab            = 'plN<';
@@ -1012,7 +1015,6 @@ private:
 			if (url.rfind("https://", 0) == 0) {
 				curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
 				curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
-		curl_easy_setopt(c, CURLOPT_SSL_VERIFYSTATUS, 1L);
 				curl_easy_setopt(c, CURLOPT_CAINFO,
 					"/system/data/ssl/CARootCertificates.pem");
 			}
@@ -1706,7 +1708,7 @@ void MainWindow::OnTitleChanged(const std::string& /*title*/) {
 
 void MainWindow::OnError(const std::string& error) {
 	// Show native Haiku notification for errors.
-	BNotification n(B_WARNING_NOTIFICATION);
+	BNotification n(B_ERROR_NOTIFICATION);
 	n.SetGroup("Pluto");
 	n.SetTitle("Pluto — error");
 	std::string text = error;
@@ -2929,12 +2931,12 @@ void MainWindow::MessageReceived(BMessage* msg) {
 		BDirectory dir(dst_dir.c_str());
 		if (dir.InitCheck() != B_OK) {
 			// Create directory hierarchy
-			BDirectory parentDir;
 			BPath path(dst_dir.c_str());
 			path.GetParent(&path);
-			status_t err = parentDir.CreateDirectory(path.Path(), path.Leaf());
+			status_t err = path.CreateDirectory(dst_dir.c_str(), 0755);
 			if (err != B_OK) {
-				_Append("Could not create Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
+				_Append("Could not create Tracker add-ons directory.
+", rgb_color{245, 101, 101, 255});
 				break;
 			}
 		}
@@ -2942,22 +2944,28 @@ void MainWindow::MessageReceived(BMessage* msg) {
 		// Copy the add-on file
 		BEntry srcEntry(src.c_str());
 		if (srcEntry.InitCheck() != B_OK) {
-			_Append("Could not find add-on binary.\n", rgb_color{245, 101, 101, 255});
+			_Append("Could not find add-on binary.
+", rgb_color{245, 101, 101, 255});
 			break;
 		}
 
 		BDirectory dstDir(dst_dir.c_str());
 		if (dstDir.InitCheck() == B_OK) {
 			BEntry dstEntry;
-			if (srcEntry.CopyTo(&dstDir, "Ask Pluto", &dstEntry) == B_OK) {
-				_Append("Tracker add-on \"Ask Pluto\" installed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
-				_Append("Right-click files in Tracker to use it.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+			if (srcEntry.Copy(&dstDir, "Ask Pluto", &dstEntry) == B_OK) {
+				_Append("Tracker add-on "Ask Pluto" installed.
+", ui_color(B_DOCUMENT_TEXT_COLOR));
+				_Append("Right-click files in Tracker to use it.
+", ui_color(B_DOCUMENT_TEXT_COLOR));
 			} else {
-				_Append("Could not copy add-on to Tracker directory.\n", rgb_color{245, 101, 101, 255});
-				_Append("Build it first: make 'Ask Pluto'\n", rgb_color{245, 101, 101, 255});
+				_Append("Could not copy add-on to Tracker directory.
+", rgb_color{245, 101, 101, 255});
+				_Append("Build it first: make 'Ask Pluto'
+", rgb_color{245, 101, 101, 255});
 			}
 		} else {
-			_Append("Could not access Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
+			_Append("Could not access Tracker add-ons directory.
+", rgb_color{245, 101, 101, 255});
 		}
 		break;
 	}
