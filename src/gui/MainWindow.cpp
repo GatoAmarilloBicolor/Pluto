@@ -15,6 +15,7 @@
 #include <BitmapStream.h>
 #include <DataIO.h>
 #include <File.h>
+#include <fs_attr.h>
 #include <FilePanel.h>
 #include <Directory.h>
 #include <SeparatorView.h>
@@ -46,7 +47,6 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
-#include <cstdlib>
 #include <memory>
 #include <set>
 
@@ -85,8 +85,6 @@
 
 #include <ctime>
 #include <fstream>
-#include <fs_attr.h>
-#include <vector>
 #include <sstream>
 #include <thread>
 
@@ -98,12 +96,19 @@ namespace gui {
 namespace {
 
 const uint32 kMsgSend         = 'plSd';
+
+
 const uint32 kMsgMcpInfo      = 'plMi';
 const uint32 kMsgSaveSession  = 'plSv';
 const uint32 kMsgResumeLast   = 'plRl';
 const uint32 kMsgLoadSession  = 'plLd';
 const uint32 kMsgStop         = 'plSt';
+
+
+
 const uint32 kMsgPrefs        = 'plPr';
+
+
 const uint32 kMsgFind         = 'plFn';
 const uint32 kMsgFindNext     = 'plF>';
 const uint32 kMsgFindHide     = 'plFh';
@@ -127,6 +132,8 @@ const uint32 kMsgOAuthLogout         = 'plOo';
 const uint32 kMsgOAuthDone           = 'plOd';
 const uint32 kMsgPeerMenu           = 'plPm';
 const uint32 kMsgPeerSendPrompt     = 'plPs';
+
+
 const uint32 kMsgTabChanged         = 'plTc';
 const uint32 kMsgNextTab            = 'plN>';
 const uint32 kMsgPrevTab            = 'plN<';
@@ -2252,7 +2259,7 @@ void MainWindow::_UpdateSidePanel(const std::string& title,
 		int32 n = fSideView->TextLength();
 		BFont mono_f = *be_fixed_font;
 		mono_f.SetSize(mono_f.Size() + fFontDelta);
-		fSideView->SetFontAndColor(header_end, n, &mono_f, B_FONT_ALL, &err_color);
+				fSideView->SetFontAndColor(header_end, n, &mono_f, B_FONT_ALL, &err_color);
 		fSideView->ScrollToOffset(0);
 	} else {
 		// Render as markdown — tool output often contains structured text.
@@ -2969,49 +2976,49 @@ void MainWindow::MessageReceived(BMessage* msg) {
 			break;
 
 		case kMsgTrackerAddonInstall: {
-			std::string src = "Ask Pluto";
-			// Try to find the add-on binary near the Pluto-gui binary.
-			image_info info;
-			int32 cookie = 0;
-			while (get_next_image_info(B_CURRENT_TEAM, &cookie, &info) == B_OK) {
-				if (info.type == B_APP_IMAGE) {
-					BPath dir(info.name);
-					dir.GetParent(&dir);
-					BPath addon(dir.Path(), "Ask Pluto");
-					struct stat st;
-					if (stat(addon.Path(), &st) == 0) {
-						src = addon.Path();
-						break;
-					}
+		std::string src = "Ask Pluto";
+		// Try to find the add-on binary near the Pluto-gui binary.
+		image_info info;
+		int32 cookie = 0;
+		while (get_next_image_info(B_CURRENT_TEAM, &cookie, &info) == B_OK) {
+			if (info.type == B_APP_IMAGE) {
+				BPath dir(info.name);
+				dir.GetParent(&dir);
+				BPath addon(dir.Path(), "Ask Pluto");
+				struct stat st;
+				if (stat(addon.Path(), &st) == 0) {
+					src = addon.Path();
+					break;
 				}
 			}
+		}
 
-			std::string dst_dir = HomeDir() + "/config/non-packaged/add-ons/Tracker";
-			if (create_directory(dst_dir.c_str(), 0755) != B_OK) {
-				_Append("Could not create Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
-				break;
-			}
-
-			BEntry srcEntry(src.c_str());
-			if (srcEntry.InitCheck() != B_OK) {
-				_Append("Could not find add-on binary.\n", rgb_color{245, 101, 101, 255});
-				break;
-			}
-
-			BDirectory dstDir(dst_dir.c_str());
-			if (dstDir.InitCheck() == B_OK) {
-				if (copy_file_to(src.c_str(), dstDir, "Ask Pluto") == B_OK) {
-					_Append("Tracker add-on \"Ask Pluto\" installed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
-					_Append("Right-click files in Tracker to use it.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
-				} else {
-					_Append("Could not copy add-on to Tracker directory.\n", rgb_color{245, 101, 101, 255});
-					_Append("Build it first: make \"Ask Pluto\"\n", rgb_color{245, 101, 101, 255});
-				}
-			} else {
-				_Append("Could not access Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
-			}
+		std::string dst_dir = HomeDir() + "/config/non-packaged/add-ons/Tracker";
+		if (create_directory(dst_dir.c_str(), 0755) != B_OK) {
+			_Append("Could not create Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
 			break;
 		}
+
+		BEntry srcEntry(src.c_str());
+		if (srcEntry.InitCheck() != B_OK) {
+			_Append("Could not find add-on binary.\n", rgb_color{245, 101, 101, 255});
+			break;
+		}
+
+		BDirectory dstDir(dst_dir.c_str());
+		if (dstDir.InitCheck() == B_OK) {
+			if (copy_file_to(src.c_str(), dstDir, "Ask Pluto") == B_OK) {
+				_Append("Tracker add-on \"Ask Pluto\" installed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+				_Append("Right-click files in Tracker to use it.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+			} else {
+				_Append("Could not copy add-on to Tracker directory.\n", rgb_color{245, 101, 101, 255});
+				_Append("Build it first: make \"Ask Pluto\"\n", rgb_color{245, 101, 101, 255});
+			}
+		} else {
+			_Append("Could not access Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
+		}
+		break;
+	}
 
 		case kMsgTrackerAddonRemove: {
 			std::string path = HomeDir()
@@ -3346,6 +3353,8 @@ void MainWindow::KeyDown(const char* bytes, int32 numBytes) {
 			case 'm':  // Cmd/Ctrl+M — model picker
 				_OpenModelPicker();
 				return;
+			case 'f':  // Cmd/Ctrl+F — find (already handled above)
+				return;
 			case '+':  // Cmd/Ctrl++ — zoom in
 				fFontDelta += 1;
 				fConfig->font_delta = fFontDelta;
@@ -3392,8 +3401,6 @@ void MainWindow::KeyDown(const char* bytes, int32 numBytes) {
 
 	BWindow::KeyDown(bytes, numBytes);
 }
-
-void MainWindow::_SendCurrentInput() {
 	if (_ActiveConv()->IsBusy()) return;
 	std::string text = trim(fInput->Text() ? fInput->Text() : "");
 	if (text.empty() && fPendingImages.empty()) return;
@@ -4634,7 +4641,6 @@ static std::string _ProbeMediaInfo(const std::string& path,
 
 	if (kind == "audio" || kind == "video") {
 		// Use ffprobe for duration, codec, sample rate, channels.
-		std::string duration, codec, sample_rate, channels, bit_rate;
 		std::string cmd = "ffprobe -v quiet -print_format flat "
 			"-show_format -show_streams '";
 		// Escape single quotes in path.
@@ -4686,6 +4692,7 @@ static std::string _ProbeMediaInfo(const std::string& path,
 				if (kbps > 0)
 					info += "Bitrate: " + std::to_string(kbps) + " kbps\n";
 			}
+		}
 	} else if (kind == "pdf") {
 		// Count pages via pdfinfo if available, otherwise note.
 		FILE* p = popen(("pdfinfo '" + path + "' 2>/dev/null").c_str(), "r");

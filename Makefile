@@ -3,10 +3,10 @@ CXX      = g++
 UNAME := $(shell uname -s)
 ifeq ($(UNAME),Haiku)
     # On Haiku, use real SDK headers
-    CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -Os -pipe -Isrc -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
+    CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -O2 -Isrc -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
 else
     # On macOS/Linux, use mock headers for cross-compilation
-    CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -Os -pipe -Isrc -Imock_headers/haiku -I/opt/homebrew/include -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
+    CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -O2 -Isrc -Imock_headers/haiku -I/opt/homebrew/include -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
 endif
 LDLIBS   = -lcurl -lbe -lcrypto -lnetwork -ledit
 
@@ -160,16 +160,10 @@ Pluto_cli: $(CORE_OBJS) $(CLI_OBJS) pluto.rsrc
 	resattr -o $@ pluto.rsrc
 	addattr -t icon -f pluto.hvif BEOS:ICON $@
 
-# Low-memory build target (for 2-core, low-RAM systems)
-# Limits to 1 job, uses less memory
-lowmem: MAKEFLAGS += -j1
-lowmem: CXXFLAGS += -fno-inline-functions -fno-inline-small-functions
-lowmem: all
-
-# Sequential test runner (low memory)
-check-seq: $(TEST_BINS)
-	@for t in $(TEST_BINS); do echo "==> $$t"; ./$$t || exit 1; done
-	@echo "all tests passed"
+# Compile md4c (C file) separately.
+CC ?= gcc
+src/gui/textview/md4c.o: src/gui/textview/md4c.c
+	$(CC) -Wall -O2 -MMD -MP -c -o $@ $<
 
 Pluto: $(CORE_OBJS) $(GUI_OBJS) $(MD4C_OBJ) pluto.rsrc
 	$(CXX) $(CXXFLAGS) -o $@ $(CORE_OBJS) $(GUI_OBJS) $(MD4C_OBJ) $(LDLIBS) -ltracker -ltranslation
