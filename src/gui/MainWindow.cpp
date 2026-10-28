@@ -2,7 +2,6 @@
 
 #include <Alert.h>
 #include <Application.h>
-#include "App.h"
 #include <Autolock.h>
 #include <Button.h>
 #include <ColumnListView.h>
@@ -96,6 +95,93 @@ namespace gui {
 
 namespace {
 
+const uint32 kMsgSend         = 'plSd';
+const uint32 kMsgMcpInfo      = 'plMi';
+const uint32 kMsgSaveSession  = 'plSv';
+const uint32 kMsgResumeLast   = 'plRl';
+const uint32 kMsgLoadSession  = 'plLd';
+const uint32 kMsgStop         = 'plSt';
+const uint32 kMsgPrefs        = 'plPr';
+const uint32 kMsgFind         = 'plFn';
+const uint32 kMsgFindNext     = 'plF>';
+const uint32 kMsgFindHide     = 'plFh';
+const uint32 kMsgMcpDiscover  = 'plMd';
+const uint32 kMsgUserGuide   = 'plUg';
+const uint32 kMsgSideLink     = 'plSl';
+const uint32 kMsgDeskbarInstall = 'plDi';
+const uint32 kMsgDeskbarRemove  = 'plDr';
+const uint32 kMsgTrackerAddonInstall = 'plTi';
+const uint32 kMsgTrackerAddonRemove  = 'plTR';
+const uint32 kMsgScheduleDialog      = 'plSc';
+const uint32 kMsgRoutineDialog       = 'plRd';
+const uint32 kMsgAgentDialog         = 'plAg';
+const uint32 kMsgImageClear          = 'plIc';
+const uint32 kMsgImageRemove         = 'plIr';
+const uint32 kMsgSessionBrowser      = 'plSb';
+const uint32 kMsgModelQuickSwitch    = 'plMq';
+const uint32 kMsgRunRoutine          = 'plRr';
+const uint32 kMsgOAuthLogin          = 'plOl';
+const uint32 kMsgOAuthLogout         = 'plOo';
+const uint32 kMsgOAuthDone           = 'plOd';
+const uint32 kMsgPeerMenu           = 'plPm';
+const uint32 kMsgPeerSendPrompt     = 'plPs';
+const uint32 kMsgTabChanged         = 'plTc';
+const uint32 kMsgNextTab            = 'plN>';
+const uint32 kMsgPrevTab            = 'plN<';
+const uint32 kMsgTabCtxClose        = 'tCtC';
+const uint32 kMsgTabCtxCloseOthers  = 'tCtO';
+const uint32 kMsgTabCtxRename       = 'tCtR';
+const uint32 kMsgOpenNewTab         = 'plOT';  // from peer: open a new tab
+const uint32 kMsgPlayerPlay        = 'plPP';  // mini player: play/pause
+const uint32 kMsgPlayerStop        = 'plPS';  // mini player: stop
+
+// Palette colors are now defined in ChatColors.cpp and declared in
+// ChatColors.h. _InitPalette() still modifies them via the extern refs.
+
+// Create a Provider instance from config. Handles Anthropic (with OAuth)
+// and OpenAI-compat providers. Returns nullptr on failure.
+// Provider factory and model heuristics are now in config.cpp:
+//   pluto::CreateProvider(cfg)
+//   pluto::pluto::GuessMaxOutputTokens(model)
+//   pluto::pluto::GuessContextWindow(model)
+// Thin wrappers for call sites that don't use the pluto:: prefix.
+static std::unique_ptr<Provider> MakeProviderForConfig(
+	const pluto::Config& cfg)
+{
+	return pluto::CreateProvider(cfg);
+}
+
+// Derive a user-friendly provider label from config fields.
+std::string friendly_provider(const pluto::Config& cfg) {
+	if (cfg.provider == "anthropic") return "Anthropic";
+	const std::string& u = cfg.base_url;
+	if (u.find("api.openai.com")  != std::string::npos) return "OpenAI";
+	if (u.find("localhost:11434") != std::string::npos) return "Ollama";
+	if (u.find("localhost:1234")  != std::string::npos) return "LM Studio";
+	if (u.find("x.ai")           != std::string::npos) return "Grok (xAI)";
+	if (u.find("openrouter.ai")  != std::string::npos) return "OpenRouter";
+	if (u.find("generativelanguage.googleapis") != std::string::npos)
+		return "Google Gemini";
+	if (u.find("groq.com")       != std::string::npos) return "Groq";
+	if (u.find("deepseek.com")   != std::string::npos) return "DeepSeek";
+	if (!u.empty()) return u;
+	return "OpenAI-compat";
+}
+
+// Color scheme override: "" or "auto" = follow system, "dark", "light".
+// Set from Config::color_scheme by _InitPalette.
+std::string gColorScheme;
+
+bool is_dark_theme() {
+	if (gColorScheme == "dark")  return true;
+	if (gColorScheme == "light") return false;
+	rgb_color bg = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
+	return (bg.red + bg.green + bg.blue) < 384;
+}
+
+rgb_color brighten(rgb_color c, int by) {
+	auto clamp = [](int v) -> uint8 {
+		return static_cast<uint8>(std::max(0, std::min(255, v)));
 	};
 	return rgb_color{ clamp(c.red + by), clamp(c.green + by),
 	                  clamp(c.blue + by), c.alpha };
@@ -108,23 +194,6 @@ std::string trim(const std::string& s) {
 	while (a < b && std::isspace(static_cast<unsigned char>(s[a]))) ++a;
 	while (b > a && std::isspace(static_cast<unsigned char>(s[b - 1]))) --b;
 	return s.substr(a, b - a);
-}
-
-// Create directory hierarchy recursively
-status_t create_directory_hierarchy(const char* path, mode_t mode) {
-	if (!path || !*path) return B_BAD_VALUE;
-	
-	BPath p(path);
-	BPath parent;
-	p.GetParent(&parent);
-	
-	BDirectory dir(parent.Path());
-	if (dir.InitCheck() != B_OK) {
-		status_t err = create_directory_hierarchy(parent.Path(), mode);
-		if (err != B_OK) return err;
-		dir.SetTo(parent.Path());
-	}
-	return dir.CreateDirectory(p.Leaf(), NULL);
 }
 
 // Copy a file (contents, permissions and attributes) using native storage APIs.
@@ -1595,10 +1664,6 @@ MainWindow::MainWindow(Provider* provider, Config* cfg, ToolRegistry* tools,
 }
 
 MainWindow::~MainWindow() {
-	if (be_app) {
-		auto* app = static_cast<App*>(be_app);
-		app->UnregisterMainWindow(this);
-	}
 }
 
 // ---- active tab + thin wrappers ----
@@ -2179,7 +2244,7 @@ void MainWindow::_UpdateSidePanel(const std::string& title,
 		BFont bold_f = *be_plain_font;
 		bold_f.SetFace(B_BOLD_FACE);
 		bold_f.SetSize(bold_f.Size() + fFontDelta + 2);
-		rgb_color err_color{245, 101, 101, 255};
+				rgb_color err_color{245, 101, 101, 255};
 		fSideView->SetFontAndColor(0, header_end, &bold_f, B_FONT_ALL, &err_color);
 		// Style the body.
 		int32 n = fSideView->TextLength();
@@ -2920,41 +2985,35 @@ void MainWindow::MessageReceived(BMessage* msg) {
 		}
 
 		std::string dst_dir = HomeDir() + "/config/non-packaged/add-ons/Tracker";
-		// Create directory hierarchy recursively using BDirectory
-		status_t err = B_OK;
-		BPath path(dst_dir.c_str());
-		BPath parent;
-		path.GetParent(&parent);
-		BDirectory dir(parent.Path());
-		if (dir.InitCheck() != B_OK) {
-			// Recursively create parent directories
-			err = create_directory_hierarchy(parent.Path(), 0755);
-		}
-		if (err == B_OK) {
-			err = dir.CreateDirectory(path.Leaf(), NULL);
-		}
-		if (err != B_OK) {
-			_Append("Could not create Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
+		if (create_directory(dst_dir.c_str(), 0755) != B_OK) {
+			_Append("Could not create Tracker add-ons directory.
+", rgb_color{245, 101, 101, 255});
 			break;
 		}
 
 		BEntry srcEntry(src.c_str());
 		if (srcEntry.InitCheck() != B_OK) {
-			_Append("Could not find add-on binary.\n", rgb_color{245, 101, 101, 255});
+			_Append("Could not find add-on binary.
+", rgb_color{245, 101, 101, 255});
 			break;
 		}
 
 		BDirectory dstDir(dst_dir.c_str());
 		if (dstDir.InitCheck() == B_OK) {
 			if (copy_file_to(src.c_str(), dstDir, "Ask Pluto") == B_OK) {
-				_Append("Tracker add-on \"Ask Pluto\" installed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
-				_Append("Right-click files in Tracker to use it.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+				_Append("Tracker add-on "Ask Pluto" installed.
+", ui_color(B_DOCUMENT_TEXT_COLOR));
+				_Append("Right-click files in Tracker to use it.
+", ui_color(B_DOCUMENT_TEXT_COLOR));
 			} else {
-				_Append("Could not copy add-on to Tracker directory.\n", rgb_color{245, 101, 101, 255});
-				_Append("Build it first: make \"Ask Pluto\"\n", rgb_color{245, 101, 101, 255});
+				_Append("Could not copy add-on to Tracker directory.
+", rgb_color{245, 101, 101, 255});
+				_Append("Build it first: make "Ask Pluto"
+", rgb_color{245, 101, 101, 255});
 			}
 		} else {
-			_Append("Could not access Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
+			_Append("Could not access Tracker add-ons directory.
+", rgb_color{245, 101, 101, 255});
 		}
 		break;
 	}

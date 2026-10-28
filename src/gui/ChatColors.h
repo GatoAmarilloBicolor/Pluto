@@ -127,6 +127,38 @@ extern NativePalette gPalette;
 // Initialize palette from Haiku system colors (ui_color()).
 void InitNativePalette();
 
+// Shared message constants (inline constexpr for switch-case labels).
+inline constexpr uint32 kMsgSend             = 'plSd';
+inline constexpr uint32 kMsgMcpInfo          = 'plMi';
+inline constexpr uint32 kMsgSaveSession      = 'plSv';
+inline constexpr uint32 kMsgResumeLast       = 'plRl';
+inline constexpr uint32 kMsgLoadSession      = 'plLd';
+inline constexpr uint32 kMsgStop               = 'plSt';
+inline constexpr uint32 kMsgPrefs              = 'plPr';
+inline constexpr uint32 kMsgFind               = 'plFn';
+inline constexpr uint32 kMsgFindNext           = 'plF>';
+inline constexpr uint32 kMsgFindHide           = 'plFh';
+inline constexpr uint32 kMsgMcpDiscover        = 'plMd';
+inline constexpr uint32 kMsgUserGuide         = 'plUg';
+inline constexpr uint32 kMsgSideLink          = 'plSl';
+inline constexpr uint32 kMsgDeskbarInstall    = 'plDi';
+inline constexpr uint32 kMsgDeskbarRemove     = 'plDr';
+inline constexpr uint32 kMsgTrackerAddonInstall = 'plTi';
+inline constexpr uint32 kMsgTrackerAddonRemove  = 'plTR';
+inline constexpr uint32 kMsgScheduleDialog     = 'plSc';
+inline constexpr uint32 kMsgRoutineDialog      = 'plRd';
+inline constexpr uint32 kMsgAgentDialog        = 'plAg';
+inline constexpr uint32 kMsgImageClear         = 'plIc';
+inline constexpr uint32 kMsgImageRemove        = 'plIr';
+inline constexpr uint32 kMsgSessionBrowser     = 'plSb';
+inline constexpr uint32 kMsgModelQuickSwitch   = 'plMq';
+inline constexpr uint32 kMsgRunRoutine         = 'plRr';
+inline constexpr uint32 kMsgOAuthLogin         = 'plOl';
+inline constexpr uint32 kMsgOAuthLogout        = 'plOo';
+inline constexpr uint32 kMsgOAuthDone          = 'plOd';
+inline constexpr uint32 kMsgPeerMenu           = 'plPm';
+inline constexpr uint32 kMsgPeerSendPrompt     = 'plPs';
+
 // Convenience: lighten/darken a color.
 rgb_color Lighten(rgb_color c, int by);
 rgb_color Darken(rgb_color c, int by);
