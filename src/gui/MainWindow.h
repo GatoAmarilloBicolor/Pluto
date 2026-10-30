@@ -44,7 +44,7 @@ public:
 
 	void MessageReceived(BMessage* msg) override;
 	bool QuitRequested() override;
-	void KeyDown(const char* bytes, int32 numBytes) override;
+	void KeyDown(const char* bytes, int32 numBytes);
 	void OnError(const std::string& error) override;
 
 	// Public getters for IPC scripting protocol (delegate to ConversationView).
