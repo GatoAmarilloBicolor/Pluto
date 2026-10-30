@@ -24,6 +24,9 @@ public:
     status_t AddPointer(const char* name, void* ptr) { (void)name; (void)ptr; return B_OK; }
     status_t AddMessage(const char* name, const BMessage* msg) { (void)name; (void)msg; return B_OK; }
     
+    status_t AddSpecifier(const char* name, const char* value = nullptr) { (void)name; (void)value; return B_OK; }
+    status_t AddSpecifier(const char* name, int32 index) { (void)name; (void)index; return B_OK; }
+    
     status_t FindData(const char* name, uint32_t type, const void** data, ssize_t* len) const { (void)name; (void)type; (void)data; (void)len; return B_ERROR; }
     status_t FindString(const char* name, const char** str) const { (void)name; (void)str; return B_ERROR; }
     status_t FindInt32(const char* name, int32_t* val) const { (void)name; (void)val; return B_ERROR; }

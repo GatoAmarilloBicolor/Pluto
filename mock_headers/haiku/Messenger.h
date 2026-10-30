@@ -18,6 +18,19 @@ public:
     status_t SendMessage(BMessage* msg, BHandler* handler) { (void)msg; (void)handler; return B_OK; }
     status_t SendMessage(BMessage* msg, const BHandler* handler) { (void)msg; (void)handler; return B_OK; }
     
+    status_t SendMessage(BMessage* msg, BHandler* handler, BHandler* replyTo, bigtime_t timeout) { 
+        (void)msg; (void)handler; (void)replyTo; (void)timeout; return B_OK; }
+    status_t SendMessage(BMessage* msg, const BHandler* handler, BHandler* replyTo, bigtime_t timeout) { 
+        (void)msg; (void)handler; (void)replyTo; (void)timeout; return B_OK; }
+    
+    // 4-arg version with send and receive timeouts (used by PlutoMessenger)
+    status_t SendMessage(BMessage* msg, BMessage* reply, bigtime_t sendTimeout, bigtime_t recvTimeout) {
+        (void)msg; (void)reply; (void)sendTimeout; (void)recvTimeout; return B_OK;
+    }
+    status_t SendMessage(BMessage* msg, BMessage* reply, bigtime_t sendTimeout, bigtime_t recvTimeout, BHandler* handler) {
+        (void)msg; (void)reply; (void)sendTimeout; (void)recvTimeout; (void)handler; return B_OK;
+    }
+    
     bool IsValid() const { return false; }
     bool IsTargetLocal() const { return false; }
     BHandler* Target(BLooper** looper = nullptr) const { (void)looper; return nullptr; }

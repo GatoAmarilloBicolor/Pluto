@@ -2995,34 +2995,27 @@ void MainWindow::MessageReceived(BMessage* msg) {
 
 		std::string dst_dir = HomeDir() + "/config/non-packaged/add-ons/Tracker";
 		if (create_directory(dst_dir.c_str(), 0755) != B_OK) {
-			_Append("Could not create Tracker add-ons directory.
-", rgb_color{245, 101, 101, 255});
+			_Append("Could not create Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
 			break;
 		}
 
 		BEntry srcEntry(src.c_str());
 		if (srcEntry.InitCheck() != B_OK) {
-			_Append("Could not find add-on binary.
-", rgb_color{245, 101, 101, 255});
+			_Append("Could not find add-on binary.\n", rgb_color{245, 101, 101, 255});
 			break;
 		}
 
 		BDirectory dstDir(dst_dir.c_str());
 		if (dstDir.InitCheck() == B_OK) {
 			if (copy_file_to(src.c_str(), dstDir, "Ask Pluto") == B_OK) {
-				_Append("Tracker add-on \"Ask Pluto\" installed.
-", ui_color(B_DOCUMENT_TEXT_COLOR));
-				_Append("Right-click files in Tracker to use it.
-", ui_color(B_DOCUMENT_TEXT_COLOR));
+				_Append("Tracker add-on \"Ask Pluto\" installed.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+				_Append("Right-click files in Tracker to use it.\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 			} else {
-				_Append("Could not copy add-on to Tracker directory.
-", rgb_color{245, 101, 101, 255});
-				_Append("Build it first: make \"Ask Pluto\"
-", rgb_color{245, 101, 101, 255});
+				_Append("Could not copy add-on to Tracker directory.\n", rgb_color{245, 101, 101, 255});
+				_Append("Build it first: make \"Ask Pluto\"\n", rgb_color{245, 101, 101, 255});
 			}
 		} else {
-			_Append("Could not access Tracker add-ons directory.
-", rgb_color{245, 101, 101, 255});
+			_Append("Could not access Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
 		}
 		break;
 	}

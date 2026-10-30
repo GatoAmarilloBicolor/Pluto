@@ -156,6 +156,10 @@ typedef uint32_t uint32;
 typedef unsigned long long uint64;
 #endif
 
+// Missing constants
+const int B_MIME_TYPE_LENGTH = 256;
+const status_t B_NAME_NOT_FOUND = -40;
+
 // POSIX environ
 extern char** environ;
 
