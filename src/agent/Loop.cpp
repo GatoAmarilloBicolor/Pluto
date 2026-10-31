@@ -56,17 +56,6 @@ namespace {
 
 // Rough token estimate: 4 chars per token. Used only for the local
 // truncation heuristic, not for billing.
-[[maybe_unused]] static size_t estimate_tokens(const std::vector<Message>& msgs) {
-	size_t chars = 0;
-	for (const auto& m : msgs) {
-		chars += m.role.size();
-		for (const auto& b : m.content) {
-			chars += b.text.size() + b.tool_input.size()
-			       + b.tool_id.size() + b.tool_name.size() + 16;
-		}
-	}
-	return chars / 4;
-}
 
 // Find the end of the first complete "round" starting at index 0.
 // A round is: user → assistant [→ user(tool_result) → assistant]*.
