@@ -135,11 +135,28 @@ void RunTurn(Provider& provider,
 		} else if (messages[i + 1].role != "user") {
 			needs_repair = true;
 		} else {
-			// Next is user — check it has tool_results.
-			bool has_result = false;
+			// Next is user — check it has matching tool_results for all tool_uses.
+			std::set<std::string> expected_ids;
+			for (const auto& b : messages[i].content)
+				if (b.type == ContentBlock::TOOL_USE && !b.tool_id.empty())
+					expected_ids.insert(b.tool_id);
+
+			std::set<std::string> found_ids;
 			for (const auto& b : messages[i + 1].content)
-				if (b.type == ContentBlock::TOOL_RESULT) { has_result = true; break; }
-			if (!has_result) needs_repair = true;
+				if (b.type == ContentBlock::TOOL_RESULT && !b.tool_id.empty())
+					found_ids.insert(b.tool_id);
+
+			if (expected_ids.empty()) {
+				// Fallback if tool_ids were empty: check any TOOL_RESULT exists
+				bool has_result = false;
+				for (const auto& b : messages[i + 1].content)
+					if (b.type == ContentBlock::TOOL_RESULT) { has_result = true; break; }
+				if (!has_result) needs_repair = true;
+			} else {
+				for (const auto& id : expected_ids) {
+					if (!found_ids.count(id)) { needs_repair = true; break; }
+				}
+			}
 		}
 
 		if (needs_repair) {
@@ -169,6 +186,18 @@ void RunTurn(Provider& provider,
 		}
 	}
 
+	// Merge consecutive user messages (can happen when max_iter exhausted
+	// leaves a trailing user(tool_result) and the next turn adds a new user prompt).
+	for (size_t i = 1; i < messages.size(); ++i) {
+		if (messages[i].role == "user" && messages[i - 1].role == "user") {
+			// Append content from messages[i] into messages[i-1].
+			for (auto& b : messages[i].content)
+				messages[i - 1].content.push_back(std::move(b));
+			messages.erase(messages.begin() + (int)i);
+			--i;  // re-check at this position
+		}
+	}
+
 	// Snapshot size at entry. On any failure during this turn we rewind to
 	// here so the user's original prompt is preserved but half-built
 	// assistant/tool_result turns are dropped — otherwise a failed turn
@@ -181,11 +210,14 @@ void RunTurn(Provider& provider,
 	// at 90% with real token counts if needed.
 	if (cfg.context_window > 0) {
 		size_t target = static_cast<size_t>(cfg.context_window) * 80 / 100;
-		int dropped = prune_to_fit(messages, target);
-		if (dropped > 0) {
-			std::fprintf(stderr,
-				"[pluto] context window pressure: dropped %d oldest pair(s)\n",
-				dropped);
+		size_t current_tokens = estimate_tokens(messages);
+		if (current_tokens > target) {
+			int dropped = prune_to_fit(messages, target);
+			if (dropped > 0) {
+				std::fprintf(stderr,
+					"[pluto] context window pressure: dropped %d oldest pair(s)\n",
+					dropped);
+			}
 		}
 	}
 
@@ -398,10 +430,21 @@ void RunTurn(Provider& provider,
 				case StreamEvent::ERROR:
 					had_error = true;
 					// Detect "no tool use support" errors from providers.
-					if (ev.error.find("tool use") != std::string::npos
-					    || ev.error.find("tool_use") != std::string::npos
-					    || ev.error.find("tools") != std::string::npos) {
-						tool_use_unsupported = true;
+					// Use more specific patterns to avoid false positives
+					// (e.g. "invalid tools schema", network errors mentioning tools).
+					{
+						std::string err = ev.error;
+						std::transform(err.begin(), err.end(), err.begin(),
+							[](unsigned char c){ return std::tolower(c); });
+						if (err.find("tool use not supported") != std::string::npos
+						    || err.find("tools not supported") != std::string::npos
+						    || err.find("tool use is not available") != std::string::npos
+						    || err.find("does not support tool") != std::string::npos
+						    || err.find("tool use disabled") != std::string::npos
+						    || err.find("tool calling not supported") != std::string::npos
+						    || err.find("function calling not supported") != std::string::npos) {
+							tool_use_unsupported = true;
+						}
 					}
 					if (ui.on_error) ui.on_error(ev.error);
 					break;
@@ -496,6 +539,10 @@ void RunTurn(Provider& provider,
 
 		for (const auto& block : assistant.content) {
 			if (block.type != ContentBlock::TOOL_USE) continue;
+
+			// Check cancellation between tool executions.
+			if (cancel && cancel->load(std::memory_order_relaxed))
+				return;
 
 			ContentBlock result;
 			result.type = ContentBlock::TOOL_RESULT;

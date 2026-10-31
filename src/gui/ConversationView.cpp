@@ -954,14 +954,17 @@ int32 ConversationView::_WorkerEntry(void* data) {
 	std::unique_ptr<WorkerCtx> ctx(static_cast<WorkerCtx*>(data));
 	BMessenger target = ctx->target;
 
-	// Cross-thread permission: post to ConversationView, block on sem.
+	// Cross-thread permission: post to ConversationView, block on sem with timeout.
 	auto gui_permission = [target](const Tool& tool,
 	                               const std::string& preview) -> Permission {
 		char sem_name[64];
 		snprintf(sem_name, sizeof(sem_name), "pluto-approval-%d",
 			(int)getpid());
 		sem_id sem = create_sem(0, sem_name);
-		if (sem < 0) return Permission::Allow;
+		if (sem < 0) {
+			// Fail closed: deny if semaphore creation fails.
+			return Permission::Deny;
+		}
 		// RAII guard: ensure semaphore is always deleted.
 		struct SemGuard {
 			sem_id id;
@@ -973,8 +976,18 @@ int32 ConversationView::_WorkerEntry(void* data) {
 		m.AddString("preview", preview.c_str());
 		m.AddInt32("sem", static_cast<int32>(sem));
 		m.AddPointer("result", &result);
-		target.SendMessage(&m);
-		acquire_sem(sem);
+		if (target.SendMessage(&m) != B_OK) {
+			// Target gone (view destroyed) — deny.
+			return Permission::Deny;
+		}
+		// Wait up to 5 minutes for user response.
+		// acquire_sem_etc with B_TIMEOUT returns B_TIMED_OUT if no signal.
+		constexpr bigtime_t kApprovalTimeout = 5 * 60 * 1000000LL;  // 5 min in microseconds
+		status_t err = acquire_sem_etc(sem, B_TIMEOUT, kApprovalTimeout);
+		if (err == B_TIMED_OUT || err != B_OK) {
+			// Timeout or error — deny.
+			return Permission::Deny;
+		}
 		if (result == 0) return Permission::Deny;
 		if (result == 2) return Permission::AllowAlways;
 		return Permission::Allow;
