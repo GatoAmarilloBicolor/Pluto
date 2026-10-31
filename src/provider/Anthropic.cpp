@@ -44,6 +44,7 @@ struct StreamState {
 	std::string tool_id;
 	std::string tool_name;
 	std::string tool_input;
+	int tool_index = -1;  // sequential index for robust matching
 
 	int input_tokens = 0;
 	int output_tokens = 0;
@@ -227,7 +228,9 @@ void process_event(StreamState& st) {
 			ev.type = StreamEvent::TOOL_USE_START;
 			ev.tool_id = st.tool_id;
 			ev.tool_name = st.tool_name;
+			ev.tool_index = st.tool_index;
 			st.cb(ev);
+			st.tool_index++;
 		}
 	} else if (type == "content_block_delta") {
 		const json::Value* delta = data.find("delta");
@@ -259,6 +262,7 @@ void process_event(StreamState& st) {
 			ev.tool_id = st.tool_id;
 			ev.tool_name = st.tool_name;
 			ev.tool_input = st.tool_input.empty() ? std::string("{}") : st.tool_input;
+			ev.tool_index = st.tool_index - 1;  // index of the block we're closing
 			st.cb(ev);
 		}
 		st.block_type = StreamState::NONE;
@@ -383,6 +387,7 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
 
 		StreamState st;
 		st.cb = cb;
+		st.tool_index = 0;
 		retry_after_secs = 0;
 
 		HeadersGuard hg;

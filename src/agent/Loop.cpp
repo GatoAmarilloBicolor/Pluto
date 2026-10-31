@@ -177,6 +177,8 @@ void RunTurn(Provider& provider,
 
 	// Local context-window truncation. We use a soft cap at 80% of the
 	// configured context window, estimated cheaply from char counts.
+	// Run AFTER repair but BEFORE provider call so compact can take over
+	// at 90% with real token counts if needed.
 	if (cfg.context_window > 0) {
 		size_t target = static_cast<size_t>(cfg.context_window) * 80 / 100;
 		int dropped = prune_to_fit(messages, target);
@@ -364,16 +366,21 @@ void RunTurn(Provider& provider,
 					b.type = ContentBlock::TOOL_USE;
 					b.tool_id = ev.tool_id;
 					b.tool_name = ev.tool_name;
+					// Store sequential index for robust matching when tool_id
+					// is empty or duplicated (some OpenAI-compat providers).
+					b.tool_index = (int)assistant.content.size();
 					assistant.content.push_back(std::move(b));
 					break;
 				}
 				case StreamEvent::TOOL_USE_INPUT_DELTA:
 					break;  // accumulated in provider; full blob arrives on END
 				case StreamEvent::TOOL_USE_END: {
+					// Match by sequential index first (robust), fall back to tool_id.
 					for (auto it = assistant.content.rbegin();
 					     it != assistant.content.rend(); ++it) {
 						if (it->type == ContentBlock::TOOL_USE &&
-						    it->tool_id == ev.tool_id) {
+						    (it->tool_index == ev.tool_index ||
+						     (!ev.tool_id.empty() && it->tool_id == ev.tool_id))) {
 							it->tool_input = ev.tool_input;
 							break;
 						}
@@ -473,8 +480,16 @@ void RunTurn(Provider& provider,
 			}
 		}
 
+		// Check stop_reason BEFORE pushing assistant to history.
+		// If not "tool_use", the assistant message has no tool_use blocks
+		// (or they're incomplete), so don't add it — the repair pass on
+		// next turn will handle any orphans.
+		if (stop_reason != "tool_use") {
+			messages.push_back(assistant);
+			return;
+		}
+
 		messages.push_back(assistant);
-		if (stop_reason != "tool_use") return;
 
 		Message user_results;
 		user_results.role = "user";
@@ -540,10 +555,62 @@ bool MaybeCompact(Provider& provider,
 	if (cumulative_input_tokens < threshold) return false;
 	if (messages.size() <= 2) return false;  // nothing useful to compact
 
-	// Keep the last user turn intact. Summarize everything before it.
-	// Find the split point: we want to summarize all but the last 2 messages
-	// (the final user turn and, if present, the preceding assistant response).
-	size_t keep_from = messages.size() >= 4 ? messages.size() - 2 : messages.size() - 1;
+	// Find a safe split point that doesn't break tool_use/tool_result pairs.
+	// Start from the end and walk backwards to find the last complete "round":
+	// user → assistant [→ user(tool_result) → assistant]*
+	// We keep the last complete round intact. A round ends at a user message
+	// that either has no tool_results, or is the final user turn.
+	size_t keep_from = messages.size();
+	for (size_t i = messages.size(); i-- > 0; ) {
+		// If we hit the very last user message, we stop (keep everything from here).
+		if (messages[i].role == "user") {
+			// Check if this user message has tool_results.
+			bool has_tool_result = false;
+			for (const auto& b : messages[i].content)
+				if (b.type == ContentBlock::TOOL_RESULT) { has_tool_result = true; break; }
+			if (!has_tool_result) {
+				// This user message has no tool_results - safe to keep from here.
+				keep_from = i;
+				break;
+			}
+			// This user has tool_results - check if previous is assistant with tool_use.
+			if (i > 0 && messages[i - 1].role == "assistant") {
+				bool has_tool_use = false;
+				for (const auto& b : messages[i - 1].content)
+					if (b.type == ContentBlock::TOOL_USE) { has_tool_use = true; break; }
+				if (has_tool_use) {
+					// This is a tool_use → tool_result pair. Keep both.
+					// Continue walking back to find the previous boundary.
+					keep_from = i - 1;
+					continue;
+				}
+			}
+			// No matching tool_use before this tool_result - safe boundary.
+			keep_from = i;
+			break;
+		}
+		// Assistant message without tool_use is a safe boundary.
+		if (messages[i].role == "assistant") {
+			bool has_tool_use = false;
+			for (const auto& b : messages[i].content)
+				if (b.type == ContentBlock::TOOL_USE) { has_tool_use = true; break; }
+			if (!has_tool_use) {
+				keep_from = i;
+				break;
+			}
+			// Assistant with tool_use but no following user with tool_result
+			// (should have been repaired) - treat as boundary.
+			if (i + 1 >= messages.size() || messages[i + 1].role != "user") {
+				keep_from = i;
+				break;
+			}
+			// Continue walking back.
+		}
+	}
+
+	// Ensure we keep at least the last 2 messages (final user turn + optional assistant).
+	if (keep_from < messages.size() - 2)
+		keep_from = messages.size() - 2;
 
 	// Build the text to summarize.
 	std::string conversation_text;

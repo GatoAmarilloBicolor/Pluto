@@ -258,6 +258,7 @@ struct OaiState {
 	std::string tool_name;
 	std::string tool_args;
 	bool in_tool = false;
+	int tool_index = 0;  // sequential index for robust matching
 
 	int prompt_tokens = 0;
 	int completion_tokens = 0;
@@ -272,6 +273,7 @@ void end_tool_call(OaiState& st) {
 	ev.tool_id   = st.tool_id;
 	ev.tool_name = st.tool_name;
 	ev.tool_input = st.tool_args.empty() ? std::string("{}") : st.tool_args;
+	ev.tool_index = st.tool_index - 1;  // index of the block we're closing
 	st.cb(ev);
 	st.in_tool = false;
 	st.tool_id.clear();
@@ -394,7 +396,9 @@ void process_oai_event(OaiState& st) {
 					ev.type      = StreamEvent::TOOL_USE_START;
 					ev.tool_id   = tc_id;
 					ev.tool_name = fn_name;
+					ev.tool_index = st.tool_index;
 					st.cb(ev);
+					st.tool_index++;
 				} else if (!fn_args.empty() && st.in_tool) {
 					st.tool_args += fn_args;
 					StreamEvent ev;

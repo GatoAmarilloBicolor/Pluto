@@ -14,6 +14,7 @@ struct ContentBlock {
 	std::string tool_id = "";      // TOOL_USE (call id) or TOOL_RESULT (refers to tool_use id)
 	std::string tool_name = "";    // TOOL_USE
 	std::string tool_input = "";   // TOOL_USE: raw JSON object string
+	int tool_index = -1;           // TOOL_USE: sequential index for robust matching
 	bool is_error = false;    // TOOL_RESULT
 	std::string image_data = "";       // IMAGE: base64-encoded image data
 	std::string image_media_type = ""; // IMAGE: e.g. "image/png", "image/jpeg"
@@ -67,6 +68,7 @@ struct StreamEvent {
 	std::string tool_id;      // TOOL_USE_*
 	std::string tool_name;    // TOOL_USE_START
 	std::string tool_input;   // TOOL_USE_END (full accumulated JSON) or _INPUT_DELTA (partial)
+	int tool_index = -1;      // TOOL_USE_*: sequential index for robust matching
 	std::string image_data;       // IMAGE_BLOCK: base64 data
 	std::string image_media_type; // IMAGE_BLOCK: mime type
 	std::string stop_reason;  // MESSAGE_END

@@ -37,6 +37,7 @@ protected:
 		std::string tool_id;
 		std::string tool_name;
 		std::string tool_input;
+		int tool_index = -1;  // sequential index for robust matching
 
 		int input_tokens = 0;
 		int output_tokens = 0;
