@@ -3366,16 +3366,6 @@ void MainWindow::KeyDown(const char* bytes, int32 numBytes) {
 				_ShowFindBar();
 				return;
 			case 'l':  // Cmd/Ctrl+L — clear conversation
-				if (_ActiveConv()) _ActiveConv()->Reset();
-				return;
-			case 'r':  // Cmd/Ctrl+R — reset session
-				if (!shift) _ResetConversation();
-				return;
-			case 'm':  // Cmd/Ctrl+M — model picker
-				_OpenModelPicker();
-				return;
-			case 'f':  // Cmd/Ctrl+F — find (already handled above)
-				return;
 			case '+':  // Cmd/Ctrl++ — zoom in
 				fFontDelta += 1;
 				fConfig->font_delta = fFontDelta;
@@ -3422,7 +3412,8 @@ void MainWindow::KeyDown(const char* bytes, int32 numBytes) {
 
 	BWindow::KeyDown(bytes, numBytes);
 }
-	if (_ActiveConv()->IsBusy()) return;
+
+void MainWindow::_SendCurrentInput() {
 	std::string text = trim(fInput->Text() ? fInput->Text() : "");
 	if (text.empty() && fPendingImages.empty()) return;
 
@@ -4673,6 +4664,11 @@ static std::string _ProbeMediaInfo(const std::string& path,
 		std::string output;
 		int rc = pluto::RunCommandCapture(cmd.c_str(), output);
 		if (rc == 0 && !output.empty()) {
+			std::string duration;
+			std::string codec;
+			std::string sample_rate;
+			std::string channels;
+			std::string bit_rate;
 			// Parse output
 			std::istringstream iss(output);
 			std::string line;
