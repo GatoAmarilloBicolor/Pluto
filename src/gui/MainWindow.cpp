@@ -95,55 +95,6 @@ namespace gui {
 
 namespace {
 
-const uint32 kMsgSend         = 'plSd';
-const uint32 kMsgReset        = 'plRs';
-const uint32 kMsgAbout        = 'plAb';
-const uint32 kMsgMcpInfo      = 'plMi';
-const uint32 kMsgSaveSession  = 'plSv';
-const uint32 kMsgResumeLast   = 'plRl';
-const uint32 kMsgLoadSession  = 'plLd';
-const uint32 kMsgStop         = 'plSt';
-const uint32 kMsgZoomIn       = 'plZi';
-const uint32 kMsgZoomOut      = 'plZo';
-const uint32 kMsgZoomReset    = 'plZr';
-const uint32 kMsgPrefs        = 'plPr';
-const uint32 kMsgExportMd     = 'plEm';
-const uint32 kMsgExportJsonl  = 'plEj';
-const uint32 kMsgFind         = 'plFn';
-const uint32 kMsgFindNext     = 'plF>';
-const uint32 kMsgFindHide     = 'plFh';
-const uint32 kMsgMcpDiscover  = 'plMd';
-const uint32 kMsgUserGuide   = 'plUg';
-const uint32 kMsgSideLink     = 'plSl';
-const uint32 kMsgDeskbarInstall = 'plDi';
-const uint32 kMsgDeskbarRemove  = 'plDr';
-const uint32 kMsgTrackerAddonInstall = 'plTi';
-const uint32 kMsgTrackerAddonRemove  = 'plTR';
-const uint32 kMsgScheduleDialog      = 'plSc';
-const uint32 kMsgRoutineDialog       = 'plRd';
-const uint32 kMsgAgentDialog         = 'plAg';
-const uint32 kMsgImageClear          = 'plIc';
-const uint32 kMsgImageRemove         = 'plIr';
-const uint32 kMsgSessionBrowser      = 'plSb';
-const uint32 kMsgModelQuickSwitch    = 'plMq';
-const uint32 kMsgRunRoutine          = 'plRr';
-const uint32 kMsgOAuthLogin          = 'plOl';
-const uint32 kMsgOAuthLogout         = 'plOo';
-const uint32 kMsgOAuthDone           = 'plOd';
-const uint32 kMsgPeerMenu           = 'plPm';
-const uint32 kMsgPeerSendPrompt     = 'plPs';
-const uint32 kMsgNewTab             = 'plNt';
-const uint32 kMsgCloseTab           = 'plCl';
-const uint32 kMsgTabChanged         = 'plTc';
-const uint32 kMsgNextTab            = 'plN>';
-const uint32 kMsgPrevTab            = 'plN<';
-const uint32 kMsgTabCtxClose        = 'tCtC';
-const uint32 kMsgTabCtxCloseOthers  = 'tCtO';
-const uint32 kMsgTabCtxRename       = 'tCtR';
-const uint32 kMsgOpenNewTab         = 'plOT';  // from peer: open a new tab
-const uint32 kMsgPlayerPlay        = 'plPP';  // mini player: play/pause
-const uint32 kMsgPlayerStop        = 'plPS';  // mini player: stop
-
 // Palette colors are now defined in ChatColors.cpp and declared in
 // ChatColors.h. _InitPalette() still modifies them via the extern refs.
 
@@ -4663,12 +4614,14 @@ static std::string _ProbeMediaInfo(const std::string& path,
 		cmd += "' 2>/dev/null";
 		std::string output;
 		int rc = pluto::RunCommandCapture(cmd.c_str(), output);
+
+		std::string duration;
+		std::string codec;
+		std::string sample_rate;
+		std::string channels;
+		std::string bit_rate;
+
 		if (rc == 0 && !output.empty()) {
-			std::string duration;
-			std::string codec;
-			std::string sample_rate;
-			std::string channels;
-			std::string bit_rate;
 			// Parse output
 			std::istringstream iss(output);
 			std::string line;
@@ -4690,25 +4643,24 @@ static std::string _ProbeMediaInfo(const std::string& path,
 			}
 		}
 
-			if (!duration.empty()) {
-				double secs = std::atof(duration.c_str());
-				int min = (int)secs / 60;
-				int sec = (int)secs % 60;
-				char tbuf[32];
-				snprintf(tbuf, sizeof(tbuf), "%d:%02d", min, sec);
-				info += "Duration: "; info += tbuf; info += "\n";
-			}
-			if (!codec.empty())
-				info += "Codec:  " + codec + "\n";
-			if (!sample_rate.empty())
-				info += "Sample: " + sample_rate + " Hz\n";
-			if (!channels.empty())
-				info += "Channels: " + channels + "\n";
-			if (!bit_rate.empty()) {
-				int kbps = std::atoi(bit_rate.c_str()) / 1000;
-				if (kbps > 0)
-					info += "Bitrate: " + std::to_string(kbps) + " kbps\n";
-			}
+		if (!duration.empty()) {
+			double secs = std::atof(duration.c_str());
+			int min = (int)secs / 60;
+			int sec = (int)secs % 60;
+			char tbuf[32];
+			snprintf(tbuf, sizeof(tbuf), "%d:%02d", min, sec);
+			info += "Duration: "; info += tbuf; info += "\n";
+		}
+		if (!codec.empty())
+			info += "Codec:  " + codec + "\n";
+		if (!sample_rate.empty())
+			info += "Sample: " + sample_rate + " Hz\n";
+		if (!channels.empty())
+			info += "Channels: " + channels + "\n";
+		if (!bit_rate.empty()) {
+			int kbps = std::atoi(bit_rate.c_str()) / 1000;
+			if (kbps > 0)
+				info += "Bitrate: " + std::to_string(kbps) + " kbps\n";
 		}
 	} else if (kind == "pdf") {
 		// Count pages via pdfinfo if available, otherwise note.
