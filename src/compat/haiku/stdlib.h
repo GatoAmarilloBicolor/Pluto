@@ -1,75 +1,16 @@
 /*
- * Minimal stdlib.h for Haiku compatibility
+ * stdlib.h for Haiku compatibility
+ * Includes real system header then adds Haiku-specific overrides
  */
 
 #ifndef _STDLIB_H
 #define _STDLIB_H
 
-#include <stddef.h>
+#include_next <stdlib.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* Memory allocation */
-void *malloc(size_t size);
-void *calloc(size_t nmemb, size_t size);
-void *realloc(void *ptr, size_t size);
-void free(void *ptr);
-void *aligned_alloc(size_t alignment, size_t size);
-
-/* String conversion */
-double strtod(const char *nptr, char **endptr);
-float strtof(const char *nptr, char **endptr);
-long double strtold(const char *nptr, char **endptr);
-long int strtol(const char *nptr, char **endptr, int base);
-long long int strtoll(const char *nptr, char **endptr, int base);
-unsigned long int strtoul(const char *nptr, char **endptr, int base);
-unsigned long long int strtoull(const char *nptr, char **endptr, int base);
-
-/* Random numbers */
-int rand(void);
-void srand(unsigned int seed);
-
-/* Searching/sorting */
-void *bsearch(const void *key, const void *base, size_t nmemb, size_t size,
-              int (*compar)(const void *, const void *));
-void qsort(void *base, size_t nmemb, size_t size,
-           int (*compar)(const void *, const void *));
-
-/* Integer arithmetic */
-int abs(int j);
-long int labs(long int j);
-long long int llabs(long long int j);
-div_t div(int numer, int denom);
-ldiv_t ldiv(long int numer, long int denom);
-lldiv_t lldiv(long long int numer, long long int denom);
-
-/* Multibyte/wide character conversion */
-int mblen(const char *s, size_t n);
-int mbtowc(wchar_t *pwc, const char *s, size_t n);
-int wctomb(char *s, wchar_t wc);
-size_t mbstowcs(wchar_t *pwcs, const char *s, size_t n);
-size_t wcstombs(char *s, const wchar_t *pwcs, size_t n);
-
-/* Environment */
-char *getenv(const char *name);
-int system(const char *string);
-
-/* Exit */
-void exit(int status);
-void _Exit(int status);
-int atexit(void (*func)(void));
-int at_quick_exit(void (*func)(void));
-void quick_exit(int status);
-
-/* Memory alignment */
-void *memalign(size_t alignment, size_t size);
-int posix_memalign(void **memptr, size_t alignment, size_t size);
-
-/* Other */
-char *mkdtemp(char *template);
-int mkstemp(char *template);
 
 #ifdef __cplusplus
 }
