@@ -7,6 +7,7 @@
 #define _FIND_DIRECTORY_H
 
 #include <stddef.h>
+#include <sys/types.h>
 
 #ifdef __cplusplus
 extern "C" {
