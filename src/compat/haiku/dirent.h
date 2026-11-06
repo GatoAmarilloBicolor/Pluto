@@ -6,6 +6,6 @@
 #ifndef _DIRENT_H
 #define _DIRENT_H
 
-#include_next <dirent.h>
+#include <dirent.h>
 
 #endif /* _DIRENT_H */

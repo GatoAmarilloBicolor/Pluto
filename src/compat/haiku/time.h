@@ -6,7 +6,7 @@
 #ifndef _TIME_H
 #define _TIME_H
 
-#include_next <time.h>
+#include <time.h>
 
 #ifdef __cplusplus
 extern "C" {

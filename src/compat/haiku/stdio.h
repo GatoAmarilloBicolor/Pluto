@@ -6,7 +6,7 @@
 #ifndef _STDIO_H
 #define _STDIO_H
 
-#include_next <stdio.h>
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {

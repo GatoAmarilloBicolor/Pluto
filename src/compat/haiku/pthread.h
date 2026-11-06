@@ -6,7 +6,7 @@
 #ifndef _PTHREAD_H
 #define _PTHREAD_H
 
-#include_next <pthread.h>
+#include <pthread.h>
 
 #ifdef __cplusplus
 extern "C" {
