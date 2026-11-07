@@ -30,8 +30,8 @@ inline status_t watch_node(const node_ref* node, uint32_t flags, BMessenger targ
     return B_OK;
 }
 
-inline void stop_watching(const node_ref* node, BMessenger target) {
-    (void)node; (void)target;
+inline void stop_watching(BMessenger target) {
+    (void)target;
 }
 
 #endif
