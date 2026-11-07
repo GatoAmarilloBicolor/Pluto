@@ -49,7 +49,7 @@ std::string trim(const std::string& s) {
 	while (a < b && (s[a] == ' ' || s[a] == '\t' || s[a] == '\r')) ++a;
 	while (b > a && (s[b - 1] == ' ' || s[b - 1] == '\t' || s[b - 1] == '\r'))
 		--b;
-	return s.substr(a, b - a + 1);
+	return s.substr(a, b - a);
 }
 
 // Shell-safe quoting: wraps in single quotes, escapes embedded quotes.
@@ -105,8 +105,12 @@ std::string canonicalize(const std::string& raw) {
 
 	// Try BPath normalization first (resolves symlinks for existing paths).
 	BPath bpath;
-	if (bpath.SetTo(raw.c_str(), nullptr, true) == B_OK)
-		return bpath.Path();
+	if (bpath.SetTo(raw.c_str(), nullptr, true) == B_OK) {
+		std::string result = bpath.Path();
+		while (result.size() > 1 && result.back() == '/')
+			result.pop_back();
+		return result;
+	}
 
 	// Walk up until we find an existing parent.
 	std::string dir = raw;
@@ -175,8 +179,9 @@ bool WorkspaceAllows(const std::string& path) {
 	// This avoids BPath/realpath for the common case where the path is
 	// already under the workspace root. Skip if the path contains ".."
 	// which could escape the workspace despite matching the prefix.
-	if (starts_with(path, g_WorkspaceRoot)
-	    && path.find("..") == std::string::npos) return true;
+	bool sw = starts_with(path, g_WorkspaceRoot);
+	bool has_dd = (path.find("..") != std::string::npos);
+	if (sw && !has_dd) return true;
 
 	// Session trust covers everything — no need to canonicalize.
 	if (g_session_trusted) return true;
@@ -185,10 +190,11 @@ bool WorkspaceAllows(const std::string& path) {
 	std::string cp = canonicalize(path);
 	if (cp.empty()) cp = path;
 
-	if (starts_with(cp, g_WorkspaceRoot)) return true;
-
 	// Check trusted workspaces.
 	auto trusted = ListTrustedWorkspaces();
+
+	if (starts_with(cp, g_WorkspaceRoot)) return true;
+
 	for (const auto& tw : trusted) {
 		if (starts_with(cp, tw)) return true;
 	}

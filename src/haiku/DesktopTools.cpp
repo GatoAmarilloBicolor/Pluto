@@ -19,6 +19,7 @@
 #include <Statable.h>
 #include <Looper.h>
 #include <Messenger.h>
+#include <OS.h>
 #endif
 
 #include <cstdint>
@@ -196,15 +197,15 @@ public:
 		if (duration_ms < 100)   duration_ms = 100;
 		if (duration_ms > 60000) duration_ms = 60000;
 
-		BNode node(path.c_str());
-		if (node.InitCheck() != B_OK || !node.IsDirectory()) {
+		BEntry entry(path.c_str());
+		if (entry.InitCheck() != B_OK) {
 			r.is_error = true;
 			r.output = "not a directory: " + path;
 			return r;
 		}
 
 		node_ref nref;
-		if (node.GetNodeRef(&nref) != B_OK) {
+		if (entry.GetNodeRef(&nref) != B_OK) {
 			r.is_error = true;
 			r.output = "GetNodeRef failed";
 			return r;
@@ -213,20 +214,20 @@ public:
 		NodeWatcher* watcher = new NodeWatcher();
 		BMessenger target(watcher);
 
-uint32_t flags = B_WATCH_DIRECTORY | B_WATCH_NAME | B_WATCH_STAT;
-	if (watch_node(&nref, flags, target) != B_OK) {
-		watcher->Lock();
-		watcher->Quit();
-		watcher->Unlock();
-		delete watcher;
-		r.is_error = true;
-		r.output = "watch_node failed";
-		return r;
-	}
+		uint32_t flags = B_WATCH_DIRECTORY | B_WATCH_NAME | B_WATCH_STAT;
+		if (watch_node(&nref, flags, target) != B_OK) {
+			watcher->Lock();
+			watcher->Quit();
+			watcher->Unlock();
+			delete watcher;
+			r.is_error = true;
+			r.output = "watch_node failed";
+			return r;
+		}
 
 		snooze(static_cast<bigtime_t>(duration_ms) * 1000LL);
 
-		watch_node(&nref, B_STOP_WATCHING, target);
+		stop_watching(&nref, target);
 		auto events = watcher->drain();
 
 		std::string out;
@@ -404,6 +405,23 @@ public:
 	}
 
 private:
+	static std::string type_code_str(uint32_t type) {
+		char t[5] = {
+			static_cast<char>((type >> 24) & 0xff),
+			static_cast<char>((type >> 16) & 0xff),
+			static_cast<char>((type >>  8) & 0xff),
+			static_cast<char>((type      ) & 0xff), 0
+		};
+		for (int i = 0; i < 4; ++i) {
+			if (t[i] < 0x20 || t[i] > 0x7e) {
+				char buf[16];
+				std::snprintf(buf, sizeof(buf), "0x%08x", (unsigned)type);
+				return buf;
+			}
+		}
+		return std::string("'") + t + "'";
+	}
+
 	static std::string format_reply(const BMessage& reply, int depth = 0) {
 		if (depth > 8) return "(recursion limit reached)\n";
 		std::string out;
@@ -414,6 +432,8 @@ private:
 		for (int32 i = 0;
 		     reply.GetInfo(B_ANY_TYPE, i, &name, &type, &count) == B_OK;
 		     ++i) {
+			// Haiku's GetInfo allocates name via free(); null-check for safety.
+			if (!name) { ++i; continue; }
 			if (std::string(name) == "when"
 			 || std::string(name) == "error") continue;
 			for (int32 j = 0; j < count; ++j) {
@@ -529,15 +549,7 @@ private:
 						break;
 					}
 					default: {
-						char tc[5] = {
-							(char)((type >> 24) & 0xff),
-							(char)((type >> 16) & 0xff),
-							(char)((type >> 8) & 0xff),
-							(char)(type & 0xff), 0
-						};
-						out += "(";
-						out += tc;
-						out += ")";
+						out += "(" + type_code_str(type) + ")";
 						break;
 					}
 				}

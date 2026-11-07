@@ -10,6 +10,7 @@
 #include <Directory.h>
 #include <Entry.h>
 #include <Messenger.h>
+#include <OS.h>
 #include <Path.h>
 #include <Roster.h>
 
@@ -93,7 +94,7 @@ process_refs(entry_ref dir, BMessage* message, void* /*reserved*/)
 		std::string ws_arg = "--workspace=";
 		ws_arg += workspace.empty() ? "." : workspace;
 		const char* argv[] = { ws_arg.c_str(), nullptr };
-		be_roster->Launch(kPlutoSig, 1, const_cast<char**>(argv));
+		be_roster->Launch(kPlutoSig, 1, argv);
 		// Wait for the app to start and create its window.
 		snooze(1500000);  // 1.5s
 	}

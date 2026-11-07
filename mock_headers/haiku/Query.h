@@ -20,4 +20,6 @@ public:
     int32 CountEntries() { return 0; }
 };
 
+const uint32_t B_QUERY_UPDATE = 'qup1';
+
 #endif

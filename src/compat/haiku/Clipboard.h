@@ -1,32 +1,11 @@
 /*
  * Clipboard.h for Haiku compatibility
- * Minimal stub for Haiku BClipboard class
+ * System <Clipboard.h> provides BClipboard; this header is a passthrough.
  */
 
-#ifndef _CLIPBOARD_H
-#define _CLIPBOARD_H
+#ifndef PLUTO_COMPAT_CLIPBOARD_H
+#define PLUTO_COMPAT_CLIPBOARD_H
 
-#include <Message.h>
+#include <Clipboard.h>
 
-#ifdef __cplusplus
-
-class BClipboard {
-public:
-    BClipboard(const char* name = NULL);
-    virtual ~BClipboard();
-
-    status_t InitCheck() const;
-    status_t Commit();
-    status_t Revert();
-    status_t Clear();
-
-    BMessage* Data() const;
-    bool IsEmpty() const;
-    bool Lock();
-    void Unlock();
-    bool LockWithTimeout(bigtime_t timeout);
-};
-
-#endif /* __cplusplus */
-
-#endif /* _CLIPBOARD_H */
+#endif /* PLUTO_COMPAT_CLIPBOARD_H */

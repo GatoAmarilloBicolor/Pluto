@@ -1,24 +1,11 @@
 /*
- * Minimal setjmp.h for Haiku compatibility
+ * setjmp.h for Haiku compatibility
+ * System <setjmp.h> provides all declarations; this header is a passthrough.
  */
 
-#ifndef _SETJMP_H
-#define _SETJMP_H
+#ifndef PLUTO_COMPAT_SETJMP_H
+#define PLUTO_COMPAT_SETJMP_H
 
-#include <stddef.h>
+#include <setjmp.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/* jmp_buf type */
-typedef long jmp_buf[16];
-
-int setjmp(jmp_buf env);
-void longjmp(jmp_buf env, int val);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* _SETJMP_H */
+#endif /* PLUTO_COMPAT_SETJMP_H */

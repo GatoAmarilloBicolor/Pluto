@@ -16,6 +16,7 @@ public:
     off_t FreeBytes() const { return 0; }
     off_t TotalBytes() const { return 0; }
     status_t GetName(char* name) const { (void)name; return B_OK; }
+    status_t InitCheck() const { return B_OK; }
     
     bool KnowsQuery() const { return true; }
     bool KnowsAttr() const { return true; }

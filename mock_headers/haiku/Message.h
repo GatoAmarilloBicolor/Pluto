@@ -23,6 +23,7 @@ public:
     status_t AddBool(const char* name, bool val) { (void)name; (void)val; return B_OK; }
     status_t AddPointer(const char* name, void* ptr) { (void)name; (void)ptr; return B_OK; }
     status_t AddMessage(const char* name, const BMessage* msg) { (void)name; (void)msg; return B_OK; }
+    status_t AddRef(const char* name, const entry_ref* ref) { (void)name; (void)ref; return B_OK; }
     
     status_t AddSpecifier(const char* name, const char* value = nullptr) { (void)name; (void)value; return B_OK; }
     status_t AddSpecifier(const char* name, int32 index) { (void)name; (void)index; return B_OK; }
@@ -34,6 +35,7 @@ public:
     status_t FindBool(const char* name, bool* val) const { (void)name; (void)val; return B_ERROR; }
     status_t FindPointer(const char* name, void** ptr) const { (void)name; (void)ptr; return B_ERROR; }
     status_t FindMessage(const char* name, BMessage* msg) const { (void)name; (void)msg; return B_ERROR; }
+    status_t FindRef(const char* name, int32 index, entry_ref* ref) const { (void)name; (void)index; (void)ref; return B_ERROR; }
     
     ssize_t FlattenedSize() const { return 0; }
     status_t Flatten(void* buf, ssize_t size) const { (void)buf; (void)size; return B_OK; }
@@ -54,5 +56,10 @@ public:
 private:
     uint32_t fWhat = 0;
 };
+
+// BeOS scripting constants
+const uint32 B_REFS_RECEIVED = 'refs';
+const uint32 B_REPLY = 'BREP';
+const uint32 B_NO_REPLY = 'BNRE';
 
 #endif

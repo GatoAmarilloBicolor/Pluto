@@ -116,6 +116,8 @@ const status_t B_BAD_IMAGE_ID = -25;
 #define B_TYPED_LIST_TYPE 38
 #define B_ANY_TYPE 39
 #define B_SYMBOL_TYPE_TEXT 40
+#define B_BOOL_TYPE 41
+#define B_RGB_COLOR_TYPE 32
 
 struct entry_ref {
     dev_t device;
@@ -129,6 +131,7 @@ struct attr_info {
 };
 
 const int B_FILE_NAME_LENGTH = 255;
+const int B_ATTR_NAME_LENGTH = 255;
 
 typedef uint32_t type_code;
 
@@ -159,6 +162,7 @@ typedef unsigned long long uint64;
 // Missing constants
 const int B_MIME_TYPE_LENGTH = 256;
 const status_t B_NAME_NOT_FOUND = -40;
+const status_t B_ALREADY_RUNNING = -47;
 
 // POSIX environ
 extern char** environ;

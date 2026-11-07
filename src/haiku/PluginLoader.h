@@ -8,7 +8,7 @@
 #ifdef __HAIKU__
 #include <kernel/image.h>
 #else
-#include "mock_headers/haiku/kernel/image.h"
+#include "../mock_headers/haiku/kernel/image.h"
 #endif
 
 #include "tools/Tool.h"

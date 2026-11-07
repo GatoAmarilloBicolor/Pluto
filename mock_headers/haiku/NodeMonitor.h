@@ -8,7 +8,13 @@ enum {
     B_WATCH_DIRECTORY = 0x0001,
     B_WATCH_NAME = 0x0002,
     B_WATCH_STAT = 0x0004,
-    B_WATCH_ALL = 0x000f
+    B_WATCH_ALL = 0x000f,
+    B_STOP_WATCHING = 0x80000000,
+    B_ENTRY_CREATED = 1,
+    B_ENTRY_REMOVED = 2,
+    B_ENTRY_MOVED = 3,
+    B_STAT_CHANGED = 4,
+    B_ATTR_CHANGED = 5
 };
 
 struct node_ref {

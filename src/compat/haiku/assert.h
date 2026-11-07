@@ -1,25 +1,11 @@
 /*
- * Minimal assert.h for Haiku compatibility
+ * assert.h for Haiku compatibility
+ * Includes real system header then adds Haiku-specific overrides
  */
 
 #ifndef _ASSERT_H
 #define _ASSERT_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#ifdef NDEBUG
-#define assert(expr) ((void)0)
-#else
-#define assert(expr) \
-    ((expr) ? (void)0 : __assert_fail(#expr, __FILE__, __LINE__, __func__))
-#endif
-
-void __assert_fail(const char *expr, const char *file, int line, const char *func);
-
-#ifdef __cplusplus
-}
-#endif
+#include <assert.h>
 
 #endif /* _ASSERT_H */

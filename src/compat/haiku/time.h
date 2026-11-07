@@ -1,25 +1,11 @@
 /*
  * time.h for Haiku compatibility
- * Includes real system header then adds Haiku-specific overrides
+ * System <time.h> provides all declarations; this header is a passthrough.
  */
 
-#ifndef _TIME_H
-#define _TIME_H
+#ifndef PLUTO_COMPAT_TIME_H
+#define PLUTO_COMPAT_TIME_H
 
 #include <time.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/* Ensure clock_t is defined */
-#ifndef _CLOCK_T_DEFINED
-typedef long clock_t;
-#define _CLOCK_T_DEFINED
-#endif
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* _TIME_H */
+#endif /* PLUTO_COMPAT_TIME_H */

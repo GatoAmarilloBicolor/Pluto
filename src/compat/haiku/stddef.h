@@ -1,17 +1,11 @@
 /*
- * Minimal stddef.h for Haiku compatibility
+ * stddef.h for Haiku compatibility
+ * System <stddef.h> provides all declarations; this header is a passthrough.
  */
 
-#ifndef _STDDEF_H
-#define _STDDEF_H
+#ifndef PLUTO_COMPAT_STDDEF_H
+#define PLUTO_COMPAT_STDDEF_H
 
-typedef long ptrdiff_t;
-typedef unsigned long size_t;
-#ifndef __cplusplus
-typedef long wchar_t;
-#endif
+#include <stddef.h>
 
-#define NULL ((void*)0)
-#define offsetof(t, d) __builtin_offsetof(t, d)
-
-#endif /* _STDDEF_H */
+#endif /* PLUTO_COMPAT_STDDEF_H */

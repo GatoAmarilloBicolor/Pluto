@@ -53,6 +53,24 @@ std::string format_type_code(uint32_t type) {
 	return std::string("'") + t + "'";
 }
 
+// Resolve a volume by name, or the boot volume if name is empty.
+// Returns false if no usable volume was found.
+static bool ResolveVolume(const std::string& volume_name, BVolume& out) {
+	if (volume_name.empty()) {
+		return BVolumeRoster().GetBootVolume(&out) == B_OK;
+	}
+	BVolumeRoster roster;
+	BVolume v;
+	char buf[B_FILE_NAME_LENGTH];
+	while (roster.GetNextVolume(&v) == B_OK) {
+		if (v.GetName(buf) == B_OK && volume_name == buf) {
+			out = v;
+			return true;
+		}
+	}
+	return false;
+}
+
 std::string format_attr_value(uint32_t type, const void* data, ssize_t size) {
 #ifdef __HAIKU__
 	switch (type) {
@@ -441,31 +459,14 @@ public:
 		if (predicate.empty()) {
 			r.is_error = true; r.output = "predicate required"; return r;
 		}
+		if (max_results < 1)   max_results = 1;
+		if (max_results > 1000) max_results = 1000;
 
 		BVolume volume;
-		if (volume_name.empty()) {
-			BVolumeRoster().GetBootVolume(&volume);
-		} else {
-			BVolumeRoster roster;
-			BVolume v;
-			char buf[B_FILE_NAME_LENGTH];
-			bool found = false;
-			while (roster.GetNextVolume(&v) == B_OK) {
-				if (v.GetName(buf) == B_OK && volume_name == buf) {
-					volume = v;
-					found = true;
-					break;
-				}
-			}
-			if (!found) {
-				r.is_error = true;
-				r.output = "volume not found: " + volume_name;
-				return r;
-			}
-		}
-		if (volume.InitCheck() != B_OK) {
+		if (!ResolveVolume(volume_name, volume)) {
 			r.is_error = true;
-			r.output = "invalid volume";
+			r.output = volume_name.empty() ? "no boot volume"
+			                                : "volume not found: " + volume_name;
 			return r;
 		}
 
@@ -537,8 +538,11 @@ public:
 		int32 dev = 0;
 		msg->FindInt32("device", &dev);
 		ev.device = static_cast<dev_t>(dev);
-		msg->FindInt64("directory", &ev.directory);
-		msg->FindInt64("node", &ev.node);
+		int64_t dir = 0, nod = 0;
+		msg->FindInt64("directory", &dir);
+		msg->FindInt64("node", &nod);
+		ev.directory = static_cast<ino_t>(dir);
+		ev.node = static_cast<ino_t>(nod);
 
 		std::lock_guard<std::mutex> lk(fMu);
 		fEvents.push_back(std::move(ev));
@@ -598,27 +602,10 @@ public:
 		if (duration_ms > 60000) duration_ms = 60000;
 
 		BVolume volume;
-		if (volume_name.empty()) {
-			BVolumeRoster().GetBootVolume(&volume);
-		} else {
-			BVolumeRoster roster;
-			BVolume v;
-			char buf[B_FILE_NAME_LENGTH];
-			bool found = false;
-			while (roster.GetNextVolume(&v) == B_OK) {
-				if (v.GetName(buf) == B_OK && volume_name == buf) {
-					volume = v; found = true; break;
-				}
-			}
-			if (!found) {
-				r.is_error = true;
-				r.output = "volume not found: " + volume_name;
-				return r;
-			}
-		}
-		if (volume.InitCheck() != B_OK) {
+		if (!ResolveVolume(volume_name, volume)) {
 			r.is_error = true;
-			r.output = "invalid volume";
+			r.output = volume_name.empty() ? "no boot volume"
+			                                : "volume not found: " + volume_name;
 			return r;
 		}
 

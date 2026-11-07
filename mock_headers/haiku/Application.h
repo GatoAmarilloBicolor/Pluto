@@ -46,6 +46,8 @@ public:
     status_t GetAppInfo(app_info* info) { (void)info; return B_OK; }
     
     thread_id Run() { return BLooper::Run(); }
+
+    status_t ActivateApp(team_id team) { (void)team; return B_OK; }
 };
 
 BApplication* BApplication::be_app = nullptr;
@@ -70,6 +72,11 @@ public:
     status_t Launch(const entry_ref* ref, int32 argc, const char** argv, const BMessage* message = nullptr) {
         (void)ref; (void)argc; (void)argv; (void)message;
         return B_ERROR;
+    }
+    
+    bool IsRunning(const char* signature) const {
+        (void)signature;
+        return false;
     }
     
     status_t GetAppInfo(const char* signature, app_info* info) const {

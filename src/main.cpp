@@ -491,12 +491,12 @@ int main(int argc, char** argv) {
 	tools.add(pluto::MakeBashTool());
 	tools.add(pluto::MakeGrepTool());
 	tools.add(pluto::MakeGlobTool());
+#ifdef __HAIKU__
 	tools.add(pluto::MakeReadAttrTool());
 	tools.add(pluto::MakeWriteAttrTool());
 	tools.add(pluto::MakeListAttrsTool());
 	tools.add(pluto::MakeRemoveAttrTool());
 	tools.add(pluto::MakeQueryFsTool());
-#ifdef __HAIKU__
 	tools.add(pluto::MakeDesktopScriptTool());
 	tools.add(pluto::MakeLaunchAppTool());
 	tools.add(pluto::MakeLiveQueryTool());

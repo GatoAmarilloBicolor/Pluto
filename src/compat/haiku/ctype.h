@@ -1,45 +1,12 @@
 /*
- * Minimal ctype.h for Haiku compatibility
+ * ctype.h for Haiku compatibility
+ * System <ctype.h> provides all declarations; this header is a passthrough
+ * for code that includes "ctype.h" with quotes instead of angle brackets.
  */
 
-#ifndef _CTYPE_H
-#define _CTYPE_H
+#ifndef PLUTO_COMPAT_CTYPE_H
+#define PLUTO_COMPAT_CTYPE_H
 
-#include <stddef.h>
+#include <ctype.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/* Character classification functions */
-int isalnum(int c);
-int isalpha(int c);
-int isblank(int c);
-int iscntrl(int c);
-int isdigit(int c);
-int isgraph(int c);
-int islower(int c);
-int isprint(int c);
-int ispunct(int c);
-int isspace(int c);
-int isupper(int c);
-int isxdigit(int c);
-
-/* Character conversion functions */
-int tolower(int c);
-int toupper(int c);
-
-/* Character classification functions (C99) */
-int isascii(int c);
-int toascii(int c);
-int _tolower(int c);
-int _toupper(int c);
-
-/* Wide character classification */
-#include <wctype.h>
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* _CTYPE_H */
+#endif /* PLUTO_COMPAT_CTYPE_H */
