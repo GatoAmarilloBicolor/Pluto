@@ -3,19 +3,25 @@
 
 #include "Message.h"
 #include "BString.h"
+#include "Bitmap.h"
 
-#define B_NOTIFICATION_TYPE_INFO 1
-#define B_NOTIFICATION_TYPE_WARNING 2
-#define B_NOTIFICATION_TYPE_ERROR 3
+#define B_INFORMATION_NOTIFICATION 1
+#define B_WARNING_NOTIFICATION 2
+#define B_ERROR_NOTIFICATION 3
 
 class BNotification {
 public:
-    BNotification(int32_t type, const BString& title, const BString& content) {
-        (void)type; (void)title; (void)content;
-    }
+    BNotification(int32_t type) : fType(type) { (void)type; }
     ~BNotification() = default;
     
     void Send() {}
+    void SetTitle(const BString& title) { (void)title; }
+    void SetContent(const BString& content) { (void)content; }
+    void SetGroup(const BString& group) { (void)group; }
+    void SetIcon(const BBitmap* icon) { (void)icon; }
+
+private:
+    int32_t fType;
 };
 
 #endif

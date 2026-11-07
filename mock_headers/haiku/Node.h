@@ -19,6 +19,8 @@ public:
     status_t RemoveAttr(const char* name) { (void)name; return B_OK; }
     status_t GetAttrInfo(const char* name, attr_info* info) { (void)name; (void)info; return B_OK; }
     status_t ListAttrs(char* buf, size_t len) { (void)buf; (void)len; return B_OK; }
+    status_t RewindAttrs() { return B_OK; }
+    status_t GetNextAttrName(char* name) { (void)name; return B_ENTRY_NOT_FOUND; }
     dev_t Device() const { return 0; }
     ino_t Node() const { return 0; }
     status_t GetStat(struct stat* st) { (void)st; return B_OK; }

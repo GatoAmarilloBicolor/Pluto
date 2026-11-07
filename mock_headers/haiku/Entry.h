@@ -2,6 +2,7 @@
 #define MOCK_ENTRY_H
 
 #include "Types.h"
+#include "NodeMonitor.h"
 
 // Forward declarations
 class BDirectory;
@@ -23,6 +24,7 @@ public:
     status_t GetRef(entry_ref* ref) const { (void)ref; return B_OK; }
     status_t GetParent(BEntry* parent) const { (void)parent; return B_OK; }
     status_t GetName(char* name) const { (void)name; return B_OK; }
+    status_t GetNodeRef(node_ref* nref) const { (void)nref; return B_OK; }
     status_t GetPath(BPath* path) const { (void)path; return B_OK; }
     status_t GetStat(struct stat* st) const { (void)st; return B_OK; }
     status_t SetTo(const entry_ref* ref) { (void)ref; return B_OK; }

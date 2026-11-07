@@ -459,8 +459,8 @@ public:
 		if (predicate.empty()) {
 			r.is_error = true; r.output = "predicate required"; return r;
 		}
-		if (max_results < 1)   max_results = 1;
-		if (max_results > 1000) max_results = 1000;
+		if (limit < 1)   limit = 1;
+		if (limit > 1000) limit = 1000;
 
 		BVolume volume;
 		if (!ResolveVolume(volume_name, volume)) {

@@ -64,6 +64,11 @@ public:
         return B_ERROR;
     }
     
+    status_t Launch(const char* signature) {
+        (void)signature;
+        return B_ERROR;
+    }
+    
     status_t Launch(const char* signature, const BMessage* message, const entry_ref* ref, int32 flags = 0) {
         (void)signature; (void)message; (void)ref; (void)flags;
         return B_ERROR;
@@ -78,6 +83,8 @@ public:
         (void)signature;
         return false;
     }
+    
+    status_t ActivateApp(team_id team) { (void)team; return B_OK; }
     
     status_t GetAppInfo(const char* signature, app_info* info) const {
         (void)signature; (void)info;

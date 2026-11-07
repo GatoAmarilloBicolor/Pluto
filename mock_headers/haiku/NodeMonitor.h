@@ -2,6 +2,7 @@
 #define MOCK_NODE_MONITOR_H
 
 #include "Types.h"
+#include "Messenger.h"
 
 enum {
     B_NODE_MONITOR = 'nmon',

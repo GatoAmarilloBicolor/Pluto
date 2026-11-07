@@ -3,6 +3,7 @@
 
 // Basic Haiku types - use existing system types where available
 #include <sys/types.h>
+#include <string.h>
 
 // Only define Haiku-specific types that don't exist on POSIX systems
 #ifndef status_t
@@ -119,10 +120,26 @@ const status_t B_BAD_IMAGE_ID = -25;
 #define B_BOOL_TYPE 41
 #define B_RGB_COLOR_TYPE 32
 
+struct rgb_color {
+    uint8_t red;
+    uint8_t green;
+    uint8_t blue;
+    uint8_t alpha;
+};
+
 struct entry_ref {
     dev_t device;
     ino_t directory;
     char name[256];
+    
+    void set_name(const char* n) { 
+        if (n) { 
+            size_t nlen = strlen(n); 
+            size_t copylen = nlen < sizeof(name)-1 ? nlen : sizeof(name)-1; 
+            memcpy(name, n, copylen); 
+            name[copylen] = '\0'; 
+        } 
+    }
 };
 
 struct attr_info {
@@ -142,6 +159,8 @@ typedef enum {
 	B_WHICH_2 = 2,
 	B_WHICH_3 = 3,
 } color_which;
+
+typedef uint32_t color_space;
 
 #ifndef uint8
 typedef unsigned char uint8;
@@ -163,6 +182,9 @@ typedef unsigned long long uint64;
 const int B_MIME_TYPE_LENGTH = 256;
 const status_t B_NAME_NOT_FOUND = -40;
 const status_t B_ALREADY_RUNNING = -47;
+const color_space B_RGB32 = 0;
+const color_space B_RGB16 = 1;
+const color_space B_GRAY8 = 3;
 
 // POSIX environ
 extern char** environ;

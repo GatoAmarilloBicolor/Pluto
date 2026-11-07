@@ -15,6 +15,7 @@ public:
     bool Lock() { return true; }
     void Unlock() {}
     bool LockWithTimeout(bigtime_t timeout) { (void)timeout; return true; }
+    status_t PostMessage(BMessage* msg) { (void)msg; return B_OK; }
     
     virtual void MessageReceived(BMessage* msg) { (void)msg; }
     virtual void DispatchMessage(BMessage* msg, BHandler* handler) { (void)msg; (void)handler; }
