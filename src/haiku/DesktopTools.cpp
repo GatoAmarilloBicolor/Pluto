@@ -227,7 +227,7 @@ public:
 
 		snooze(static_cast<bigtime_t>(duration_ms) * 1000LL);
 
-		stop_watching(&nref, target);
+		stop_watching(target);
 		auto events = watcher->drain();
 
 		std::string out;
