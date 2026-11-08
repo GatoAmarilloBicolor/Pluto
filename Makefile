@@ -56,6 +56,7 @@ CORE_SRCS = src/lsp/LspClient.cpp \
             src/systemone/RemoteDecisionModel.cpp \
             src/systemone/LocalDecisionModel.cpp \
             src/systemone/SystemOneClient.cpp \
+            src/systemone/TokenSaver.cpp \
             src/mcp/builtin/builtin_servers.cpp \
             src/mcp/builtin/mcp_builtin_manager.cpp \
             src/mcp/builtin/mcp_tool_wrapper.cpp \
@@ -87,8 +88,7 @@ HAIKU_SRCS = src/haiku/BfsTools.cpp \
              src/ipc/PlutoMessenger.cpp \
              src/oauth.cpp
 
-CLI_SRCS = src/main.cpp \
-           src/repl.cpp \
+CLI_SRCS = src/repl.cpp \
            src/mcp/Cli.cpp \
            src/cli/CliApp.cpp \
            src/cli/ProviderFactory.cpp \

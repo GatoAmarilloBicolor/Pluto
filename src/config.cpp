@@ -825,6 +825,13 @@ void LoadModes(Config& cfg) {
 	}
 }
 
+const ModeEntry* FindMode(const Config& cfg, const std::string& name) {
+    for (const auto& mode : cfg.modes) {
+        if (mode.name == name) return &mode;
+    }
+    return nullptr;
+}
+
 #else  // __HAIKU__
 
 void ApplyProjectMemory(Config& cfg) { (void)cfg; }

@@ -213,9 +213,9 @@ ToolResult McpClient::call_tool(const std::string& name, const std::string& argu
 	return r;
 }
 
-void register_mcp_tools(McpClient& client, ToolRegistry& registry) {
+void register_mcp_tools(std::shared_ptr<McpClient> client, ToolRegistry& registry) {
 	int skipped = 0;
-	for (const auto& info : client.tools()) {
+	for (const auto& info : client->tools()) {
 		// Skip per-app generated scripting wrappers (e.g. app_application_x_vnd_*)
 		// — they are redundant with the generic get_property/set_property tools
 		// and overwhelm the model when there are hundreds of them.
@@ -223,13 +223,13 @@ void register_mcp_tools(McpClient& client, ToolRegistry& registry) {
 			++skipped;
 			continue;
 		}
-		std::string prefixed = client.server_name() + "__" + info.name;
+		std::string prefixed = client->server_name() + "__" + info.name;
 		registry.add(std::make_unique<RemoteTool>(
-			&client, prefixed, info.name, info.description, info.input_schema_json));
+			client.get(), prefixed, info.name, info.description, info.input_schema_json));
 	}
 	if (skipped > 0)
 		std::fprintf(stderr, "[mcp/%s] skipped %d per-app wrappers\n",
-			client.server_name().c_str(), skipped);
+			client->server_name().c_str(), skipped);
 }
 
 }  // namespace pluto

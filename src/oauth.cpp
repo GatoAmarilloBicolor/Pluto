@@ -321,8 +321,7 @@ bool OAuthLogin() {
     std::fprintf(stderr, "Opening browser for Claude login...\n");
     std::fprintf(stderr, " -> %s\n", auth_url.c_str());
 
-    // Try Haiku's be_roster first (global variable, not static member)
-    extern BRoster* be_roster;
+    // Try Haiku's be_roster first (global variable, declared in Roster.h)
     char* argv[] = {const_cast<char*>("open"), const_cast<char*>(auth_url.c_str()), nullptr};
     if (be_roster && be_roster->Launch("text/html", 1, const_cast<const char**>(argv)) == B_OK) {
         // Success

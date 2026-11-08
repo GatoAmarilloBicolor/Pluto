@@ -5,6 +5,8 @@
 #include <map>
 #include <cmath>
 
+#include "DecisionModel.h"
+
 namespace pluto {
 namespace systemone {
 
