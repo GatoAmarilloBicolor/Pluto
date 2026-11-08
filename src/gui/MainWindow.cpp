@@ -18,6 +18,7 @@
 #include <fs_attr.h>
 #include <FilePanel.h>
 #include <Directory.h>
+#include <Screen.h>
 #include <SeparatorView.h>
 #include <SpaceLayoutItem.h>
 #include <TabView.h>
@@ -35,6 +36,7 @@
 #include <Roster.h>
 
 #include <curl/curl.h>
+#include <fcntl.h>
 #include <Path.h>
 #include <ScrollView.h>
 #include <SplitView.h>
@@ -2953,12 +2955,12 @@ void MainWindow::MessageReceived(BMessage* msg) {
 			BPath parent(path);
 			parent.GetParent(&parent);
 			BDirectory parentDir(parent.Path());
-			status_t err = B_OK;
 			if (parentDir.InitCheck() != B_OK) {
 				_Append("Could not create Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
 				break;
 			}
-			err = parentDir.CreateDirectory(path.Leaf(), 0755);
+			BDirectory newDir;
+			status_t err = parentDir.CreateDirectory(path.Leaf(), &newDir);
 			if (err != B_OK) {
 				_Append("Could not create Tracker add-ons directory.\n", rgb_color{245, 101, 101, 255});
 				break;
@@ -2975,7 +2977,7 @@ void MainWindow::MessageReceived(BMessage* msg) {
 				_Append("Could not find add-on binary.\n", rgb_color{245, 101, 101, 255});
 				break;
 			}
-			BFile dstFile(dstPath.Path(), O_READWRITE | O_CREATE);
+			BFile dstFile(dstPath.Path(), B_READ_WRITE | O_CREAT);
 			if (dstFile.InitCheck() != B_OK) {
 				_Append("Could not copy add-on to Tracker directory.\n", rgb_color{245, 101, 101, 255});
 				_Append("Build it first: make 'Ask Pluto'\n", rgb_color{245, 101, 101, 255});
@@ -3266,7 +3268,6 @@ void MainWindow::MessageReceived(BMessage* msg) {
 
 void MainWindow::KeyDown(const char* bytes, int32 numBytes) {
 	if (numBytes != 1) {
-		BWindow::KeyDown(bytes, numBytes);
 		return;
 	}
 
@@ -3350,20 +3351,19 @@ void MainWindow::KeyDown(const char* bytes, int32 numBytes) {
 		// For simplicity, toggle fullscreen on any F-key.
 		if (IsHidden() || !IsActive()) return;
 		BRect frame = Frame();
-		BRect screen = BScreen().Frame();
-		if (frame == screen) {
+		BScreen screen;
+		BRect screenFrame = screen.Frame();
+		if (frame == screenFrame) {
 			// Restore to windowed.
 			ResizeTo(1020, 720);
-			MoveTo((screen.Width() - 1020) / 2, (screen.Height() - 720) / 2);
+			MoveTo((screenFrame.Width() - 1020) / 2, (screenFrame.Height() - 720) / 2);
 		} else {
 			// Go full screen.
 			MoveTo(0, 0);
-			ResizeTo(screen.Width(), screen.Height());
+			ResizeTo(screenFrame.Width(), screenFrame.Height());
 		}
 		return;
 	}
-
-	BWindow::KeyDown(bytes, numBytes);
 }
 
 void MainWindow::_SendCurrentInput() {
@@ -3801,21 +3801,21 @@ void MainWindow::_ApplyViewColors() {
 		if (conv) {
 			conv->UpdateParserColors(true, fg, code_bg, link_color);
 			if (conv->DocView()) {
-				conv->DocView()->SetViewUIColor(gPalette.window_bg);
-				conv->DocView()->SetLowUIColor(gPalette.window_bg);
+				conv->DocView()->SetViewColor(gPalette.window_bg);
+				conv->DocView()->SetLowColor(gPalette.window_bg);
 				conv->DocView()->Invalidate();
 			}
 		}
 	}
 
 	if (fSideView) {
-		fSideView->SetViewUIColor(gPalette.window_bg);
-		fSideView->SetLowUIColor(gPalette.window_bg);
+		fSideView->SetViewColor(gPalette.window_bg);
+		fSideView->SetLowColor(gPalette.window_bg);
 		fSideView->SetHighColor(fg);
 	}
 	if (fInput) {
-		fInput->SetViewUIColor(gPalette.window_bg);
-		fInput->SetLowUIColor(gPalette.window_bg);
+		fInput->SetViewColor(gPalette.window_bg);
+		fInput->SetLowColor(gPalette.window_bg);
 		BFont font;
 		fInput->GetFontAndColor(0, &font);
 		fInput->SetFontAndColor(&font, B_FONT_ALL, &fg);
