@@ -7,8 +7,9 @@
 class BTextView : public BView {
 public:
     BTextView(BRect frame, const char* name, BRect textRect,
-              uint32 resizingMode, uint32 flags) {
-        (void)frame; (void)name; (void)textRect; (void)resizingMode; (void)flags;
+              uint32 resizingMode, uint32 flags)
+        : BView(frame, name, resizingMode, flags) {
+        (void)textRect;
     }
     virtual ~BTextView() = default;
     
@@ -26,12 +27,6 @@ public:
     virtual bool IsEditable() const { return false; }
     virtual void SetAlignment(alignment align) { (void)align; }
     virtual alignment Alignment() const { return B_ALIGN_LEFT; }
-    
-    enum alignment {
-        B_ALIGN_LEFT = 0,
-        B_ALIGN_RIGHT = 1,
-        B_ALIGN_CENTER = 2
-    };
 };
 
 #endif

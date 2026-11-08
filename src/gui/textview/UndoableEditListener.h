@@ -7,6 +7,7 @@
 
 
 #include <Referenceable.h>
+#include <Reference.h>
 
 class TextDocument;
 class UndoableEditRef;

@@ -10,6 +10,7 @@
 
 #include <Font.h>
 #include <Referenceable.h>
+#include <Reference.h>
 #include <String.h>
 
 #include "CharacterStyle.h"

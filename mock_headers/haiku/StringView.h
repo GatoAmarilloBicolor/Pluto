@@ -6,6 +6,12 @@
 
 class BStringView : public BView {
 public:
+    // Haiku BStringView convenience constructor (no frame needed)
+    BStringView(const char* name, const char* text)
+        : BView(BRect(0, 0, 100, 20), name, B_FOLLOW_LEFT | B_FOLLOW_TOP, B_WILL_DRAW) {
+        (void)text;
+    }
+    // Full constructor for compatibility
     BStringView(BRect frame, const char* name, const char* text,
                 uint32 resizingMode, uint32 flags)
         : BView(frame, name, resizingMode, flags) {

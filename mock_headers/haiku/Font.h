@@ -22,6 +22,14 @@ struct BFont {
     }
 };
 
+// Font flags
+const uint32 B_FONT_FAMILY_AND_STYLE = 1;
+const uint32 B_FONT_SIZE = 2;
+const uint32 B_FONT_SHEAR = 4;
+const uint32 B_FONT_ROTATION = 8;
+const uint32 B_FONT_SPACING = 16;
+const uint32 B_FONT_ALL = B_FONT_FAMILY_AND_STYLE | B_FONT_SIZE | B_FONT_SHEAR | B_FONT_ROTATION | B_FONT_SPACING;
+
 #define be_plain_font (new BFont())
 
 #endif

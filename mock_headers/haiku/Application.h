@@ -5,6 +5,8 @@
 #include "Looper.h"
 #include "Handler.h"
 #include "List.h"
+#include "ListView.h"
+#include "BString.h"
 
 // BeOS scripting constants
 const int32 B_APP_IMAGE = 1;
@@ -44,8 +46,9 @@ public:
     static BApplication* be_app;
     
     status_t GetAppInfo(app_info* info) { (void)info; return B_OK; }
+    const char* Signature() const { return "application/x-vnd.pluto"; }
     
-    thread_id Run() { return BLooper::Run(); }
+    void Run() { BLooper::Run(); }
 
     status_t ActivateApp(team_id team) { (void)team; return B_OK; }
 };
@@ -120,7 +123,6 @@ extern BRoster* be_roster;
 BApplication* be_app = nullptr;
 
 // BeOS scripting constants
-const uint32 B_GET_PROPERTY = 'BGET';
 const uint32 B_SET_PROPERTY = 'BSET';
 const uint32 B_COUNT_PROPERTIES = 'BCNT';
 const uint32 B_CREATE_PROPERTY = 'BCRT';

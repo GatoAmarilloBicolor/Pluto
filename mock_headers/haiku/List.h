@@ -5,63 +5,45 @@
 #include <vector>
 #include <algorithm>
 
-// Non-templated BList for mock purposes
+// Non-templated BList (Haiku original) - stores void* for backward compatibility
 class BList {
 public:
     BList() = default;
     ~BList() = default;
     
-    int32 CountItems() const { return fItems.size(); }
-    
-    bool AddItem(void* item) { 
-        fItems.push_back(item);
-        return true;
-    }
-    
-    bool AddItem(void* item, int32 index) {
-        if (index < 0 || index >= (int32)fItems.size()) {
-            fItems.push_back(item);
-        } else {
-            fItems.insert(fItems.begin() + index, item);
-        }
-        return true;
-    }
-    
-    bool RemoveItem(void* item) {
+    void AddItem(void* item) { fItems.push_back(item); }
+    void RemoveItem(void* item) { 
         auto it = std::find(fItems.begin(), fItems.end(), item);
-        if (it != fItems.end()) {
-            fItems.erase(it);
-            return true;
-        }
-        return false;
+        if (it != fItems.end()) fItems.erase(it);
     }
-    
-    void* RemoveItem(int32 index) {
-        if (index < 0 || index >= (int32)fItems.size()) return nullptr;
-        void* item = fItems[index];
-        fItems.erase(fItems.begin() + index);
-        return item;
+    void RemoveItem(int32 index) { 
+        if (index >= 0 && index < (int32)fItems.size()) fItems.erase(fItems.begin() + index); 
     }
-    
-    void* ItemAt(int32 index) const {
-        if (index < 0 || index >= (int32)fItems.size()) return nullptr;
-        return fItems[index];
+    void* ItemAt(int32 index) const { 
+        if (index >= 0 && index < (int32)fItems.size()) return fItems[index]; 
+        return nullptr; 
     }
-    
-    int32 IndexOf(void* item) const {
-        auto it = std::find(fItems.begin(), fItems.end(), item);
-        if (it != fItems.end()) return it - fItems.begin();
-        return -1;
-    }
-    
+    int32 CountItems() const { return (int32)fItems.size(); }
+    bool HasItem(void* item) const { return std::find(fItems.begin(), fItems.end(), item) != fItems.end(); }
     void MakeEmpty() { fItems.clear(); }
     
-    bool HasItem(void* item) const {
-        return std::find(fItems.begin(), fItems.end(), item) != fItems.end();
-    }
-
 private:
     std::vector<void*> fItems;
+};
+
+// Templated BList for type-safe usage
+template<typename T>
+class BListT : public BList {
+public:
+    using BList::AddItem;
+    using BList::RemoveItem;
+    using BList::ItemAt;
+    using BList::HasItem;
+    
+    void AddItem(T* item) { BList::AddItem(item); }
+    void RemoveItem(T* item) { BList::RemoveItem(item); }
+    T* ItemAt(int32 index) const { return static_cast<T*>(BList::ItemAt(index)); }
+    bool HasItem(T* item) const { return BList::HasItem(item); }
 };
 
 #endif

@@ -715,12 +715,12 @@ void SettingsDialog::MessageReceived(BMessage* msg) {
 			// Save System One settings.
 			_SaveSystemOne();
 			out.AddBool("systemone_enabled", fResult.systemone_enabled);
-			out.AddString("systemone_model", fResult.systemone_model);
-			out.AddString("systemone_api_key", fResult.systemone_api_key);
-			out.AddString("systemone_base_url", fResult.systemone_base_url);
-			out.AddString("systemone_kev_url", fResult.systemone_kev_url);
-			out.AddString("systemone_laya_url", fResult.systemone_laya_url);
-			out.AddString("systemone_jev_url", fResult.systemone_jev_url);
+			out.AddString("systemone_model", fResult.systemone_model.c_str());
+			out.AddString("systemone_api_key", fResult.systemone_api_key.c_str());
+			out.AddString("systemone_base_url", fResult.systemone_base_url.c_str());
+			out.AddString("systemone_kev_url", fResult.systemone_kev_url.c_str());
+			out.AddString("systemone_laya_url", fResult.systemone_laya_url.c_str());
+			out.AddString("systemone_jev_url", fResult.systemone_jev_url.c_str());
 			out.AddDouble("systemone_threshold", fResult.systemone_threshold);
 			out.AddInt32("systemone_timeout_secs", fResult.systemone_timeout_secs);
 			out.AddBool("systemone_prefer_local", fResult.systemone_prefer_local);

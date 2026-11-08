@@ -81,6 +81,7 @@ private:
 	BTextControl* fSystemOneTimeout   = nullptr;
 	BCheckBox*    fSystemOnePreferLocal = nullptr;
 	BCheckBox*    fSystemOneFallbackLocal = nullptr;
+	BBox*         fSystemOneBox         = nullptr;
 
 	bool          fAccepted      = false;
 	int32         fCurrentProfile = -1;

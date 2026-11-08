@@ -30,8 +30,8 @@ public:
     }
     virtual ~BAlert() = default;
     
-    virtual void Go(void* invoker = nullptr) { (void)invoker; }
     virtual int32 Go() { return 0; }
+    virtual void SetShortcut(int32 index, int32 key) { (void)index; (void)key; }
 };
 
 #endif

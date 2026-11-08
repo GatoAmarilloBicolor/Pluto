@@ -25,6 +25,7 @@ public:
     status_t AddPointer(const char* name, void* ptr) { (void)name; (void)ptr; return B_OK; }
     status_t AddMessage(const char* name, const BMessage* msg) { (void)name; (void)msg; return B_OK; }
     status_t AddRef(const char* name, const entry_ref* ref) { (void)name; (void)ref; return B_OK; }
+    status_t AddFlat(const char* name, const void* obj) { (void)name; (void)obj; return B_OK; }
     
     status_t AddSpecifier(const char* name, const char* value = nullptr) { (void)name; (void)value; return B_OK; }
     status_t AddSpecifier(const char* name, int32 index) { (void)name; (void)index; return B_OK; }
@@ -69,6 +70,12 @@ public:
     bool HasInt32(const char* name) const { (void)name; return false; }
     bool HasBool(const char* name) const { (void)name; return false; }
     
+    // Scripting support - matches real Haiku API
+    status_t GetCurrentSpecifier(int32* index = nullptr, BMessage* specifier = nullptr, int32* what = nullptr, const char** property = nullptr) const { 
+        (void)index; (void)specifier; (void)what; (void)property; return B_OK; 
+    }
+    status_t SendReply(BMessage* reply) const { (void)reply; return B_OK; }
+    
     static const int32_t B_OK = 0;
     static const int32_t B_ERROR = -1;
     static const int32_t B_ENTRY_NOT_FOUND = -2;
@@ -83,5 +90,7 @@ private:
 const uint32 B_REFS_RECEIVED = 'refs';
 const uint32 B_REPLY = 'BREP';
 const uint32 B_NO_REPLY = 'BNRE';
+const uint32 B_QUIT_REQUESTED = 'BQRQ';
+const uint32 B_GET_PROPERTY = 'BGPB';
 
 #endif

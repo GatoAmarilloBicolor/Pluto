@@ -33,19 +33,8 @@ namespace pluto {
 
 namespace {
 
-std::string trim(const std::string& s) {
-	size_t a = 0, b = s.size();
-	while (a < b && (s[a] == ' ' || s[a] == '\t')) ++a;
-	while (b > a && (s[b - 1] == ' ' || s[b - 1] == '\t' || s[b - 1] == '\r')) --b;
-	return s.substr(a, b - a);
-}
-
-std::string home_dir() {
-	return HomeDir();
-}
-
-std::string settings_dir() {
-	return home_dir() + "/config/settings/pluto";
+inline std::string settings_dir() {
+	return SettingsDir();
 }
 
 std::string config_path() {
@@ -57,7 +46,7 @@ std::string config_path() {
 }
 
 std::string api_key_path() {
-	return home_dir() + "/config/settings/pluto-api-key";
+	return HomeDir() + "/config/settings/pluto-api-key";
 }
 
 void maybe_migrate_settings() {
@@ -98,12 +87,12 @@ bool ParseProviderConf(const std::string& path, ProviderConf& out) {
 	if (!f) return false;
 	std::string line;
 	while (std::getline(f, line)) {
-		std::string s = trim(line);
+		std::string s = Trim(line);
 		if (s.empty() || s[0] == '#') continue;
 		size_t eq = s.find('=');
 		if (eq == std::string::npos) continue;
-		std::string k = trim(s.substr(0, eq));
-		std::string v = trim(s.substr(eq + 1));
+		std::string k = Trim(s.substr(0, eq));
+		std::string v = Trim(s.substr(eq + 1));
 		if (k == "label")            out.label = v;
 		else if (k == "base_url")    out.base_url = v;
 		else if (k == "api_key_env") out.api_key_env = v;
@@ -113,7 +102,7 @@ bool ParseProviderConf(const std::string& path, ProviderConf& out) {
 			std::string tok;
 			int field = 0;
 			while (std::getline(ss, tok, ',')) {
-				tok = trim(tok);
+				tok = Trim(tok);
 				switch (field++) {
 					case 0: m.id = tok; break;
 					case 1: m.label = tok; break;
@@ -315,12 +304,12 @@ Config LoadConfig() {
 	if (!f) return cfg;
 	std::string line;
 	while (std::getline(f, line)) {
-		std::string s = trim(line);
+		std::string s = Trim(line);
 		if (s.empty() || s[0] == '#') continue;
 		size_t eq = s.find('=');
 		if (eq == std::string::npos) continue;
-		std::string k = trim(s.substr(0, eq));
-		std::string v = trim(s.substr(eq + 1));
+		std::string k = Trim(s.substr(0, eq));
+		std::string v = Trim(s.substr(eq + 1));
 		if      (k == "provider")     cfg.provider = v;
 		else if (k == "model")        cfg.model = v;
 		else if (k == "base_url")     cfg.base_url = v;
@@ -496,7 +485,7 @@ std::string provider_key_path(const std::string& env_name) {
 #else  // __HAIKU__
 
 std::string provider_key_path(const std::string& env_name) {
-	return home_dir() + "/config/settings/pluto/keys/" + env_name;
+	return HomeDir() + "/config/settings/pluto/keys/" + env_name;
 }
 
 #endif  // __HAIKU__
@@ -581,7 +570,7 @@ void ApplyProjectMemory(Config& cfg) {
 	char cwd_buf[PATH_MAX] = {};
 	::getcwd(cwd_buf, sizeof(cwd_buf));
 	std::string cwd = canon(cwd_buf);
-	std::string home = canon(home_dir());
+	std::string home = canon(HomeDir());
 
 	if (cfg.system_prompt.empty()) {
 		cfg.system_prompt =
@@ -594,7 +583,7 @@ void ApplyProjectMemory(Config& cfg) {
 			"Current workspace: " + cwd;
 	}
 
-	std::string user_mem = home_dir() + "/config/settings/pluto/pluto.md";
+	std::string user_mem = HomeDir() + "/config/settings/pluto/pluto.md";
 	std::set<std::string> seen;
 	if (append_doc(cfg, user_mem, "user_memory"))
 		seen.insert(canon(user_mem));
@@ -636,7 +625,7 @@ static std::string parse_skill_frontmatter(const std::string& content,
 }
 
 void ApplySkills(Config& cfg) {
-	std::string skills_dir = home_dir() + "/config/settings/pluto/skills";
+	std::string skills_dir = HomeDir() + "/config/settings/pluto/skills";
 	BDirectory bdir(skills_dir.c_str());
 	if (bdir.InitCheck() != B_OK) return;
 
@@ -798,7 +787,7 @@ void LoadModes(Config& cfg) {
 	};
 	cfg.modes.push_back(std::move(plan));
 
-	std::string modes_dir = home_dir() + "/config/settings/pluto/modes";
+	std::string modes_dir = HomeDir() + "/config/settings/pluto/modes";
 	BDirectory modesDir(modes_dir.c_str());
 	if (modesDir.InitCheck() != B_OK) return;
 

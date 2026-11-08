@@ -2,26 +2,32 @@
 #define MOCK_LOOPER_H
 
 #include "Types.h"
-#include <Handler.h>
-#include <Message.h>
+#include "Message.h"
+#include "Locker.h"
+#include "Handler.h"
 
 class BLooper : public BHandler {
 public:
-    BLooper(const char* name = nullptr) { (void)name; }
+    BLooper(const char* name = nullptr) : BHandler(name) {}
     virtual ~BLooper() = default;
     
-    thread_id Run() { return 0; }
-    void Quit() {}
-    bool Lock() { return true; }
-    void Unlock() {}
-    bool LockWithTimeout(bigtime_t timeout) { (void)timeout; return true; }
-    status_t PostMessage(BMessage* msg) { (void)msg; return B_OK; }
+    bool Lock() { return fLocker.Lock(); }
+    bool Unlock() { return fLocker.Unlock(); }
     
+    virtual void PostMessage(BMessage* msg, BHandler* handler = nullptr) { (void)msg; (void)handler; }
+    virtual void PostMessage(uint32 what) { (void)what; }
     virtual void MessageReceived(BMessage* msg) { (void)msg; }
-    virtual void DispatchMessage(BMessage* msg, BHandler* handler) { (void)msg; (void)handler; }
+    virtual void Quit() {}
+    virtual BHandler* PreferredHandler() { return nullptr; }
+    virtual void Run() {}
+    thread_id Thread() const { return -1; }
+    const char* Name() const { return "BLooper"; }
     
-    static BLooper* LooperForThread(thread_id thread) { (void)thread; return nullptr; }
-    thread_id Thread() const { return 0; }
+    static BLooper* LooperForThread(thread_id thread = -1) { (void)thread; return nullptr; }
+    static BLooper* ApplicationLooper() { return nullptr; }
+
+private:
+    BLocker fLocker;
 };
 
 #endif

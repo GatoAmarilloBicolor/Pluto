@@ -6,6 +6,7 @@
 #define BULLET_DATA_H
 
 #include <Referenceable.h>
+#include <Reference.h>
 #include <String.h>
 
 

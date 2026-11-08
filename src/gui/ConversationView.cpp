@@ -9,6 +9,7 @@
 #include <MessageRunner.h>
 #include <Messenger.h>
 #include <NodeInfo.h>
+#include <OS.h>
 #include <Roster.h>
 #include <ScrollView.h>
 #include <String.h>
@@ -44,7 +45,12 @@ ConversationView::ConversationView(std::unique_ptr<Provider> provider,
 	  fOwnedProvider(std::move(provider)),
 	  fProvider(fOwnedProvider.get()),
 	  fConfig(&fTabConfig),
-	  fTools(tools), fDelegate(delegate)
+	  fTools(tools), fDelegate(delegate),
+	  fControlTextColor(ui_color(B_CONTROL_TEXT_COLOR)),
+	  fDocTextColor(ui_color(B_DOCUMENT_TEXT_COLOR)),
+	  fPanelBgColor(ui_color(B_PANEL_BACKGROUND_COLOR)),
+	  fErrorColor({245, 101, 101, 255}),
+	  fWarningColor({255, 180, 0, 255})
 {
 	// Create the markdown-native document view.
 	fDocView = new TextDocumentView("output");
@@ -54,7 +60,6 @@ ConversationView::ConversationView(std::unique_ptr<Provider> provider,
 	fDocView->SetTextDocument(fTextDoc);
 
 	// Set background color from config color scheme.
-	// Note: cfg.color_scheme may be "dark", "light", or "auto".
 	if (cfg.color_scheme == "dark") {
 		rgb_color bg = { 30, 30, 30, 255 };
 		fDocView->SetViewUIColor(B_NO_COLOR);
@@ -70,18 +75,13 @@ ConversationView::ConversationView(std::unique_ptr<Provider> provider,
 		fDocView->SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
 	}
 
-	// Keep legacy BTextView for compatibility (hidden, used for text queries).
-	// Legacy BTextView removed — rendering uses TextDocumentView (fDocView).
-
 	fOutputScroll = new BScrollView("outputScroll", fDocView,
 	                                 0, false, true, B_FANCY_BORDER);
 
-	// Layout: output scroll fills the view.
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
 		.Add(fOutputScroll)
 		.End();
 
-	// Wire streaming markdown callbacks to the real rendering methods.
 	fStreamingMd.on_line = [this](const std::string& line) {
 		_RenderAssistantLine(line);
 	};
@@ -90,7 +90,6 @@ ConversationView::ConversationView(std::unique_ptr<Provider> provider,
 		_FlushMdCodeBlockImpl(code, lang);
 	};
 	fStreamingMd.on_partial = [this](const std::string& partial) {
-		// With TextDocumentView, partial lines are rendered directly.
 		if (!partial.empty())
 			_Append(partial, kColAsstBody);
 	};
@@ -98,12 +97,10 @@ ConversationView::ConversationView(std::unique_ptr<Provider> provider,
 
 void ConversationView::AttachedToWindow() {
 	BView::AttachedToWindow();
-	// Create cursor runner now that we have a Looper.
 	if (!fCursorRunner) {
 		BMessage tick(kMsgCursorTick);
 		fCursorRunner = new BMessageRunner(BMessenger(this), &tick, 500000);
 	}
-	// Set this view as the invoker target for link clicks in TextDocumentView.
 	if (fDocView)
 		fDocView->SetTarget(this);
 }
@@ -114,8 +111,6 @@ void ConversationView::FrameResized(float w, float h) {
 }
 
 ConversationView::~ConversationView() {
-	// Signal worker to stop and wait for it to finish before
-	// invalidating any pointers it holds (provider, config, tools).
 	fCancelFlag.store(true, std::memory_order_release);
 	if (fWorker >= 0) {
 		status_t dummy;
@@ -139,31 +134,24 @@ void ConversationView::_Append(const std::string& text, rgb_color color,
 	style.SetFont(font);
 	style.SetForegroundColor(color);
 
-	// Process text: accumulate spans in fCurrentPara.
-	// On '\n', flush fCurrentPara to the document and start a new one.
 	size_t pos = 0;
 	while (pos < text.size()) {
 		size_t nl = text.find('\n', pos);
 		if (nl == std::string::npos) {
-			// No more newlines — add remaining text to current paragraph.
 			BString chunk(text.c_str() + pos, text.size() - pos);
 			fCurrentPara.Append(TextSpan(chunk, style));
 			break;
 		}
-		// Text before the newline — add to current paragraph.
 		if (nl > pos) {
 			BString chunk(text.c_str() + pos, nl - pos);
 			fCurrentPara.Append(TextSpan(chunk, style));
 		}
-		// Flush current paragraph to document.
 		if (fCurrentPara.IsEmpty()) {
-			// Empty paragraph — add a space so it takes up a line.
 			CharacterStyle dimStyle;
 			dimStyle.SetFont(*be_plain_font);
 			fCurrentPara.Append(TextSpan(" ", dimStyle));
 		}
 		fTextDoc->Append(fCurrentPara);
-		// Start a new paragraph with zero spacing.
 		ParagraphStyle pstyle;
 		pstyle.SetSpacingTop(0);
 		pstyle.SetSpacingBottom(0);
@@ -171,11 +159,9 @@ void ConversationView::_Append(const std::string& text, rgb_color color,
 		pos = nl + 1;
 	}
 
-	// Update the view.
 	fDocView->SetTextDocument(fTextDoc);
 	fDocView->Relayout();
 
-	// Scroll to bottom.
 	if (fOutputScroll) {
 		BScrollBar* sb = fOutputScroll->ScrollBar(B_VERTICAL);
 		if (sb) {
@@ -189,64 +175,56 @@ void ConversationView::_Append(const std::string& text, rgb_color color,
 // ---- header emission ----
 
 void ConversationView::_EmitUserHeader() {
-	// Spacer between turns (skip on first message after banner).
 	if (fTextDoc.IsSet() && fTextDoc->CountParagraphs() > 2) {
-		// Thin dotted separator — lighter than the old solid bar.
 		CharacterStyle hrStyle;
-		rgb_color sepColor = ui_color(B_DOCUMENT_TEXT_COLOR);
-		sepColor.alpha = 100;  // semi-transparent
+		rgb_color sepColor = fDocTextColor;
+		sepColor.alpha = 100;
 		hrStyle.SetForegroundColor(sepColor);
 		BFont hrFont = *be_plain_font;
 		hrFont.SetSize(4);
 		hrStyle.SetFont(hrFont);
 		_Append("\xC2\xB7 \xC2\xB7 \xC2\xB7 \xC2\xB7 \xC2\xB7 "
 		        "\xC2\xB7 \xC2\xB7 \xC2\xB7 \xC2\xB7 \xC2\xB7 "
-		        "\xC2\xB7 \xC2\xB7 \xC2\xB7 \xC2\xB7 \xC2\xB7 "
 		        "\xC2\xB7 \xC2\xB7 \xC2\xB7 \xC2\xB7 \xC2\xB7\n",
-		        ui_color(B_DOCUMENT_TEXT_COLOR), 0, false);
-		_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR), 0, false);
+		        fDocTextColor, 0, false);
+		_Append("\n", fDocTextColor, 0, false);
 	}
-	_Append("\xF0\x9F\x91\xA4 You\n", ui_color(B_CONTROL_TEXT_COLOR), B_BOLD_FACE);
+	_Append("\xF0\x9F\x91\xA4 You\n", fControlTextColor, B_BOLD_FACE);
 }
 
 void ConversationView::_EmitAssistantHeader() {
-	fAsstHeaderOff = 0;  // legacy offset, unused by paragraph-based ToolBlockManager
+	fAsstHeaderOff = 0;
 
-	// Breathing space before assistant response.
-	_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR), 0, false);
+	_Append("\n", fDocTextColor, 0, false);
 
 	fAsstHeaderPara = fTextDoc.IsSet() ? fTextDoc->CountParagraphs() : -1;
 
-	// Pre-allocate a ToolBlock so we know its index for the click message.
 	ToolBlock block;
 	block.collapsed = false;
 	block.is_error = false;
 	block.header_para = fAsstHeaderPara;
 	fPendingAsstBlock = fToolBlocks.add(block);
 
-	// Create clickable arrow span for collapse/expand.
-	{
-		BFont font = *be_plain_font;
-		font.SetFace(B_BOLD_FACE);
-		if (fFontDelta != 0) font.SetSize(font.Size() + fFontDelta);
-		CharacterStyle style;
-		style.SetFont(font);
-		style.SetForegroundColor(ui_color(B_CONTROL_TEXT_COLOR));
+	BFont font = *be_plain_font;
+	font.SetFace(B_BOLD_FACE);
+	if (fFontDelta != 0) font.SetSize(font.Size() + fFontDelta);
+	CharacterStyle style;
+	style.SetFont(font);
+	style.SetForegroundColor(fControlTextColor);
 
-		BMessage* clickMsg = new BMessage(kMsgToolToggle);
-		clickMsg->AddInt32("block_idx", (int32)fPendingAsstBlock);
+	BMessage* clickMsg = new BMessage(kMsgToolToggle);
+	clickMsg->AddInt32("block_idx", (int32)fPendingAsstBlock);
 
-		std::string arrow_text;
-		arrow_text += kArrowOpen;  // ▾
-		arrow_text += " \xE2\x9C\xA8 Pluto";  // ✨
+	std::string arrow_text;
+	arrow_text += kArrowOpen;
+	arrow_text += " \xE2\x9C\xA8 Pluto";
 
-		TextSpan span(BString(arrow_text.c_str()), style);
-		span.SetClickMessage(clickMsg);
-		fCurrentPara.Append(span);
-	}
-	_Append("\n", ui_color(B_CONTROL_TEXT_COLOR));
+	TextSpan span(BString(arrow_text.c_str()), style);
+	span.SetClickMessage(clickMsg);
+	fCurrentPara.Append(span);
+	_Append("\n", fControlTextColor);
 
-	fAsstBodyOff = 0;  // legacy offset, unused
+	fAsstBodyOff = 0;
 }
 
 // ---- finalize assistant block ----
@@ -254,7 +232,6 @@ void ConversationView::_EmitAssistantHeader() {
 void ConversationView::_FinalizeAssistantBlock() {
 	if (fAsstHeaderOff < 0 || fAsstBodyOff < 0) return;
 
-	// Fill in the pre-allocated assistant block with body paragraph info.
 	if (fPendingAsstBlock >= 0 && fTextDoc.IsSet()) {
 		auto* b = fToolBlocks.at(fPendingAsstBlock);
 		if (b) {
@@ -265,10 +242,8 @@ void ConversationView::_FinalizeAssistantBlock() {
 			b->body_para_count = fTextDoc->CountParagraphs() - fAsstDocParaStart;
 			b->body_text = fAsstMarkdownBuf;
 
-			// If the body is short, the block doesn't need collapse.
-			// We leave it registered but it'll be a no-op on toggle.
 			if (fAsstMarkdownBuf.size() <= 400)
-				b->body_para_count = 0;  // not collapsible
+				b->body_para_count = 0;
 		}
 	}
 
@@ -284,7 +259,6 @@ void ConversationView::_FinalizeAssistantBlock() {
 void ConversationView::_RenderAssistantInline(const std::string& line) {
 	size_t i = 0;
 	while (i < line.size()) {
-		// **bold**
 		if (i + 1 < line.size() && line[i] == '*' && line[i + 1] == '*') {
 			size_t end = line.find("**", i + 2);
 			if (end != std::string::npos) {
@@ -294,7 +268,6 @@ void ConversationView::_RenderAssistantInline(const std::string& line) {
 				continue;
 			}
 		}
-		// *italic*
 		if (line[i] == '*' && (i == 0 || line[i - 1] != '*')
 		    && i + 1 < line.size() && line[i + 1] != '*') {
 			size_t end = line.find('*', i + 1);
@@ -306,17 +279,15 @@ void ConversationView::_RenderAssistantInline(const std::string& line) {
 				continue;
 			}
 		}
-		// `inline code`
 		if (line[i] == '`') {
 			size_t end = line.find('`', i + 1);
 			if (end != std::string::npos) {
 				_Append(line.substr(i + 1, end - i - 1),
-					ui_color(B_PANEL_BACKGROUND_COLOR), 0, true);
+					fPanelBgColor, 0, true);
 				i = end + 1;
 				continue;
 			}
 		}
-		// [text](url)
 		if (line[i] == '[') {
 			size_t close = line.find(']', i + 1);
 			if (close != std::string::npos && close + 1 < line.size()
@@ -324,23 +295,21 @@ void ConversationView::_RenderAssistantInline(const std::string& line) {
 				size_t pclose = line.find(')', close + 2);
 				if (pclose != std::string::npos) {
 					std::string label = line.substr(i + 1, close - i - 1);
-					_Append(label, ui_color(B_CONTROL_TEXT_COLOR), B_UNDERSCORE_FACE, false);
+					_Append(label, fControlTextColor, B_UNDERSCORE_FACE, false);
 					i = pclose + 1;
 					continue;
 				}
 			}
 		}
-		// ~~strikethrough~~
 		if (i + 1 < line.size() && line[i] == '~' && line[i + 1] == '~') {
 			size_t end = line.find("~~", i + 2);
 			if (end != std::string::npos) {
 				_Append(line.substr(i + 2, end - i - 2),
-					ui_color(B_DOCUMENT_TEXT_COLOR), B_STRIKEOUT_FACE, false);
+					fDocTextColor, B_STRIKEOUT_FACE, false);
 				i = end + 2;
 				continue;
 			}
 		}
-		// Plain text — accumulate until next special char
 		size_t next = i + 1;
 		while (next < line.size()
 		    && line[next] != '*' && line[next] != '`'
@@ -354,20 +323,20 @@ void ConversationView::_RenderAssistantInline(const std::string& line) {
 // ---- code block flush ----
 
 void ConversationView::_FlushMdCodeBlockImpl(const std::string& code,
-                                              const std::string& lang) {
+                                               const std::string& lang) {
 	if (!lang.empty())
 		_Append("  \xE2\x94\x8C\xE2\x94\x80 " + lang + " \xE2\x94\x80\xE2\x94\x80\n",
-		ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);  // ┌─ lang ──
+		fDocTextColor, 0, true);
 	auto syn_tokens = highlight(code, lang);
 	for (const auto& tok : syn_tokens) {
-		rgb_color tc = ui_color(B_PANEL_BACKGROUND_COLOR);
+		rgb_color tc = fPanelBgColor;
 		switch (tok.type) {
-			case TokenType::Keyword:      tc = ui_color(B_CONTROL_TEXT_COLOR); break;
-			case TokenType::String:       tc = ui_color(B_CONTROL_TEXT_COLOR); break;
-			case TokenType::Comment:      tc = ui_color(B_DOCUMENT_TEXT_COLOR); break;
-			case TokenType::Number:       tc = ui_color(B_CONTROL_TEXT_COLOR); break;
-			case TokenType::Preprocessor: tc = ui_color(B_CONTROL_TEXT_COLOR); break;
-			case TokenType::Type:         tc = ui_color(B_CONTROL_TEXT_COLOR); break;
+			case TokenType::Keyword:      tc = fControlTextColor; break;
+			case TokenType::String:       tc = fControlTextColor; break;
+			case TokenType::Comment:      tc = fDocTextColor; break;
+			case TokenType::Number:       tc = fControlTextColor; break;
+			case TokenType::Preprocessor: tc = fControlTextColor; break;
+			case TokenType::Type:         tc = fControlTextColor; break;
 			default: break;
 		}
 		_Append(tok.text, tc, 0, true);
@@ -378,7 +347,6 @@ void ConversationView::_FlushMdCodeBlockImpl(const std::string& code,
 // ---- single line renderer ----
 
 void ConversationView::_RenderAssistantLine(const std::string& line) {
-	// Headings
 	if (!line.empty() && line[0] == '#') {
 		int level = 0;
 		while (level < (int)line.size() && line[level] == '#') ++level;
@@ -387,23 +355,22 @@ void ConversationView::_RenderAssistantLine(const std::string& line) {
 			while (!heading.empty() && heading.front() == ' ')
 				heading.erase(0, 1);
 			_Append("\n", kColAsstBody);
-			_Append(heading + "\n", ui_color(B_CONTROL_TEXT_COLOR), B_BOLD_FACE);
+			_Append(heading + "\n", fControlTextColor, B_BOLD_FACE);
 			if (level <= 2) {
 				size_t ul = heading.size();
 				if (ul > 40) ul = 40;
 				std::string underline;
+				underline.reserve(ul);
+				char ch = (level == 1) ? '\xe2\x94\x81' : '\xe2\x94\x80';
 				for (size_t j = 0; j < ul; ++j)
-					underline += (level == 1)
-						? "\xe2\x94\x81"   // ━
-						: "\xe2\x94\x80";   // ─
-				_Append(underline + "\n", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
+					underline += ch;
+				_Append(underline + "\n", fDocTextColor, 0, true);
 			}
 			_Append("\n", kColAsstBody);
 			return;
 		}
 	}
 
-	// Horizontal rule
 	if (line.size() >= 3 && (line.find("---") == 0 || line.find("***") == 0)) {
 		bool is_rule = true;
 		for (char c : line)
@@ -413,22 +380,20 @@ void ConversationView::_RenderAssistantLine(const std::string& line) {
 			_Append("\n  \xE2\x94\x80 \xE2\x94\x80 \xE2\x94\x80 "
 			        "\xE2\x94\x80 \xE2\x94\x80 \xE2\x94\x80 "
 			        "\xE2\x94\x80 \xE2\x94\x80 \xE2\x94\x80 "
-			        "\xE2\x94\x80\n\n", ui_color(B_DOCUMENT_TEXT_COLOR), 0, true);
+			        "\xE2\x94\x80\n\n", fDocTextColor, 0, true);
 			return;
 		}
 	}
 
-	// Blockquote — left bar + italic text
 	if (!line.empty() && line[0] == '>') {
 		std::string q = line.substr(1);
 		while (!q.empty() && q.front() == ' ') q.erase(0, 1);
-		_Append("   \xE2\x94\x83 ", ui_color(B_CONTROL_TEXT_COLOR), 0, false);  // ┃ (thick bar)
-		_Append(q, ui_color(B_DOCUMENT_TEXT_COLOR), B_ITALIC_FACE, false);
-		_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("   \xE2\x94\x83 ", fControlTextColor, 0, false);
+		_Append(q, fDocTextColor, B_ITALIC_FACE, false);
+		_Append("\n", fDocTextColor);
 		return;
 	}
 
-	// Task list  - [ ] or - [x]
 	if (line.size() >= 5 && line[0] == '-' && line[1] == ' '
 	    && line[2] == '[') {
 		bool checked = (line[3] == 'x' || line[3] == 'X');
@@ -437,25 +402,23 @@ void ConversationView::_RenderAssistantLine(const std::string& line) {
 		const char* box = checked
 			? "  \xe2\x98\x91 "    // ☑
 			: "  \xe2\x98\x90 ";   // ☐
-		_Append(box, checked ? ui_color(B_CONTROL_TEXT_COLOR) : ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append(box, checked ? fControlTextColor : fDocTextColor);
 		if (checked)
-			_Append(item, ui_color(B_DOCUMENT_TEXT_COLOR), B_STRIKEOUT_FACE);
+			_Append(item, fDocTextColor, B_STRIKEOUT_FACE);
 		else
 			_RenderAssistantInline(item);
 		_Append("\n", kColAsstBody);
 		return;
 	}
 
-	// Bullet list — wider indent, softer bullet
 	if (line.size() >= 2 && (line[0] == '-' || line[0] == '*')
 	    && line[1] == ' ') {
-		_Append("   \xE2\x80\xA2 ", ui_color(B_DOCUMENT_TEXT_COLOR));  // •  (dimmed bullet)
+		_Append("   \xE2\x80\xA2 ", fDocTextColor);
 		_RenderAssistantInline(line.substr(2));
 		_Append("\n", kColAsstBody);
 		return;
 	}
 
-	// Numbered list
 	if (line.size() >= 3 && std::isdigit((unsigned char)line[0])) {
 		size_t dot = line.find(". ");
 		if (dot != std::string::npos && dot <= 3) {
@@ -467,13 +430,11 @@ void ConversationView::_RenderAssistantLine(const std::string& line) {
 		}
 	}
 
-	// Empty line
 	if (line.empty()) {
 		_Append("\n", kColAsstBody);
 		return;
 	}
 
-	// Normal paragraph with inline formatting
 	_RenderAssistantInline(line);
 	_Append("\n", kColAsstBody);
 }
@@ -503,16 +464,9 @@ void ConversationView::_RenderAssistantMarkdown(const std::string& text) {
 }
 
 // ---- streaming cursor / thinking spinner ----
-//
-// Both the blinking cursor (█) and the thinking spinner (⠋ thinking…) are
-// implemented as a temporary paragraph appended to the end of the document.
-// _ShowCursor/_ShowSpinner append it; _HideCursor removes it by popping
-// the last paragraph. This avoids byte-counting issues with the TextDocument
-// model which operates on paragraphs, not raw bytes.
 
 void ConversationView::_ShowCursor() {
 	if (fCursorShown) return;
-	// Flush any pending spans in fCurrentPara first.
 	if (!fCurrentPara.IsEmpty() && fTextDoc.IsSet()) {
 		fTextDoc->Append(fCurrentPara);
 		ParagraphStyle pstyle;
@@ -520,19 +474,17 @@ void ConversationView::_ShowCursor() {
 		pstyle.SetSpacingBottom(0);
 		fCurrentPara = Paragraph(pstyle);
 	}
-	// Append cursor as its own paragraph.
 	BFont font = *be_plain_font;
 	font.SetFace(B_BOLD_FACE);
 	if (fFontDelta != 0) font.SetSize(font.Size() + fFontDelta);
 	CharacterStyle style;
 	style.SetFont(font);
-	style.SetForegroundColor(ui_color(B_CONTROL_TEXT_COLOR));
+	style.SetForegroundColor(fControlTextColor);
 	Paragraph cursorPara;
 	cursorPara.Append(TextSpan(kCursorChar, style));
 	fTextDoc->Append(cursorPara);
 	fDocView->SetTextDocument(fTextDoc);
 	fDocView->Relayout();
-	// Scroll to bottom.
 	if (fOutputScroll) {
 		BScrollBar* sb = fOutputScroll->ScrollBar(B_VERTICAL);
 		if (sb) { float mn, mx; sb->GetRange(&mn, &mx); sb->SetValue(mx); }
@@ -542,12 +494,9 @@ void ConversationView::_ShowCursor() {
 
 void ConversationView::_HideCursor() {
 	if (!fCursorShown) return;
-	// Remove the last paragraph (cursor or spinner) by computing its
-	// text offset and length from the document model.
 	if (fTextDoc.IsSet()) {
 		int32 count = fTextDoc->CountParagraphs();
 		if (count > 0) {
-			// Calculate offset of the last paragraph.
 			int32 offset = 0;
 			for (int32 i = 0; i < count - 1; ++i)
 				offset += fTextDoc->ParagraphAtIndex(i).Length();
@@ -561,27 +510,24 @@ void ConversationView::_HideCursor() {
 }
 
 void ConversationView::OnCursorTick() {
-	// Thinking spinner: braille dots animation before first text arrives.
 	if (fThinking && fBusy) {
 		static const char* kFrames[] = {
 			"\xE2\xA0\x8B", "\xE2\xA0\x99", "\xE2\xA0\xB9", "\xE2\xA0\xB8",
 			"\xE2\xA0\xBC", "\xE2\xA0\xB4", "\xE2\xA0\xA6", "\xE2\xA0\xA7",
 			"\xE2\xA0\x87", "\xE2\xA0\x8F"
-		};  // ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏
+		};
 
 		BFont font = *be_plain_font;
 		font.SetFace(B_ITALIC_FACE);
 		if (fFontDelta != 0) font.SetSize(font.Size() + fFontDelta);
 		CharacterStyle style;
 		style.SetFont(font);
-		style.SetForegroundColor(ui_color(B_DOCUMENT_TEXT_COLOR));
+		style.SetForegroundColor(fDocTextColor);
 
 		BString text;
 		text.SetToFormat("%s thinking\xE2\x80\xA6", kFrames[fSpinnerFrame % 10]);
 
 		if (fCursorShown && fTextDoc.IsSet()) {
-			// Update spinner text in-place: replace the last paragraph's
-			// content without removing/re-adding it to avoid layout flicker.
 			int32 count = fTextDoc->CountParagraphs();
 			if (count > 0) {
 				int32 offset = 0;
@@ -593,7 +539,6 @@ void ConversationView::OnCursorTick() {
 				fDocView->Relayout();
 			}
 		} else {
-			// First tick: flush pending content and append spinner paragraph.
 			if (!fCurrentPara.IsEmpty() && fTextDoc.IsSet()) {
 				fTextDoc->Append(fCurrentPara);
 				ParagraphStyle pstyle;
@@ -616,7 +561,6 @@ void ConversationView::OnCursorTick() {
 		return;
 	}
 
-	// Normal streaming cursor: blinking block.
 	if (!fTextOngoing) return;
 	if (fCursorShown)
 		_HideCursor();
@@ -628,15 +572,13 @@ void ConversationView::OnCursorTick() {
 
 void ConversationView::_RenderMessages() {
 	_ClearInlineImages();
-	// Legacy BTextView removed — no text to clear.
-	// Reset the document model.
 	fTextDoc.SetTo(new TextDocument(), true);
 	fDocView->SetTextDocument(fTextDoc);
 
 	BString header;
 	header.SetToFormat("(loaded %ld turn%s)\n\n",
 		(long)fMessages.size(), fMessages.size() == 1 ? "" : "s");
-	_Append(header.String(), ui_color(B_DOCUMENT_TEXT_COLOR));
+	_Append(header.String(), fDocTextColor);
 
 	for (const auto& m : fMessages) {
 		if (m.role == "user") {
@@ -656,7 +598,7 @@ void ConversationView::_RenderMessages() {
 						std::string label = "\xf0\x9f\x96\xbc [";
 						label += b.image_media_type.empty() ? "image" : b.image_media_type;
 						label += "]\n";
-						_Append(label, ui_color(B_DOCUMENT_TEXT_COLOR), B_ITALIC_FACE);
+						_Append(label, fDocTextColor, B_ITALIC_FACE);
 					}
 				} else if (b.type == ContentBlock::AUDIO) {
 					std::string label = "\xf0\x9f\x94\x8a [audio: ";
@@ -664,18 +606,18 @@ void ConversationView::_RenderMessages() {
 					label += ", ";
 					label += std::to_string(b.audio_data.size() / 1370);
 					label += " KB]\n";
-					_Append(label, ui_color(B_DOCUMENT_TEXT_COLOR), B_ITALIC_FACE);
+					_Append(label, fDocTextColor, B_ITALIC_FACE);
 				} else if (b.type == ContentBlock::DOCUMENT) {
 					std::string label = "\xf0\x9f\x93\x84 [PDF: ";
 					label += std::to_string(b.doc_data.size() / 1370);
 					label += " KB]\n";
-					_Append(label, ui_color(B_DOCUMENT_TEXT_COLOR), B_ITALIC_FACE);
+					_Append(label, fDocTextColor, B_ITALIC_FACE);
 				} else if (b.type == ContentBlock::TOOL_RESULT) {
 					std::string body = b.text;
 					if (body.size() > 600)
 						body = body.substr(0, 600) + "\n\xe2\x80\xa6";
 					body += "\n";
-					_Append(body, b.is_error ? rgb_color{245, 101, 101, 255} : ui_color(B_PANEL_BACKGROUND_COLOR), 0, true);
+					_Append(body, b.is_error ? fErrorColor : fPanelBgColor, 0, true);
 				}
 			}
 		} else if (m.role == "assistant") {
@@ -693,20 +635,20 @@ void ConversationView::_RenderMessages() {
 						std::string label = "\xf0\x9f\x96\xbc [";
 						label += b.image_media_type.empty() ? "image" : b.image_media_type;
 						label += "]\n";
-						_Append(label, ui_color(B_DOCUMENT_TEXT_COLOR), B_ITALIC_FACE);
+						_Append(label, fDocTextColor, B_ITALIC_FACE);
 					}
 				} else if (b.type == ContentBlock::AUDIO) {
-					_Append("\xf0\x9f\x94\x8a [audio attached]\n", ui_color(B_DOCUMENT_TEXT_COLOR), B_ITALIC_FACE);
+					_Append("\xf0\x9f\x94\x8a [audio attached]\n", fDocTextColor, B_ITALIC_FACE);
 				} else if (b.type == ContentBlock::DOCUMENT) {
-					_Append("\xf0\x9f\x93\x84 [PDF attached]\n", ui_color(B_DOCUMENT_TEXT_COLOR), B_ITALIC_FACE);
+					_Append("\xf0\x9f\x93\x84 [PDF attached]\n", fDocTextColor, B_ITALIC_FACE);
 				} else if (b.type == ContentBlock::TOOL_USE) {
-					std::string head = "\n\xE2\x97\x86 ";  // ◆
+					std::string head = "\n\xE2\x97\x86 ";
 					head += b.tool_name;
 					head += "\n";
-					_Append(head, ui_color(B_CONTROL_TEXT_COLOR), B_BOLD_FACE);
+					_Append(head, fControlTextColor, B_BOLD_FACE);
 				}
 			}
-			_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+			_Append("\n", fDocTextColor);
 		}
 	}
 }
@@ -716,10 +658,9 @@ void ConversationView::_RenderMessages() {
 bool ConversationView::HandleTextDelta(const std::string& text) {
 	bool first = false;
 	if (!fTextOngoing) {
-		// Stop thinking spinner — first text has arrived.
 		if (fThinking) {
 			fThinking = false;
-			_HideCursor();  // remove spinner
+			_HideCursor();
 		} else {
 			_HideCursor();
 		}
@@ -727,22 +668,16 @@ bool ConversationView::HandleTextDelta(const std::string& text) {
 		_EmitAssistantHeader();
 		fTextOngoing = true;
 		fAsstMarkdownBuf.clear();
-		// Remember where the assistant content starts in the document.
 		fAsstDocParaStart = fTextDoc.IsSet() ? fTextDoc->CountParagraphs() : 0;
 		first = true;
 	}
 	_HideCursor();
 
-	// Accumulate markdown text.
 	fAsstMarkdownBuf += text;
 
-	// Remove previous assistant content from the document
-	// and re-render with MarkdownParser for proper markdown.
 	if (fTextDoc.IsSet()) {
-		// Remove paragraphs from fAsstDocParaStart to end.
 		int32 paraCount = fTextDoc->CountParagraphs();
 		if (paraCount > fAsstDocParaStart) {
-			// Calculate text offset at the start of assistant content.
 			int32 offset = 0;
 			for (int32 i = 0; i < fAsstDocParaStart; ++i)
 				offset += fTextDoc->ParagraphAtIndex(i).Length();
@@ -751,13 +686,11 @@ bool ConversationView::HandleTextDelta(const std::string& text) {
 				fTextDoc->Remove(offset, totalLen - offset);
 		}
 
-		// Re-render the accumulated markdown.
 		BString mdText(fAsstMarkdownBuf.c_str());
 		fMdParser.AppendMarkdown(fTextDoc, mdText);
 		fDocView->SetTextDocument(fTextDoc);
 		fDocView->Relayout();
 
-		// Scroll to bottom.
 		if (fOutputScroll) {
 			BScrollBar* sb = fOutputScroll->ScrollBar(B_VERTICAL);
 			if (sb) {
@@ -786,37 +719,30 @@ void ConversationView::HandleToolStart(const std::string& name,
 	block.collapsed = false;
 	block.is_error = false;
 
-	// Record paragraph index before appending the header.
 	block.header_para = fTextDoc.IsSet() ? fTextDoc->CountParagraphs() : -1;
 
-	// Build the header with a clickable arrow span carrying a tool-toggle message.
-	_Append("\n", ui_color(B_CONTROL_TEXT_COLOR));
+	_Append("\n", fControlTextColor);
 
-	// Create the arrow+tool name as a clickable span with a toggle message.
-	{
-		BFont font = *be_plain_font;
-		font.SetFace(B_BOLD_FACE);
-		if (fFontDelta != 0) font.SetSize(font.Size() + fFontDelta);
-		CharacterStyle style;
-		style.SetFont(font);
-		style.SetForegroundColor(ui_color(B_CONTROL_TEXT_COLOR));
+	BFont font = *be_plain_font;
+	font.SetFace(B_BOLD_FACE);
+	if (fFontDelta != 0) font.SetSize(font.Size() + fFontDelta);
+	CharacterStyle style;
+	style.SetFont(font);
+	style.SetForegroundColor(fControlTextColor);
 
-		// Attach a click message for tool block toggle.
-		BMessage* clickMsg = new BMessage(kMsgToolToggle);
-		clickMsg->AddInt32("block_idx", (int32)fToolBlocks.count());
+	BMessage* clickMsg = new BMessage(kMsgToolToggle);
+	clickMsg->AddInt32("block_idx", (int32)fToolBlocks.count());
 
-		std::string arrow_text;
-		arrow_text += kArrowOpen;
-		arrow_text += " \xF0\x9F\x94\xA7 ";  // 🔧
-		arrow_text += preview;
+	std::string arrow_text;
+	arrow_text += kArrowOpen;
+	arrow_text += " \xF0\x9F\x94\xA7 ";
+	arrow_text += preview;
 
-		TextSpan span(BString(arrow_text.c_str()), style);
-		span.SetClickMessage(clickMsg);
-		fCurrentPara.Append(span);
-	}
-	_Append("\n", ui_color(B_CONTROL_TEXT_COLOR));
+	TextSpan span(BString(arrow_text.c_str()), style);
+	span.SetClickMessage(clickMsg);
+	fCurrentPara.Append(span);
+	_Append("\n", fControlTextColor);
 
-	// Record header paragraph count.
 	if (fTextDoc.IsSet() && block.header_para >= 0)
 		block.header_para_count = fTextDoc->CountParagraphs() - block.header_para;
 
@@ -840,16 +766,13 @@ std::string ConversationView::HandleToolResult(const std::string& output,
 		b.body_text = display;
 		b.is_error = is_error;
 
-		// Record body paragraph start.
 		b.body_para = fTextDoc.IsSet() ? fTextDoc->CountParagraphs() : -1;
 
-		_Append(display, is_error ? rgb_color{245, 101, 101, 255} : ui_color(B_PANEL_BACKGROUND_COLOR), 0, true);
+		_Append(display, is_error ? fErrorColor : fPanelBgColor, 0, true);
 
-		// Record body paragraph count.
 		if (fTextDoc.IsSet() && b.body_para >= 0)
 			b.body_para_count = fTextDoc->CountParagraphs() - b.body_para;
 
-		// Auto-collapse long tool output.
 		if (display.size() > 400 && fTextDoc.IsSet()) {
 			fToolBlocks.collapse(fPendingTool, fTextDoc);
 			fDocView->SetTextDocument(fTextDoc);
@@ -858,7 +781,7 @@ std::string ConversationView::HandleToolResult(const std::string& output,
 
 		fPendingTool = -1;
 	} else {
-		_Append(display, is_error ? rgb_color{245, 101, 101, 255} : ui_color(B_PANEL_BACKGROUND_COLOR), 0, true);
+		_Append(display, is_error ? fErrorColor : fPanelBgColor, 0, true);
 	}
 	std::string tool = fCurrentTool;
 	fCurrentTool.clear();
@@ -869,10 +792,10 @@ void ConversationView::HandleError(const std::string& error) {
 	fTextOngoing = false;
 	fShimmerStart = -1;
 	_HideCursor();
-	std::string line = "\n\xE2\x9A\xA0 ";  // ⚠
+	std::string line = "\n\xE2\x9A\xA0 ";
 	line += error;
 	line += "\n";
-	_Append(line, rgb_color{245, 101, 101, 255}, B_BOLD_FACE);
+	_Append(line, fErrorColor, B_BOLD_FACE);
 	if (fDelegate) fDelegate->OnError(error);
 }
 
@@ -890,7 +813,7 @@ void ConversationView::HandleUsage(long in, long out,
 std::string ConversationView::HandleTurnDone() {
 	_FinalizeAssistantBlock();
 	_HideCursor();
-	_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+	_Append("\n", fDocTextColor);
 	fBusy = false;
 	fTextOngoing = false;
 	fThinking = false;
@@ -905,18 +828,18 @@ std::string ConversationView::HandleTurnDone() {
 void ConversationView::HandleStatusMessage(const std::string& status,
                                             bool is_warning) {
 	if (is_warning) {
-		_Append("\xe2\x9a\xa0 ", {255, 180, 0, 255}, B_BOLD_FACE);
-		_Append(status + "\n", {255, 180, 0, 255});
+		_Append("\xe2\x9a\xa0 ", fWarningColor, B_BOLD_FACE);
+		_Append(status + "\n", fWarningColor);
 	} else {
 		std::string line = "[retry] ";
 		line += status;
 		line += "\n";
-		_Append(line, ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append(line, fDocTextColor);
 	}
 }
 
 void ConversationView::HandleRagHint(const std::string& hint) {
-	_Append(hint, ui_color(B_DOCUMENT_TEXT_COLOR));
+	_Append(hint, fDocTextColor);
 }
 
 void ConversationView::PrepareTurn(std::vector<ContentBlock> user_blocks) {
@@ -954,7 +877,6 @@ int32 ConversationView::_WorkerEntry(void* data) {
 	std::unique_ptr<WorkerCtx> ctx(static_cast<WorkerCtx*>(data));
 	BMessenger target = ctx->target;
 
-	// Cross-thread permission: post to ConversationView, block on sem with timeout.
 	auto gui_permission = [target](const Tool& tool,
 	                               const std::string& preview) -> Permission {
 		char sem_name[64];
@@ -962,10 +884,8 @@ int32 ConversationView::_WorkerEntry(void* data) {
 			(int)getpid());
 		sem_id sem = create_sem(0, sem_name);
 		if (sem < 0) {
-			// Fail closed: deny if semaphore creation fails.
 			return Permission::Deny;
 		}
-		// RAII guard: ensure semaphore is always deleted.
 		struct SemGuard {
 			sem_id id;
 			~SemGuard() { if (id >= 0) delete_sem(id); }
@@ -977,15 +897,11 @@ int32 ConversationView::_WorkerEntry(void* data) {
 		m.AddInt32("sem", static_cast<int32>(sem));
 		m.AddPointer("result", &result);
 		if (target.SendMessage(&m) != B_OK) {
-			// Target gone (view destroyed) — deny.
 			return Permission::Deny;
 		}
-		// Wait up to 5 minutes for user response.
-		// acquire_sem_etc with B_TIMEOUT returns B_TIMED_OUT if no signal.
-		constexpr bigtime_t kApprovalTimeout = 5 * 60 * 1000000LL;  // 5 min in microseconds
+		constexpr bigtime_t kApprovalTimeout = 5 * 60 * 1000000LL;
 		status_t err = acquire_sem_etc(sem, 1, B_TIMEOUT, kApprovalTimeout);
 		if (err == B_TIMED_OUT || err != B_OK) {
-			// Timeout or error — deny.
 			return Permission::Deny;
 		}
 		if (result == 0) return Permission::Deny;
@@ -1196,7 +1112,7 @@ void ConversationView::MessageReceived(BMessage* msg) {
 		case kMsgWorkerDone: {
 			std::string preview = HandleTurnDone();
 			if (fDelegate) fDelegate->OnTurnDone(preview);
-			// Auto-save session after each turn.
+
 			if (!fMessages.empty()) SaveSession();
 			break;
 		}
@@ -1243,10 +1159,7 @@ void ConversationView::MessageReceived(BMessage* msg) {
 			if (msg->FindString("url", &url) == B_OK && url && *url) {
 				std::string u(url);
 				if (u[0] == '#') {
-					// Anchor link — scroll within conversation (no-op for now,
-					// could search for heading text).
 				} else if (u.find("://") != std::string::npos) {
-					// External URL — open in browser via Haiku roster.
 					const char* argv[] = { url, nullptr };
 					be_roster->Launch("text/html", 1, const_cast<char**>(argv));
 				}
@@ -1299,7 +1212,6 @@ void ConversationView::Reset() {
 	fLastAssistantText.clear();
 
 	_ClearInlineImages();
-	// Reset document model.
 	fTextDoc.SetTo(new TextDocument(), true);
 	if (fDocView) fDocView->SetTextDocument(fTextDoc);
 }
@@ -1318,11 +1230,10 @@ void ConversationView::LoadSession(const std::string& path) {
 	std::string error;
 
 	if (!SessionStore::load(path, msgs, meta, error)) {
-		_Append("[error] " + error + "\n", rgb_color{245, 101, 101, 255});
+		_Append("[error] " + error + "\n", fErrorColor);
 		return;
 	}
 
-	// Reset state before populating.
 	fMessages = std::move(msgs);
 	fToolBlocks.clear();
 	fSessionPath = path;
@@ -1331,7 +1242,6 @@ void ConversationView::LoadSession(const std::string& path) {
 	fTokensOut = meta.tokens_out;
 	fTurnCount = meta.turns;
 
-	// Restore the model the session was created with.
 	if (!meta.model.empty())
 		fTabConfig.model = meta.model;
 	fPendingTool = -1;
@@ -1364,11 +1274,10 @@ void ConversationView::SaveSession() {
 		fTokensIn, fTokensOut, fMessages, error);
 
 	if (saved.empty()) {
-		_Append("[error] save failed: " + error + "\n", rgb_color{245, 101, 101, 255});
+		_Append("[error] save failed: " + error + "\n", fErrorColor);
 		return;
 	}
 
-	// Update session path if this was a new save.
 	if (fSessionPath.empty())
 		fSessionPath = saved;
 }
@@ -1418,8 +1327,6 @@ void ConversationView::SetSessionTitle(const std::string& title) {
 }
 
 void ConversationView::RequestCompaction() {
-	// Inject a system message asking the model to compact the conversation.
-	// This will be processed on the next turn.
 	if (fBusy) return;
 	
 	Message sys;
@@ -1435,12 +1342,6 @@ void ConversationView::RequestCompaction() {
 	sys.content.push_back(std::move(sb));
 	fMessages.push_back(std::move(sys));
 	
-	// Also trigger the built-in MaybeCompact logic by setting a flag
-	// that will be checked on the next turn. For now, just inject the
-	// request as a system message - the model will respond with a summary
-	// and we'll handle it in the next turn.
-	
-	// Start a turn to process the compaction request.
 	PrepareTurn({});
 	if (fDelegate) fDelegate->OnTurnStarted();
 	_StartTurn();
@@ -1454,8 +1355,6 @@ void ConversationView::SetProvider(std::unique_ptr<Provider> provider) {
 void ConversationView::ApplyFontDelta(int delta) {
 	fFontDelta = delta;
 
-	// Re-render the entire conversation with the new font delta.
-	// This rebuilds all paragraphs from the message history.
 	if (!fMessages.empty()) {
 		_RenderMessages();
 	}
@@ -1469,6 +1368,7 @@ void ConversationView::UpdateParserColors(bool useSystem,
 
 std::string ConversationView::BuildMarkdown() const {
 	std::string out;
+	out.reserve(1024);
 	out += "# Pluto conversation\n\n";
 	out += "**Model:** " + (fConfig ? fConfig->model : "unknown") + "  \n";
 	out += "**Tokens:** " + std::to_string(fTokensIn) + " in / "
@@ -1506,7 +1406,6 @@ void ConversationView::FindInConversation(const std::string& query,
 	int32 len = docText.Length();
 	if (len <= 0) return;
 
-	// Case-insensitive linear scan from fFindOffset.
 	std::string q(query);
 	for (auto& c : q) c = static_cast<char>(
 		std::tolower(static_cast<unsigned char>(c)));
@@ -1517,13 +1416,11 @@ void ConversationView::FindInConversation(const std::string& query,
 
 	size_t pos = text.find(q, fFindOffset);
 	if (pos == std::string::npos && fFindOffset > 0)
-		pos = text.find(q);  // wrap
+		pos = text.find(q);
 	if (pos == std::string::npos) return;
 
-	// Select the found text in the TextDocumentView.
 	if (fDocView) {
-		fDocView->SetCaret(BPoint(0, 0), false);  // deselect
-		// TODO: implement proper selection highlighting in TextDocumentView
+		fDocView->SetCaret(BPoint(0, 0), false);
 	}
 	fFindOffset = static_cast<int32>(pos + 1);
 }
@@ -1543,7 +1440,6 @@ public:
 		BRect br = fBitmap->Bounds();
 		float iw = br.Width() + 1;
 		float ih = br.Height() + 1;
-		// Scale to fit maxWidth, cap height at 300.
 		float scale = (iw > maxWidth && maxWidth > 10) ? maxWidth / iw : 1.0f;
 		fDrawWidth = iw * scale;
 		fDrawHeight = ih * scale;
@@ -1569,7 +1465,6 @@ public:
 		GetMouse(&where, &buttons);
 		if (!(buttons & B_PRIMARY_MOUSE_BUTTON)) return;
 
-		// Build a drag message with negotiated type for Tracker.
 		BMessage drag(B_SIMPLE_DATA);
 		drag.AddInt32("be:actions", B_COPY_TARGET);
 		drag.AddString("be:types", "application/octet-stream");
@@ -1577,7 +1472,6 @@ public:
 		drag.AddString("be:type_descriptions", "PNG image");
 		drag.AddString("be:clip_name", "pluto_image.png");
 
-		// Thumbnail for drag feedback.
 		float thumbW = std::min(fDrawWidth, 100.0f);
 		float thumbH = fDrawHeight * (thumbW / fDrawWidth);
 		BBitmap* thumb = new BBitmap(BRect(0, 0, thumbW - 1, thumbH - 1),
@@ -1609,7 +1503,6 @@ public:
 
 private:
 	void _HandleCopyTarget(BMessage* msg) {
-		// Tracker asks us to write data to a file it created.
 		entry_ref dir;
 		const char* name = nullptr;
 		if (msg->FindRef("directory", &dir) != B_OK
@@ -1620,17 +1513,15 @@ private:
 		BFile file(&destDir, name, B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
 		if (file.InitCheck() != B_OK) return;
 
-		// Write the raw PNG data.
 		file.Write(fPngData.data(), fPngData.size());
 		file.SetSize(fPngData.size());
 
-		// Set the MIME type.
 		BNodeInfo info(&file);
 		info.SetType("image/png");
 	}
 
 	BBitmap*    fBitmap;
-	std::string fPngData;  // raw PNG bytes for drag-to-save
+	std::string fPngData;
 	float       fDrawWidth;
 	float       fDrawHeight;
 };
@@ -1638,17 +1529,14 @@ private:
 }  // anon namespace
 
 void ConversationView::_ClearInlineImages() {
-	// Legacy inline image views removed — images are now shown in the
-	// side panel via OnImage delegate callback.
 	fInlineImages.clear();
 	fImageOffsets.clear();
 }
 
 void ConversationView::_InsertInlineImage(const std::string& base64_data) {
-	// Decode base64 → raw image bytes → BBitmap via BTranslatorRoster.
 	std::string raw = base64_decode(base64_data);
 	if (raw.empty()) {
-		_Append("\xf0\x9f\x96\xbc [image decode failed]\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("\xf0\x9f\x96\xbc [image decode failed]\n", fDocTextColor);
 		return;
 	}
 
@@ -1664,7 +1552,6 @@ void ConversationView::_InsertInlineImage(const std::string& base64_data) {
 	}
 
 	if (bitmap != NULL) {
-		// Scale bitmap to fit the view width (max 400px, cap height 300px).
 		BRect bounds = bitmap->Bounds();
 		float iw = bounds.Width() + 1;
 		float ih = bounds.Height() + 1;
@@ -1678,7 +1565,6 @@ void ConversationView::_InsertInlineImage(const std::string& base64_data) {
 		float dh = ih * scale;
 		if (dh > 300) { dh = 300; dw = iw * (300.0f / ih); }
 
-		// Create a scaled copy for inline display.
 		BBitmap* scaled = new BBitmap(BRect(0, 0, dw - 1, dh - 1),
 		                              B_RGBA32, true);
 		if (scaled->Lock()) {
@@ -1691,8 +1577,6 @@ void ConversationView::_InsertInlineImage(const std::string& base64_data) {
 			scaled->Unlock();
 		}
 
-		// Insert as a TextSpan image in the document model — participates
-		// in text flow, no overlap with surrounding paragraphs.
 		if (fTextDoc) {
 			Paragraph imgPara;
 			TextSpan imgSpan;
@@ -1700,7 +1584,6 @@ void ConversationView::_InsertInlineImage(const std::string& base64_data) {
 			imgPara.Append(imgSpan);
 			fTextDoc->Append(imgPara);
 
-			// Add an empty paragraph after for spacing.
 			Paragraph spacer;
 			spacer.Append(TextSpan(" ", CharacterStyle()));
 			fTextDoc->Append(spacer);
@@ -1709,18 +1592,16 @@ void ConversationView::_InsertInlineImage(const std::string& base64_data) {
 		} else {
 			delete scaled;
 		}
-		delete bitmap;  // original no longer needed, scaled copy is in doc
+		delete bitmap;
 	} else {
-		_Append("\xf0\x9f\x96\xbc [image — could not render]\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		_Append("\xf0\x9f\x96\xbc [image \xe2\x80\x94 could not render]\n", fDocTextColor);
 	}
 
-	// Also send to side panel for full-size preview.
 	if (fDelegate)
 		fDelegate->OnImage(base64_data, "image/png");
 }
 
 void ConversationView::_RepositionInlineImages() {
-	// No-op with TextDocumentView (images in side panel).
 }
 
 }  // namespace gui

@@ -3,8 +3,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#include <stdexcept>
 #include <string>
+#include <system_error>
 
 namespace pluto::json {
 
@@ -12,26 +12,29 @@ namespace {
 
 void serialize_string(std::string& out, const std::string& s) {
 	out += '"';
-	for (char c : s) {
-		switch (c) {
-			case '"':  out += "\\\""; break;
-			case '\\': out += "\\\\"; break;
-			case '\n': out += "\\n";  break;
-			case '\r': out += "\\r";  break;
-			case '\t': out += "\\t";  break;
-			case '\b': out += "\\b";  break;
-			case '\f': out += "\\f";  break;
-			default:
-				if (static_cast<unsigned char>(c) < 0x20) {
+	size_t start = 0;
+	for (size_t i = 0; i < s.size(); ++i) {
+		char c = s[i];
+		if (c == '"' || c == '\\' || c == '\n' || c == '\r' || c == '\t' || c == '\b' || c == '\f' || static_cast<unsigned char>(c) < 0x20) {
+			if (i > start) out.append(s.data() + start, i - start);
+			switch (c) {
+				case '"':  out += "\\\""; break;
+				case '\\': out += "\\\\"; break;
+				case '\n': out += "\\n";  break;
+				case '\r': out += "\\r";  break;
+				case '\t': out += "\\t";  break;
+				case '\b': out += "\\b";  break;
+				case '\f': out += "\\f";  break;
+				default: {
 					char buf[8];
-					std::snprintf(buf, sizeof(buf), "\\u%04x",
-						static_cast<unsigned char>(c));
+					std::snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned char>(c));
 					out += buf;
-				} else {
-					out += c;
 				}
+			}
+			start = i + 1;
 		}
 	}
+	if (start < s.size()) out.append(s.data() + start, s.size() - start);
 	out += '"';
 }
 
@@ -53,21 +56,20 @@ void serialize_value(std::string& out, const Value& v) {
 	if (v.is_str()) { serialize_string(out, v.as_str()); return; }
 	if (v.is_arr()) {
 		out += '[';
-		bool first = true;
-		for (const auto& e : v.as_arr()) {
-			if (!first) out += ',';
-			first = false;
-			serialize_value(out, e);
+		const auto& arr = v.as_arr();
+		for (size_t i = 0; i < arr.size(); ++i) {
+			if (i) out += ',';
+			serialize_value(out, arr[i]);
 		}
 		out += ']';
 		return;
 	}
 	if (v.is_obj()) {
 		out += '{';
-		bool first = true;
-		for (const auto& [k, val] : v.as_obj()) {
-			if (!first) out += ',';
-			first = false;
+		const auto& obj = v.as_obj();
+		size_t i = 0;
+		for (const auto& [k, val] : obj) {
+			if (i++) out += ',';
 			serialize_string(out, k);
 			out += ':';
 			serialize_value(out, val);
@@ -79,7 +81,7 @@ void serialize_value(std::string& out, const Value& v) {
 
 class Parser {
 public:
-	Parser(const std::string& s) : fSrc(s), fPos(0), fDepth(0) {}
+	explicit Parser(const std::string& s) : fSrc(s), fPos(0), fDepth(0) {}
 
 	Value parse_value() {
 		skip_ws();
@@ -93,6 +95,7 @@ public:
 		if (c == 'n') return parse_null();
 		if (c == '-' || (c >= '0' && c <= '9')) return parse_number();
 		fail("unexpected character");
+		return Value();
 	}
 
 	void expect_eof() {
@@ -106,8 +109,7 @@ private:
 	int fDepth;
 
 	[[noreturn]] void fail(const char* msg) {
-		throw std::runtime_error(std::string("json parse: ") + msg +
-			" at offset " + std::to_string(fPos));
+		throw std::runtime_error(std::string("json parse: ") + msg + " at offset " + std::to_string(fPos));
 	}
 
 	void skip_ws() {
@@ -194,16 +196,13 @@ private:
 						return code;
 					};
 					unsigned code = read_hex4();
-					// Handle UTF-16 surrogate pairs (U+10000..U+10FFFF).
 					if (code >= 0xD800 && code <= 0xDBFF) {
 						if (fPos + 2 <= fSrc.size()
 						    && fSrc[fPos] == '\\' && fSrc[fPos + 1] == 'u') {
 							fPos += 2;
 							unsigned low = read_hex4();
 							if (low >= 0xDC00 && low <= 0xDFFF) {
-								code = 0x10000
-								     + ((code - 0xD800) << 10)
-								     + (low - 0xDC00);
+								code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
 							} else {
 								fail("bad surrogate pair");
 							}
@@ -211,7 +210,6 @@ private:
 							fail("lone high surrogate");
 						}
 					}
-					// Encode as UTF-8.
 					if (code < 0x80) {
 						out += static_cast<char>(code);
 					} else if (code < 0x800) {
@@ -233,12 +231,12 @@ private:
 			}
 		}
 		fail("unterminated string");
+		return out;
 	}
 
 	Value parse_number() {
 		size_t start = fPos;
 		if (fSrc[fPos] == '-') ++fPos;
-		// JSON requires at least one digit after an optional minus sign.
 		if (fPos >= fSrc.size() || fSrc[fPos] < '0' || fSrc[fPos] > '9')
 			fail("invalid number: expected digit after '-'");
 		while (fPos < fSrc.size() && fSrc[fPos] >= '0' && fSrc[fPos] <= '9') ++fPos;
@@ -251,21 +249,23 @@ private:
 			if (fPos < fSrc.size() && (fSrc[fPos] == '+' || fSrc[fPos] == '-')) ++fPos;
 			while (fPos < fSrc.size() && fSrc[fPos] >= '0' && fSrc[fPos] <= '9') ++fPos;
 		}
-		// Parse directly from the source buffer without allocating a substring.
-		// strtod reads until it hits a non-numeric character, which is safe
-		// because the JSON input is always null-terminated.
-		return Value(std::strtod(fSrc.c_str() + start, nullptr));
+		char* endptr = nullptr;
+		double val = std::strtod(fSrc.c_str() + start, &endptr);
+		if (endptr != fSrc.c_str() + fPos) fail("number parse failed");
+		return Value(val);
 	}
 
 	Value parse_bool() {
 		if (fSrc.compare(fPos, 4, "true") == 0) { fPos += 4; return Value(true); }
 		if (fSrc.compare(fPos, 5, "false") == 0) { fPos += 5; return Value(false); }
 		fail("expected true/false");
+		return Value();
 	}
 
 	Value parse_null() {
 		if (fSrc.compare(fPos, 4, "null") == 0) { fPos += 4; return Value(nullptr); }
 		fail("expected null");
+		return Value();
 	}
 };
 
@@ -273,6 +273,7 @@ private:
 
 std::string Value::serialize() const {
 	std::string out;
+	out.reserve(256);
 	serialize_value(out, *this);
 	return out;
 }

@@ -8,6 +8,7 @@
 #include <StringView.h>
 #include <SupportDefs.h>
 #include <TextView.h>
+#include <View.h>
 #include <Window.h>
 
 #include <string>

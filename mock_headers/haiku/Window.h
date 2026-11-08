@@ -24,15 +24,6 @@ enum window_feel {
     B_DOCK_WINDOW_FEEL = 3
 };
 
-enum color_space {
-    B_RGB32 = 0,
-    B_RGB16 = 1,
-    B_RGB15 = 2,
-    B_CMAP8 = 3,
-    B_GRAY8 = 4,
-    B_NO_COLOR_SPACE = 5
-};
-
 class BWindow : public BLooper {
 public:
     BWindow(BRect frame, const char* title, window_type type, uint32 flags,

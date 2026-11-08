@@ -2972,12 +2972,12 @@ void MainWindow::MessageReceived(BMessage* msg) {
 		if (dstDir.InitCheck() == B_OK) {
 			BPath dstPath(dst_dir.c_str());
 			dstPath.Append("Ask Pluto");
-			BFile srcFile(src.c_str(), O_RDONLY);
+			BFile srcFile(src.c_str(), B_READ_ONLY);
 			if (srcFile.InitCheck() != B_OK) {
 				_Append("Could not find add-on binary.\n", rgb_color{245, 101, 101, 255});
 				break;
 			}
-			BFile dstFile(dstPath.Path(), B_READ_WRITE | O_CREAT);
+			BFile dstFile(dstPath.Path(), B_READ_WRITE | B_CREATE_FILE);
 			if (dstFile.InitCheck() != B_OK) {
 				_Append("Could not copy add-on to Tracker directory.\n", rgb_color{245, 101, 101, 255});
 				_Append("Build it first: make 'Ask Pluto'\n", rgb_color{245, 101, 101, 255});

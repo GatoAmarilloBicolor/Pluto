@@ -1,13 +1,20 @@
 #ifndef MOCK_MESSENGER_H
 #define MOCK_MESSENGER_H
 
-#include <Handler.h>
-#include <Looper.h>
+#include "Handler.h"
+#include "Looper.h"
+#include "View.h"
 
 class BMessenger {
 public:
     BMessenger() = default;
     BMessenger(const BHandler* handler, const BLooper* looper = nullptr) { (void)handler; (void)looper; }
+    BMessenger(const BHandler* handler) { (void)handler; }
+    BMessenger(BHandler* handler) { (void)handler; }
+    BMessenger(const BView* view) { (void)view; }
+    BMessenger(BView* view) { (void)view; }
+    template<typename T>
+    BMessenger(T* ptr) { (void)ptr; }
     BMessenger(const char* signature, team_id team = -1) { (void)signature; (void)team; }
     BMessenger(const BMessenger& other) = default;
     ~BMessenger() = default;
@@ -15,6 +22,7 @@ public:
     BMessenger& operator=(const BMessenger& other) = default;
     
     status_t SendMessage(BMessage* msg) { (void)msg; return B_OK; }
+    status_t SendMessage(uint32 what) { (void)what; return B_OK; }
     status_t SendMessage(BMessage* msg, BHandler* handler) { (void)msg; (void)handler; return B_OK; }
     status_t SendMessage(BMessage* msg, const BHandler* handler) { (void)msg; (void)handler; return B_OK; }
     

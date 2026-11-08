@@ -1,7 +1,8 @@
 #ifndef MOCK_HANDLER_H
 #define MOCK_HANDLER_H
 
-#include <Message.h>
+#include "Types.h"
+#include "Message.h"
 
 class BLooper;
 
@@ -11,12 +12,9 @@ public:
     virtual ~BHandler() = default;
     
     virtual void MessageReceived(BMessage* msg) { (void)msg; }
-    virtual void MessageDropped(BMessage* msg, BHandler* handler) { (void)msg; (void)handler; }
-    
     BLooper* Looper() const { return nullptr; }
-    void SetLooper(BLooper* looper) { (void)looper; }
-    const char* Name() const { return ""; }
-    void SetName(const char* name) { (void)name; }
+    const char* Name() const { return "BHandler"; }
+    virtual status_t SetName(const char* name) { (void)name; return B_OK; }
 };
 
 #endif

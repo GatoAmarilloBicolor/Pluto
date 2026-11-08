@@ -185,14 +185,65 @@ const status_t B_ALREADY_RUNNING = -47;
 const color_space B_RGB32 = 0;
 const color_space B_RGB16 = 1;
 const color_space B_GRAY8 = 3;
+const color_space B_RGBA32 = 4;
+const color_space B_RGBA32_BIG = 5;
+
+// Window flags
+const uint32 B_NOT_ZOOMABLE = 0x0001;
+const uint32 B_TITLED_WINDOW = 0x0002;
+
+// Node flavors
+const uint32 B_FILE_NODE = 0x0001;
+const uint32 B_DIRECTORY_NODE = 0x0002;
+const uint32 B_SYMLINK_NODE = 0x0004;
+
+// Keyboard constants
+const int32 B_ESCAPE = 0x1B;
+const int32 B_LEFT_ARROW = 0x1C;
+const int32 B_RIGHT_ARROW = 0x1D;
+const int32 B_UP_ARROW = 0x1E;
+const int32 B_DOWN_ARROW = 0x1F;
+const int32 B_INSERT = 0x20;
+const int32 B_DELETE = 0x21;
+const int32 B_HOME = 0x22;
+const int32 B_END = 0x23;
+const int32 B_PAGE_UP = 0x24;
+const int32 B_PAGE_DOWN = 0x25;
+const int32 B_FUNCTION_KEY = 0x26;
+const int32 B_TAB = 0x09;
+const int32 B_ENTER = 0x0A;
+const int32 B_RETURN = 0x0D;
+const int32 B_SPACE = 0x20;
+const int32 B_BACKSPACE = 0x08;
+
+// BSize constants
+const float B_SIZE_UNSET = -1.0f;
+const float B_SIZE_UNLIMITED = -2.0f;
 
 // POSIX environ
 extern char** environ;
+
+// Missing Haiku types
+typedef enum {
+    B_ALIGN_LEFT = 0,
+    B_ALIGN_RIGHT = 1,
+    B_ALIGN_CENTER = 2,
+    B_ALIGN_HORIZONTAL_CENTER = 2,
+    B_ALIGN_VERTICAL_CENTER = 3,
+    B_ALIGN_USE_FULL_WIDTH = 4
+} alignment;
+
+typedef enum {
+    B_NO_BORDER = 0,
+    B_PLAIN_BORDER = 1,
+    B_FANCY_BORDER = 2
+} border_style;
 
 // Forward declarations to avoid circular dependencies
 class BEntry;
 class BDirectory;
 class BFile;
 class BPath;
+class BNode;
 
 #endif

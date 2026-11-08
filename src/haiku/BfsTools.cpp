@@ -337,6 +337,7 @@ public:
 		char attr_name[B_ATTR_NAME_LENGTH];
 		node.RewindAttrs();
 		std::string out;
+		out.reserve(256);
 		int count = 0;
 		while (node.GetNextAttrName(attr_name) == B_OK) {
 			attr_info info;
@@ -485,6 +486,7 @@ public:
 		}
 
 		std::string out;
+		out.reserve(limit * 64);
 		BEntry entry;
 		int count = 0;
 		while (query.GetNextEntry(&entry) == B_OK) {
@@ -609,17 +611,17 @@ public:
 			return r;
 		}
 
-		LiveQueryListener* listener = new LiveQueryListener();
+		// Use unique_ptr to ensure cleanup on any early return/exception
+		std::unique_ptr<LiveQueryListener> listener(new LiveQueryListener());
 
 		BQuery query;
 		query.SetVolume(&volume);
 		query.SetPredicate(predicate.c_str());
-		query.SetTarget(BMessenger(listener));
+		query.SetTarget(BMessenger(listener.get()));
 		if (query.Fetch() != B_OK) {
 			listener->Lock();
 			listener->Quit();
 			listener->Unlock();
-			delete listener;
 			r.is_error = true;
 			r.output = "query fetch failed";
 			return r;
@@ -677,10 +679,10 @@ public:
 			out += "\n";
 		}
 
+		// Properly shut down the looper thread
 		listener->Lock();
 		listener->Quit();
 		listener->Unlock();
-		delete listener;
 
 		r.output = std::move(out);
 		return r;

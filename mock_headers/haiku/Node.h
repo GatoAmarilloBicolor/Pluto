@@ -24,6 +24,13 @@ public:
     dev_t Device() const { return 0; }
     ino_t Node() const { return 0; }
     status_t GetStat(struct stat* st) { (void)st; return B_OK; }
+    
+    // Read/Write methods (for file I/O)
+    ssize_t Read(off_t pos, void* buffer, size_t size) { (void)pos; (void)buffer; (void)size; return 0; }
+    ssize_t Write(off_t pos, const void* buffer, size_t size) { (void)pos; (void)buffer; (void)size; return size; }
+    // Overload for writing at current position
+    ssize_t Write(const void* buffer, size_t size) { (void)buffer; (void)size; return size; }
+    ssize_t Read(void* buffer, size_t size) { (void)buffer; (void)size; return 0; }
 };
 
 #endif

@@ -3,6 +3,7 @@
 
 #include "Types.h"
 #include "Rect.h"
+#include <string>
 
 enum drawing_mode {
     B_OP_COPY = 0,
@@ -16,7 +17,6 @@ enum drawing_mode {
     B_OP_BLEND = 8
 };
 
-#endif
 // Mock BField hierarchy for ColumnTypes.cpp
 class BField {
 public:
@@ -43,4 +43,6 @@ public:
     BBitmapField() = default;
     const char* FieldType() const override { return "BBitmapField"; }
 };
+
+#endif
 

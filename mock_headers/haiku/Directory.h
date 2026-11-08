@@ -24,6 +24,7 @@ public:
     status_t CreateDirectory(const char* path, BDirectory* dir) { (void)path; (void)dir; return B_OK; }
     status_t CreateFile(const char* path, BFile* file) { (void)path; (void)file; return B_OK; }
     status_t GetNextDirents(void* buf, size_t len, int32* count) { (void)buf; (void)len; (void)count; return B_OK; }
+    status_t CreateEntry(const char* name, BEntry* entry = nullptr) { (void)name; (void)entry; return B_OK; }
 };
 
 #endif

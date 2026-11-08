@@ -8,11 +8,10 @@
 
 struct BFont;
 
-struct rgb_color {
-    uint8_t red;
-    uint8_t green;
-    uint8_t blue;
-    uint8_t alpha;
+class BShape {
+public:
+    BShape() = default;
+    virtual ~BShape() = default;
 };
 
 class BWindow;  // forward declaration
@@ -71,7 +70,11 @@ public:
     virtual BLooper* Looper() const { return nullptr; }
     virtual BWindow* Window() const { return nullptr; }
     virtual void SetTarget(BHandler* target) { (void)target; }
+    virtual void SetTarget(BView* view, BHandler* target) { (void)view; (void)target; }
     virtual BHandler* Target() const { return nullptr; }
+    virtual BSize MinSize() { return BSize(0, 0); }
+    virtual BSize MaxSize() { return BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED); }
+    virtual BSize PreferredSize() { return BSize(0, 0); }
     
     enum drawing_mode {
         B_OP_COPY = 0,
@@ -93,10 +96,22 @@ public:
         B_FOLLOW_H_CENTER = 16,
         B_FOLLOW_V_CENTER = 32,
         B_FOLLOW_ALL = B_FOLLOW_LEFT | B_FOLLOW_RIGHT | B_FOLLOW_TOP | B_FOLLOW_BOTTOM,
+        B_FOLLOW_ALL_SIDES = B_FOLLOW_ALL,
         B_FOLLOW_LEFT_TOP = B_FOLLOW_LEFT | B_FOLLOW_TOP,
         B_FOLLOW_RIGHT_TOP = B_FOLLOW_RIGHT | B_FOLLOW_TOP,
         B_FOLLOW_LEFT_BOTTOM = B_FOLLOW_LEFT | B_FOLLOW_BOTTOM,
         B_FOLLOW_RIGHT_BOTTOM = B_FOLLOW_RIGHT | B_FOLLOW_BOTTOM
+    };
+
+    // View flags
+    enum {
+        B_WILL_DRAW = 1,
+        B_FRAME_EVENTS = 2,
+        B_NAVIGABLE = 4,
+        B_NAVIGABLE_JUMP = 8,
+        B_SUBPIXEL_PRECISE = 16,
+        B_FULL_UPDATE_ON_RESIZE = 32,
+        B_PULSE_NEEDED = 64
     };
 };
 
