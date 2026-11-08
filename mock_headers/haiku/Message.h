@@ -2,7 +2,6 @@
 #define MOCK_MESSAGE_H
 
 #include "Types.h"
-#include <cstring>
 #include <map>
 #include <string>
 #include <vector>
@@ -21,6 +20,8 @@ public:
     status_t AddString(const char* name, const char* str) { (void)name; (void)str; return B_OK; }
     status_t AddInt32(const char* name, int32_t val) { (void)name; (void)val; return B_OK; }
     status_t AddInt64(const char* name, int64_t val) { (void)name; (void)val; return B_OK; }
+    status_t AddFloat(const char* name, float val) { (void)name; (void)val; return B_OK; }
+    status_t AddDouble(const char* name, double val) { (void)name; (void)val; return B_OK; }
     status_t AddBool(const char* name, bool val) { (void)name; (void)val; return B_OK; }
     status_t AddPointer(const char* name, void* ptr) { (void)name; (void)ptr; return B_OK; }
     status_t AddMessage(const char* name, const BMessage* msg) { (void)name; (void)msg; return B_OK; }
@@ -60,6 +61,7 @@ public:
     status_t FindMessage(const char* name, BMessage* msg) const { (void)name; (void)msg; return B_ERROR; }
     status_t FindMessage(const char* name, int32 index, BMessage* msg) const { (void)name; (void)index; (void)msg; return B_ERROR; }
     status_t FindRef(const char* name, int32 index, entry_ref* ref) const { (void)name; (void)index; (void)ref; return B_ERROR; }
+    status_t FindRef(const char* name, entry_ref* ref) const { (void)name; (void)ref; return B_ERROR; }
     
     ssize_t FlattenedSize() const { return 0; }
     status_t Flatten(void* buf, ssize_t size) const { (void)buf; (void)size; return B_OK; }
@@ -82,8 +84,65 @@ public:
     static const int32_t B_BAD_VALUE = -3;
     static const int32_t B_NO_MEMORY = -4;
     static const int32_t B_TIMED_OUT = -5;
+    
+    // Scripting constants
+    static const uint32 B_GET_PROPERTY = 'BGPB';
+    static const uint32 B_SET_PROPERTY = 'BSPB';
+    static const uint32 B_CREATE_PROPERTY = 'BCPB';
+    static const uint32 B_DELETE_PROPERTY = 'BDPB';
+    static const uint32 B_EXECUTE_PROPERTY = 'BEPB';
+    static const uint32 B_COUNT_PROPERTIES = 'BCOP';
+    static const uint32 B_QUIT_REQUESTED = 'BQRQ';
+    
+    status_t SendMessage(BMessage* msg) { (void)msg; return B_OK; }
+    status_t SendMessage(uint32 what) { (void)what; return B_OK; }
+};
 
-private:
+// Forward declare BHandler, BLooper, BView, and BWindow for BMessenger
+class BHandler;
+class BLooper;
+class BView;
+class BWindow;
+
+// BMessenger - for sending messages to handlers/loopers
+class BMessenger {
+public:
+    BMessenger() = default;
+    BMessenger(const BHandler* handler, const BLooper* looper = nullptr) { (void)handler; (void)looper; }
+    BMessenger(const BHandler* handler) { (void)handler; }
+    BMessenger(BHandler* handler) { (void)handler; }
+    BMessenger(const BView* view) { (void)view; }
+    BMessenger(BView* view) { (void)view; }
+    BMessenger(const BWindow* window) { (void)window; }
+    BMessenger(BWindow* window) { (void)window; }
+    template<typename T>
+    BMessenger(T* ptr) { (void)ptr; }
+    BMessenger(const char* signature, team_id team = -1) { (void)signature; (void)team; }
+    BMessenger(const BMessenger& other) = default;
+    ~BMessenger() = default;
+    
+    BMessenger& operator=(const BMessenger& other) = default;
+    
+    status_t SendMessage(BMessage* msg) const { (void)msg; return B_OK; }
+    status_t SendMessage(uint32 what) const { (void)what; return B_OK; }
+    status_t SendMessage(BMessage* msg, BHandler* handler) const { (void)msg; (void)handler; return B_OK; }
+    status_t SendMessage(BMessage* msg, const BHandler* handler) const { (void)msg; (void)handler; return B_OK; }
+    
+    status_t SendMessage(BMessage* msg, BHandler* handler, BHandler* replyTo, bigtime_t timeout) const { 
+        (void)msg; (void)handler; (void)replyTo; (void)timeout; return B_OK; }
+    status_t SendMessage(BMessage* msg, const BHandler* handler, BHandler* replyTo, bigtime_t timeout) const { 
+        (void)msg; (void)handler; (void)replyTo; (void)timeout; return B_OK; }
+    
+    // 4-arg version with send and receive timeouts
+    status_t SendMessage(BMessage* msg, BMessage* reply, bigtime_t sendTimeout, bigtime_t recvTimeout) const {
+        (void)msg; (void)reply; (void)sendTimeout; (void)recvTimeout; return B_OK; }
+    status_t SendMessage(BMessage* msg, BMessage* reply, bigtime_t sendTimeout, bigtime_t recvTimeout, BHandler* handler) const {
+        (void)msg; (void)reply; (void)sendTimeout; (void)recvTimeout; (void)handler; return B_OK; }
+    
+    bool IsValid() const { return false; }
+    bool IsTargetLocal() const { return false; }
+    BHandler* Target(BLooper** looper = nullptr) const { (void)looper; return nullptr; }
+    team_id Team() const { return -1; }
 };
 
 // BeOS scripting constants
@@ -92,5 +151,7 @@ const uint32 B_REPLY = 'BREP';
 const uint32 B_NO_REPLY = 'BNRE';
 const uint32 B_QUIT_REQUESTED = 'BQRQ';
 const uint32 B_GET_PROPERTY = 'BGPB';
+const uint32 B_SIMPLE_DATA = 'BsdT';
+const uint32 B_SAVE_REQUESTED = 'BsvR';
 
 #endif

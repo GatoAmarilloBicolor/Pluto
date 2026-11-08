@@ -13,6 +13,7 @@ public:
     
     bool Lock() { return fLocker.Lock(); }
     bool Unlock() { return fLocker.Unlock(); }
+    status_t LockWithTimeout(bigtime_t timeout) { (void)timeout; return Lock() ? B_OK : B_TIMED_OUT; }
     
     virtual void PostMessage(BMessage* msg, BHandler* handler = nullptr) { (void)msg; (void)handler; }
     virtual void PostMessage(uint32 what) { (void)what; }

@@ -48,6 +48,7 @@ public:
     virtual void Hide() {}
     virtual void SetButtonLabel(button_which which, const char* label) { (void)which; (void)label; }
     virtual const char* ButtonLabel(button_which which) const { (void)which; return ""; }
+    virtual void SetSaveText(const char* text) { (void)text; }
 };
 
 #endif

@@ -5,6 +5,7 @@
 
 #define B_CURRENT_TEAM 0
 #define B_NORMAL_IMAGE 0
+#define B_APP_IMAGE 1
 
 struct image_info {
     image_id id;

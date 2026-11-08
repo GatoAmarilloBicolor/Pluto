@@ -3,7 +3,7 @@
 
 #include "Types.h"
 #include "Rect.h"
-#include <string>
+#include "String.h"
 
 enum drawing_mode {
     B_OP_COPY = 0,
@@ -14,35 +14,17 @@ enum drawing_mode {
     B_OP_MAX = 5,
     B_OP_ADD = 6,
     B_OP_SUBTRACT = 7,
-    B_OP_BLEND = 8
+    B_OP_BLEND = 8,
+    B_OP_ALPHA = 9
 };
 
-// Mock BField hierarchy for ColumnTypes.cpp
-class BField {
-public:
-    virtual ~BField() = default;
-    virtual const char* FieldType() const { return "BField"; }
-};
+// BField, BStringField, BBitmapField are defined in ColumnListView.h
 
-class BStringField : public BField {
-public:
-    BStringField(const char* str = "") : fString(str) {}
-    const char* FieldType() const override { return "BStringField"; }
-    const char* String() const { return fString.String(); }
-private:
-    class BString {  // minimal BString mock
-    public:
-        BString(const char* s = "") : str(s) {}
-        const char* String() const { return str.c_str(); }
-        std::string str;
-    } fString;
-};
-
-class BBitmapField : public BField {
-public:
-    BBitmapField() = default;
-    const char* FieldType() const override { return "BBitmapField"; }
-};
+// Color constants (for ui_color) - using existing color_which typedef from Types.h
+inline rgb_color ui_color(color_which which) {
+    (void)which;
+    return { 255, 255, 255, 255 };
+}
 
 #endif
 

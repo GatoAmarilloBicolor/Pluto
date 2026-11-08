@@ -8,8 +8,7 @@
 #include "ListView.h"
 #include "BString.h"
 
-// BeOS scripting constants
-const int32 B_APP_IMAGE = 1;
+// BeOS scripting constants are defined in kernel/image.h
 
 struct app_info {
     team_id team;
@@ -53,8 +52,6 @@ public:
     status_t ActivateApp(team_id team) { (void)team; return B_OK; }
 };
 
-BApplication* BApplication::be_app = nullptr;
-
 class BRoster {
 public:
     BRoster() = default;
@@ -63,6 +60,11 @@ public:
     static BRoster* be_roster;
     
     status_t Launch(const char* signature, int32 argc, const char** argv, const BMessage* message = nullptr) {
+        (void)signature; (void)argc; (void)argv; (void)message;
+        return B_ERROR;
+    }
+    
+    status_t Launch(const char* signature, int32 argc, char** argv, const BMessage* message = nullptr) {
         (void)signature; (void)argc; (void)argv; (void)message;
         return B_ERROR;
     }
@@ -82,14 +84,22 @@ public:
         return B_ERROR;
     }
     
+    status_t Launch(const entry_ref* ref) {
+        (void)ref;
+        return B_ERROR;
+    }
+    
     bool IsRunning(const char* signature) const {
         (void)signature;
         return false;
     }
     
-    status_t ActivateApp(team_id team) { (void)team; return B_OK; }
+    bool IsRunning(team_id team) const {
+        (void)team;
+        return false;
+    }
     
-    status_t GetAppInfo(const char* signature, app_info* info) const {
+    status_t GetRunningAppInfo(const char* signature, app_info* info) const {
         (void)signature; (void)info;
         return B_ERROR;
     }
@@ -113,14 +123,22 @@ public:
         (void)list; (void)mimeType;
         return B_ERROR;
     }
-};
 
-BRoster* BRoster::be_roster = nullptr;
+    status_t GetAppInfo(const char* signature, app_info* info) const {
+        (void)signature; (void)info;
+        return B_ERROR;
+    }
+    
+    status_t ActivateApp(team_id team) const {
+        (void)team;
+        return B_OK;
+    }
+};
 
 // Global be_roster pointer (Haiku API)
 extern BRoster* be_roster;
 
-BApplication* be_app = nullptr;
+extern BApplication* be_app;
 
 // BeOS scripting constants
 const uint32 B_SET_PROPERTY = 'BSET';
@@ -129,9 +147,6 @@ const uint32 B_CREATE_PROPERTY = 'BCRT';
 const uint32 B_DELETE_PROPERTY = 'BDLT';
 const uint32 B_EXECUTE_PROPERTY = 'BEXE';
 
-status_t GetAppInfo(app_info* info) {
-    (void)info;
-    return B_OK;
-}
+status_t GetAppInfo(app_info* info);
 
 #endif

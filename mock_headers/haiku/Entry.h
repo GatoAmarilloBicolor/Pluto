@@ -4,6 +4,8 @@
 #include "Types.h"
 #include "NodeMonitor.h"
 
+inline status_t get_ref_for_path(const char* path, entry_ref* ref) { (void)path; (void)ref; return B_ERROR; }
+
 // Forward declarations
 class BDirectory;
 class BPath;

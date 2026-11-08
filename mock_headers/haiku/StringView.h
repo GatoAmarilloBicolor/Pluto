@@ -23,12 +23,7 @@ public:
     virtual const char* Text() const { return ""; }
     virtual void SetAlignment(alignment align) { (void)align; }
     virtual alignment Alignment() const { return B_ALIGN_LEFT; }
-    
-    enum alignment {
-        B_ALIGN_LEFT = 0,
-        B_ALIGN_RIGHT = 1,
-        B_ALIGN_CENTER = 2
-    };
+    virtual void SetToolTip(const char* tip) { (void)tip; }
 };
 
 #endif

@@ -28,13 +28,8 @@ struct BRect {
     BRect& InsetBy(float dx, float dy) { left += dx; right -= dx; top += dy; bottom -= dy; return *this; }
     BRect& OffsetBy(float dx, float dy) { left += dx; right += dx; top += dy; bottom += dy; return *this; }
     BRect& OffsetTo(float x, float y) { float w = Width(); float h = Height(); left = x; top = y; right = left + w; bottom = top + h; return *this; }
-};
-
-struct BSize {
-    float width;
-    float height;
-    BSize() : width(0), height(0) {}
-    BSize(float w, float h) : width(w), height(h) {}
+    bool operator==(const BRect& other) const { return left == other.left && top == other.top && right == other.right && bottom == other.bottom; }
+    bool operator!=(const BRect& other) const { return !(*this == other); }
 };
 
 #endif

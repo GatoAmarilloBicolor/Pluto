@@ -8,6 +8,7 @@
 
 class BBitmapStream : public BPositionIO {
 public:
+    BBitmapStream() = default;
     BBitmapStream(BBitmap* bitmap) { (void)bitmap; }
     virtual ~BBitmapStream() = default;
     

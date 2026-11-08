@@ -20,7 +20,21 @@ struct BFont {
     virtual float StringWidth(const char* string, int32 len = -1) const {
         (void)string; (void)len; return 0;
     }
+    virtual void SetFace(uint16 face) { (void)face; }
+    virtual uint16 Face() const { return 0; }
 };
+
+// Font faces
+const uint16 B_REGULAR_FACE = 0;
+const uint16 B_BOLD_FACE = 1;
+const uint16 B_ITALIC_FACE = 2;
+const uint16 B_OBLIQUE_FACE = 4;
+const uint16 B_UNDERSCORE_FACE = 0x0004;
+const uint16 B_STRIKEOUT_FACE = 0x0008;
+
+#define be_plain_font (new BFont())
+#define be_fixed_font (new BFont())
+#define be_bold_font (new BFont())
 
 // Font flags
 const uint32 B_FONT_FAMILY_AND_STYLE = 1;

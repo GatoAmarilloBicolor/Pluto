@@ -3,9 +3,23 @@
 
 #include "Types.h"
 #include "View.h"
-#include "String.h"
+#include <string>
 
-class BListItem;
+class BListItem {
+public:
+    BListItem() = default;
+    virtual ~BListItem() = default;
+    virtual void DrawItem(BView* owner, BRect frame, bool complete = false) { (void)owner; (void)frame; (void)complete; }
+    virtual void Update(BView* owner, const BFont* font) { (void)owner; (void)font; }
+    virtual bool IsSelected() const { return fSelected; }
+    virtual void SetHeight(float height) { (void)height; }
+    virtual float Height() const { return 20.0f; }
+    virtual void SetEnabled(bool enabled) { (void)enabled; }
+    virtual bool IsEnabled() const { return true; }
+    class BListView* fOwnerView = nullptr;
+    int32 fIndex = -1;
+    bool fSelected = false;
+};
 
 class BListView : public BView {
 public:
@@ -19,8 +33,8 @@ public:
     virtual ~BListView() = default;
     
     virtual void AddItem(BListItem* item, int32 index = -1) { (void)item; (void)index; }
-    virtual void RemoveItem(int32 index) { (void)index; }
-    virtual void RemoveItem(BListItem* item) { (void)item; }
+    virtual BListItem* RemoveItem(int32 index) { (void)index; return nullptr; }
+    virtual BListItem* RemoveItem(BListItem* item) { (void)item; return nullptr; }
     virtual BListItem* ItemAt(int32 index) const { (void)index; return nullptr; }
     virtual int32 CountItems() const { return 0; }
     virtual int32 CurrentSelection(int32 index = -1) const { (void)index; return -1; }
@@ -29,24 +43,10 @@ public:
     virtual void DeselectAll() {}
     virtual void ScrollToSelection() {}
     virtual void InvalidateItem(int32 index) { (void)index; }
-};
-
-class BListItem {
-public:
-    BListItem() = default;
-    virtual ~BListItem() = default;
-    virtual void DrawItem(BView* owner, BRect frame, bool complete = false) { (void)owner; (void)frame; (void)complete; }
-    virtual void Update(BView* owner, const BFont* font) { (void)owner; (void)font; }
-    BListView* fOwnerView = nullptr;
-    int32 fIndex = -1;
-    bool fSelected = false;
-};
-
-class BStringItem : public BListItem {
-public:
-    BStringItem(const char* text, uint32 level = 0, bool expanded = true) { (void)text; (void)level; (void)expanded; }
-    virtual ~BStringItem() = default;
-    virtual void DrawItem(BView* owner, BRect frame, bool complete = false) { (void)owner; (void)frame; (void)complete; }
+    virtual void SetSelectionMessage(BMessage* msg) { (void)msg; }
+    virtual void SetInvocationMessage(BMessage* msg) { (void)msg; }
+    virtual BMessage* SelectionMessage() const { return nullptr; }
+    virtual BMessage* InvocationMessage() const { return nullptr; }
 };
 
 class BOutlineListView : public BListView {
@@ -54,9 +54,16 @@ public:
     BOutlineListView(const char* name) : BListView(name) {}
     virtual ~BOutlineListView() = default;
     virtual void AddItem(BListItem* item, BListItem* superItem, bool expanded = true) { (void)item; (void)superItem; (void)expanded; }
-    virtual void RemoveItem(BListItem* item) { (void)item; }
+    virtual BListItem* RemoveItem(BListItem* item) { (void)item; return nullptr; }
     virtual BListItem* SuperItem(BListItem* item) const { (void)item; return nullptr; }
     virtual void SetExpanded(BListItem* item, bool expanded) { (void)item; (void)expanded; }
+};
+
+class BStringItem : public BListItem {
+public:
+    BStringItem(const char* text, uint32 level = 0, bool expanded = true) { (void)text; (void)level; (void)expanded; }
+    virtual ~BStringItem() = default;
+    virtual void DrawItem(BView* owner, BRect frame, bool complete = false) { (void)owner; (void)frame; (void)complete; }
 };
 
 #endif

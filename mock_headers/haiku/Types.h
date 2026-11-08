@@ -3,7 +3,9 @@
 
 // Basic Haiku types - use existing system types where available
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <string.h>
+#include <unistd.h>
 
 // Only define Haiku-specific types that don't exist on POSIX systems
 #ifndef status_t
@@ -60,6 +62,7 @@ const status_t B_NAME_TOO_LONG = -6;
 const status_t B_WOULD_BLOCK = -7;
 const status_t B_INTERRUPTED = -8;
 const status_t B_TIMED_OUT = -9;
+const status_t B_TIMEOUT = B_TIMED_OUT;
 const status_t B_FILE_EXISTS = -10;
 const status_t B_DEVICE_FULL = -11;
 const status_t B_BAD_TYPE = -12;
@@ -76,6 +79,9 @@ const status_t B_BAD_PORT_ID = -22;
 const status_t B_BAD_THREAD_ID = -23;
 const status_t B_BAD_TEAM_ID = -24;
 const status_t B_BAD_IMAGE_ID = -25;
+
+// Message codes for drag and drop
+const uint32 B_COPY_TARGET = 'BCTR';
 
 // BFS attribute types
 #define B_STRING_TYPE 0
@@ -160,6 +166,35 @@ typedef enum {
 	B_WHICH_3 = 3,
 } color_which;
 
+// Allow implicit conversion from rgb_color to color_which for ui_color()
+inline color_which operator+(color_which lhs, const rgb_color& rhs) { (void)rhs; return lhs; }
+inline color_which operator+(const rgb_color& lhs, color_which rhs) { (void)lhs; return rhs; }
+
+// Color constants for ui_color()
+const color_which B_DOCUMENT_BACKGROUND_COLOR = B_WHICH_1;
+const color_which B_PANEL_BACKGROUND_COLOR = B_WHICH_2;
+const color_which B_CONTROL_BACKGROUND_COLOR = B_WHICH_3;
+const color_which B_LIST_BACKGROUND_COLOR = B_WHICH_0;
+const color_which B_LIST_SELECTED_BACKGROUND_COLOR = B_WHICH_1;
+const color_which B_DOCUMENT_TEXT_COLOR = B_WHICH_2;
+const color_which B_LIST_SELECTED_ITEM_TEXT_COLOR = B_WHICH_3;
+const color_which B_PANEL_TEXT_COLOR = B_WHICH_0;
+const color_which B_KEYBOARD_NAVIGATION_COLOR = B_WHICH_1;
+const color_which B_LINK_TEXT_COLOR = B_WHICH_2;
+const color_which B_LIST_ITEM_TEXT_COLOR = B_WHICH_0;
+const color_which B_CONTROL_TEXT_COLOR = B_WHICH_0;
+const color_which B_CONTROL_BORDER_COLOR = B_WHICH_1;
+const color_which B_CONTROL_HIGHLIGHT_COLOR = B_WHICH_2;
+const color_which B_NAVIGATION_BASE_COLOR = B_WHICH_3;
+const color_which B_NAVIGATION_PULSE_COLOR = B_WHICH_0;
+const color_which B_SHINE_COLOR = B_WHICH_1;
+const color_which B_SHADOW_COLOR = B_WHICH_2;
+const color_which B_MENU_BACKGROUND_COLOR = B_WHICH_3;
+const color_which B_MENU_SELECTED_BACKGROUND_COLOR = B_WHICH_0;
+const color_which B_MENU_ITEM_TEXT_COLOR = B_WHICH_1;
+const color_which B_MENU_SELECTED_ITEM_TEXT_COLOR = B_WHICH_2;
+const color_which MENU_SELECTED_BORDER_COLOR = B_WHICH_3;
+
 typedef uint32_t color_space;
 
 #ifndef uint8
@@ -190,12 +225,20 @@ const color_space B_RGBA32_BIG = 5;
 
 // Window flags
 const uint32 B_NOT_ZOOMABLE = 0x0001;
-const uint32 B_TITLED_WINDOW = 0x0002;
 
 // Node flavors
 const uint32 B_FILE_NODE = 0x0001;
 const uint32 B_DIRECTORY_NODE = 0x0002;
 const uint32 B_SYMLINK_NODE = 0x0004;
+
+// File open modes
+const uint32 B_READ_ONLY = 0x0001;
+const uint32 B_WRITE_ONLY = 0x0002;
+const uint32 B_READ_WRITE = 0x0003;
+const uint32 B_CREATE_FILE = 0x0100;
+const uint32 B_ERASE_FILE = 0x0200;
+const uint32 B_OPEN_AT_END = 0x0400;
+const uint32 B_FAIL_IF_EXISTS = 0x0800;
 
 // Keyboard constants
 const int32 B_ESCAPE = 0x1B;
@@ -216,9 +259,65 @@ const int32 B_RETURN = 0x0D;
 const int32 B_SPACE = 0x20;
 const int32 B_BACKSPACE = 0x08;
 
+// Keyboard modifiers
+const uint32 B_SHIFT_KEY = 0x01;
+const uint32 B_COMMAND_KEY = 0x02;
+const uint32 B_CONTROL_KEY = 0x04;
+const uint32 B_OPTION_KEY = 0x08;
+const uint32 B_CAPS_LOCK = 0x10;
+const uint32 B_SCROLL_LOCK = 0x20;
+const uint32 B_NUM_LOCK = 0x40;
+const uint32 B_MENU_KEY = 0x80;
+
+// Thread priorities
+const int32 B_LOW_PRIORITY = 10;
+const int32 B_NORMAL_PRIORITY = 20;
+const int32 B_HIGH_PRIORITY = 30;
+const int32 B_URGENT_DISPLAY_PRIORITY = 40;
+const int32 B_REAL_TIME_DISPLAY_PRIORITY = 50;
+const int32 B_URGENT_PRIORITY = 60;
+const int32 B_REAL_TIME_PRIORITY = 70;
+
+// Mouse button constants
+const uint32 B_PRIMARY_MOUSE_BUTTON = 0x01;
+const uint32 B_SECONDARY_MOUSE_BUTTON = 0x02;
+const uint32 B_TERTIARY_MOUSE_BUTTON = 0x04;
+
+// Layout spacing constants
+const float B_USE_SMALL_SPACING = -1.0f;
+const float B_USE_WINDOW_SPACING = -2.0f;
+
+// GroupLayout orientation (also available globally for compatibility)
+const int B_HORIZONTAL = 0;
+const int B_VERTICAL = 1;
+
+typedef int orientation;
+
+// Window flags (additional)
+const uint32 B_ASYNCHRONOUS_CONTROLS = 0x00001000;
+
+// String truncation
+enum {
+    B_TRUNCATE_BEGIN = 0,
+    B_TRUNCATE_MIDDLE = 1,
+    B_TRUNCATE_END = 2,
+    B_TRUNCATE_SMART = 3
+};
+
+// UTF-8 ellipsis character
+#define B_UTF8_ELLIPSIS "\xE2\x80\xA6"
+
 // BSize constants
 const float B_SIZE_UNSET = -1.0f;
 const float B_SIZE_UNLIMITED = -2.0f;
+
+struct BSize {
+    float width, height;
+    BSize() : width(B_SIZE_UNSET), height(B_SIZE_UNSET) {}
+    BSize(float w, float h) : width(w), height(h) {}
+};
+
+const rgb_color B_TRANSPARENT_COLOR = {0, 0, 0, 0};
 
 // POSIX environ
 extern char** environ;
@@ -239,11 +338,54 @@ typedef enum {
     B_FANCY_BORDER = 2
 } border_style;
 
+// Translator constants
+#define B_TRANSLATOR_BITMAP 1
+
+// Notification types
+#define B_IMPORTANT_NOTIFICATION 4
+
+// Screen/color constants
+const uint32 B_COLORS_UPDATED = 0x434C5250;  // 'CLRP'
+const color_which B_NO_COLOR = static_cast<color_which>(-1);
+
+// Forward declarations
+class BMessage;
+
+// BArchivable interface
+class BArchivable {
+public:
+    virtual ~BArchivable() = default;
+    virtual status_t Archive(BMessage* archive, bool deep = true) const = 0;
+    static BArchivable* Instantiate(BMessage* archive) { (void)archive; return nullptr; }
+};
+
 // Forward declarations to avoid circular dependencies
 class BEntry;
 class BDirectory;
 class BFile;
 class BPath;
 class BNode;
+
+class BScrollBar;
+class BScrollView;
+
+// Translator formats
+#define B_PNG_FORMAT "image/png"
+#define B_TRANSLATOR_BITMAP 1
+
+// Button
+class BButton;
+
+// Thread functions
+extern "C" thread_id spawn_thread(int32 (*func)(void*), const char* name, int32 priority, void* data);
+extern "C" status_t resume_thread(thread_id id);
+extern "C" status_t wait_for_thread(thread_id id, status_t* return_value);
+extern "C" status_t kill_thread(thread_id id);
+extern "C" thread_id find_thread(const char* name);
+
+// POSIX functions
+extern "C" char* getcwd(char* buf, size_t size);
+#include <sys/stat.h>
+extern "C" int stat(const char* path, struct stat* buf);
 
 #endif

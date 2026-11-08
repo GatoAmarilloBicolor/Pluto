@@ -18,6 +18,8 @@ public:
     virtual int32 Value() const { return 0; }
     virtual void SetEnabled(bool enabled) { (void)enabled; }
     virtual bool IsEnabled() const { return true; }
+    virtual void SetMessage(BMessage* message) { (void)message; }
+    virtual BMessage* Message() const { return nullptr; }
 };
 
 #endif

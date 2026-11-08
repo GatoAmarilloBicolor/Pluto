@@ -19,6 +19,7 @@ public:
     virtual void SetMarked(bool marked) { (void)marked; }
     virtual bool IsMarked() const { return false; }
     virtual BMenu* Menu() const { return nullptr; }
+    virtual void SetShortcut(char shortcut, uint32 modifiers = 0) { (void)shortcut; (void)modifiers; }
 };
 
 #endif

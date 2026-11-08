@@ -2,7 +2,8 @@
 #define MOCK_NODE_MONITOR_H
 
 #include "Types.h"
-#include "Messenger.h"
+// Forward declare BMessenger (defined in Messenger.h)
+class BMessenger;
 
 enum {
     B_NODE_MONITOR = 'nmon',
@@ -25,12 +26,12 @@ struct node_ref {
     node_ref(int32_t d, int64_t n) : device(d), node(n) {}
 };
 
-inline status_t watch_node(const node_ref* node, uint32_t flags, BMessenger target) {
+inline status_t watch_node(const node_ref* node, uint32_t flags, const BMessenger& target) {
     (void)node; (void)flags; (void)target;
     return B_OK;
 }
 
-inline void stop_watching(BMessenger target) {
+inline void stop_watching(const BMessenger& target) {
     (void)target;
 }
 

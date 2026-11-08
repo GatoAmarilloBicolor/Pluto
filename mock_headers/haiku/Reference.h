@@ -24,10 +24,17 @@ public:
         return *this;
     }
 
+    void SetTo(T* obj, bool adopt = false) {
+        if (fObject) fObject->ReleaseReference();
+        fObject = obj;
+        if (obj && !adopt) obj->AcquireReference();
+    }
+
     T* operator->() const { return fObject; }
     T& operator*() const { return *fObject; }
     T* Get() const { return fObject; }
     operator bool() const { return fObject != nullptr; }
+    bool IsSet() const { return fObject != nullptr; }
 
 private:
     T* fObject;

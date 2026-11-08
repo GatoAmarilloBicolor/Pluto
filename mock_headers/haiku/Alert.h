@@ -18,19 +18,26 @@ enum alert_type {
     B_STOP_ALERT = 4
 };
 
+enum button_spacing {
+    B_OFFSET_SPACING = 0,
+    B_EVEN_SPACING = 1
+};
+
 class BAlert : public BWindow {
 public:
+    // Unified constructor: handles both common calling conventions
     BAlert(const char* title, const char* text, const char* button1,
            const char* button2 = nullptr, const char* button3 = nullptr,
            button_width width = B_WIDTH_AS_USUAL,
-           alert_type type = B_INFO_ALERT)
+           int arg7 = B_INFO_ALERT,
+           int arg8 = B_OFFSET_SPACING)
         : BWindow(BRect(0,0,1,1), title, B_TITLED_WINDOW, 0) {
         (void)title; (void)text; (void)button1; (void)button2; (void)button3;
-        (void)width; (void)type;
+        (void)width; (void)arg7; (void)arg8;
     }
     virtual ~BAlert() = default;
     
-    virtual int32 Go() { return 0; }
+    virtual int32 Go(void* = nullptr) { return 0; }
     virtual void SetShortcut(int32 index, int32 key) { (void)index; (void)key; }
 };
 

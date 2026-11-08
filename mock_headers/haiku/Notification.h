@@ -9,16 +9,21 @@
 #define B_WARNING_NOTIFICATION 2
 #define B_ERROR_NOTIFICATION 3
 
+class BMessenger;
+
 class BNotification {
 public:
     BNotification(int32_t type) : fType(type) { (void)type; }
     ~BNotification() = default;
     
-    void Send() {}
+    void Send(BMessenger* messenger = nullptr) { (void)messenger; }
+    void Send(bigtime_t timeout) { (void)timeout; }
     void SetTitle(const BString& title) { (void)title; }
     void SetContent(const BString& content) { (void)content; }
     void SetGroup(const BString& group) { (void)group; }
     void SetIcon(const BBitmap* icon) { (void)icon; }
+    void SetMessageID(const BString& id) { (void)id; }
+    void SetOnClickApp(const BString& signature) { (void)signature; }
 
 private:
     int32_t fType;

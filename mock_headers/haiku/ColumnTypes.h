@@ -4,14 +4,16 @@
 #include "Types.h"
 #include "String.h"
 #include "View.h"
-#include "ListView.h"
 #include "InterfaceDefs.h"
 #include "DateTimeFormat.h"
 #include "NumberFormat.h"
 
 // Forward declarations
 class BBitmap;
-class BFont;
+struct BFont;
+class BField;
+class BColumn;
+class BRow;
 
 class BTitledColumn : public BColumn {
 public:

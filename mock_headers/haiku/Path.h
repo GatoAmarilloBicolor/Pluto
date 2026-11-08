@@ -9,6 +9,7 @@ class BPath {
 public:
     BPath() = default;
     BPath(const char* path) : fPath(normalize(path ? path : "")) {}
+    BPath(const char* path, const char* leaf) { (void)path; (void)leaf; }
     BPath(const entry_ref* ref) { (void)ref; }
     BPath(const BEntry* entry) { (void)entry; }
     BPath(const BDirectory* dir, const char* name) { (void)dir; (void)name; }

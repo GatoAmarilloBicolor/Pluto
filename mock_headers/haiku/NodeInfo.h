@@ -10,6 +10,7 @@ class BNodeInfo {
 public:
     BNodeInfo() = default;
     BNodeInfo(const BNode* node) { (void)node; }
+    BNodeInfo(const class BFile* file) { (void)file; }
     ~BNodeInfo() = default;
     
     status_t GetType(char* type) const { (void)type; return B_ERROR; }

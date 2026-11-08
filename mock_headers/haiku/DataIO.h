@@ -21,4 +21,21 @@ public:
     virtual ~BPositionIO() = default;
 };
 
+class BMallocIO : public BPositionIO {
+public:
+    BMallocIO() = default;
+    virtual ~BMallocIO() = default;
+    void* Buffer() { return nullptr; }
+    const void* Buffer() const { return nullptr; }
+    off_t BufferLength() const { return 0; }
+};
+
+class BMemoryIO : public BPositionIO {
+public:
+    BMemoryIO() = default;
+    BMemoryIO(const void* buffer, size_t size) { (void)buffer; (void)size; }
+    virtual ~BMemoryIO() = default;
+    void SetBuffer(const void* buffer, size_t size) { (void)buffer; (void)size; }
+};
+
 #endif

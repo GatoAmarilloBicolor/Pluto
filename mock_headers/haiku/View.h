@@ -5,6 +5,7 @@
 #include "Handler.h"
 #include "Rect.h"
 #include "Message.h"
+#include "InterfaceDefs.h"
 
 struct BFont;
 
@@ -14,13 +15,18 @@ public:
     virtual ~BShape() = default;
 };
 
+class BBitmap;  // forward declaration
 class BWindow;  // forward declaration
 
-class BView : public BHandler {
+class BView : public virtual BHandler {
 public:
     BView(BRect frame, const char* name, uint32 resizingMode, uint32 flags)
         : BHandler(name) {
         (void)frame; (void)resizingMode; (void)flags;
+    }
+    BView(const char* name, uint32 flags)
+        : BHandler(name) {
+        (void)flags;
     }
     virtual ~BView() = default;
     
@@ -38,10 +44,14 @@ public:
     virtual void AllDetached() {}
     virtual void MakeFocus(bool focused = true) { (void)focused; }
     virtual bool IsFocus() const { return false; }
+    virtual status_t Archive(BMessage* archive, bool deep = true) const { (void)archive; (void)deep; return B_OK; }
     virtual void ScrollTo(BPoint where) { (void)where; }
     virtual void ScrollBy(float dx, float dy) { (void)dx; (void)dy; }
     virtual void Invalidate(BRect rect) { (void)rect; }
     virtual void Invalidate() {}
+    virtual void Hide() {}
+    virtual void Show() {}
+    virtual bool IsHidden() const { return false; }
     virtual void AddChild(BView* view) { (void)view; }
     virtual void RemoveChild(BView* view) { (void)view; }
     virtual BView* FindView(const char* name) { (void)name; return nullptr; }
@@ -72,25 +82,37 @@ public:
     virtual void SetTarget(BHandler* target) { (void)target; }
     virtual void SetTarget(BView* view, BHandler* target) { (void)view; (void)target; }
     virtual BHandler* Target() const { return nullptr; }
+    virtual void SetLabel(const char* label) { (void)label; }
+    virtual const char* Label() const { return ""; }
     virtual BSize MinSize() { return BSize(0, 0); }
     virtual BSize MaxSize() { return BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED); }
     virtual BSize PreferredSize() { return BSize(0, 0); }
+    virtual void SetExplicitMinSize(BSize size) { (void)size; }
+    virtual void SetExplicitMaxSize(BSize size) { (void)size; }
+    virtual void SetExplicitPreferredSize(BSize size) { (void)size; }
+    virtual void InvalidateLayout() {}
+    virtual void SetViewUIColor(color_which which) { (void)which; }
+    virtual void SetLowUIColor(color_which which) { (void)which; }
+    virtual void FillRect(BRect rect) { (void)rect; }
+    virtual void StrokeRect(BRect rect) { (void)rect; }
+    virtual BPoint ConvertToScreen(BPoint point) const { return point; }
+    virtual void ConvertToScreen(BPoint* point) { (void)point; }
+    virtual void ConvertToScreen(BPoint& point) { (void)point; }
+    virtual void GetMouse(BPoint* where, uint32* buttons, bool async = false) const { if (where) *where = BPoint(); if (buttons) *buttons = 0; (void)async; }
+    virtual void DrawBitmap(BBitmap* bitmap, BPoint where, uint32 flags = B_OP_COPY) { (void)bitmap; (void)where; (void)flags; }
+    virtual void DrawBitmap(BBitmap* bitmap, BRect dest, BRect src, uint32 flags = B_OP_COPY) { (void)bitmap; (void)dest; (void)src; (void)flags; }
+    virtual BScrollBar* ScrollBar(int32 which) const { (void)which; return nullptr; }
+    virtual void DragMessage(BMessage* message, BBitmap* dragBitmap, drawing_mode mode, BPoint offset) { (void)message; (void)dragBitmap; (void)mode; (void)offset; }
     
-    enum drawing_mode {
-        B_OP_COPY = 0,
-        B_OP_OVER = 1,
-        B_OP_ERASE = 2,
-        B_OP_SELECT = 3,
-        B_OP_MIN = 4,
-        B_OP_MAX = 5,
-        B_OP_ADD = 6,
-        B_OP_SUBTRACT = 7,
-        B_OP_BLEND = 8
-    };
+    virtual void SetDrawingMode(drawing_mode mode) { (void)mode; }
+    virtual drawing_mode DrawingMode() const { return B_OP_COPY; }
+    virtual void DrawString(const char* string, BPoint where = BPoint()) { (void)string; (void)where; }
+    virtual void Sync() {}
     
     enum {
         B_FOLLOW_LEFT = 1,
         B_FOLLOW_RIGHT = 2,
+        B_FOLLOW_LEFT_RIGHT = B_FOLLOW_LEFT | B_FOLLOW_RIGHT,
         B_FOLLOW_TOP = 4,
         B_FOLLOW_BOTTOM = 8,
         B_FOLLOW_H_CENTER = 16,
