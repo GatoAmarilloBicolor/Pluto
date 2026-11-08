@@ -983,7 +983,7 @@ int32 ConversationView::_WorkerEntry(void* data) {
 		// Wait up to 5 minutes for user response.
 		// acquire_sem_etc with B_TIMEOUT returns B_TIMED_OUT if no signal.
 		constexpr bigtime_t kApprovalTimeout = 5 * 60 * 1000000LL;  // 5 min in microseconds
-		status_t err = acquire_sem_etc(sem, B_TIMEOUT, kApprovalTimeout);
+		status_t err = acquire_sem_etc(sem, 1, B_TIMEOUT, kApprovalTimeout);
 		if (err == B_TIMED_OUT || err != B_OK) {
 			// Timeout or error — deny.
 			return Permission::Deny;

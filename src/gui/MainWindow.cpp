@@ -141,7 +141,7 @@ bool is_dark_theme() {
 	return (bg.red + bg.green + bg.blue) < 384;
 }
 
-rgb_color brighten(rgb_color c, int by) {
+[[maybe_unused]] rgb_color brighten(rgb_color c, int by) {
 	auto clamp = [](int v) -> uint8 {
 		return static_cast<uint8>(std::max(0, std::min(255, v)));
 	};
@@ -159,7 +159,7 @@ std::string trim(const std::string& s) {
 }
 
 // Copy a file (contents, permissions and attributes) using native storage APIs.
-status_t copy_file_to(const char* from, BDirectory& dir, const char* name) {
+[[maybe_unused]] status_t copy_file_to(const char* from, BDirectory& dir, const char* name) {
 	BFile src(from, B_READ_ONLY);
 	status_t err = src.InitCheck();
 	if (err != B_OK)
@@ -3789,7 +3789,6 @@ void MainWindow::_ApplyViewColors() {
 	if (!fTabView || fTabView->CountTabs() == 0) return;
 
 	// Use native Haiku palette.
-	rgb_color bg = gPalette.window_bg;
 	rgb_color fg = gPalette.text_fg;
 	rgb_color code_bg = gPalette.panel_bg;
 	rgb_color link_color = gPalette.link_color;

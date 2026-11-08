@@ -210,8 +210,8 @@ std::string compress_message(
 
 std::vector<int> select_messages_to_compact(
     const std::vector<std::string>& messages,
-    const std::string& current_question,
-    int max_tokens,
+    [[maybe_unused]] const std::string& current_question,
+    [[maybe_unused]] int max_tokens,
     double compaction_threshold) {
     std::vector<int> to_compact;
 

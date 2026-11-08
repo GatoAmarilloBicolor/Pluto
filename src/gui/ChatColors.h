@@ -5,6 +5,7 @@
 
 #include <InterfaceDefs.h>
 #include <Message.h>
+#include <StringView.h>
 #include <SupportDefs.h>
 #include <TextView.h>
 #include <Window.h>
@@ -81,6 +82,11 @@ struct NativePalette {
 
 // Global palette instance — initialized in MainWindow::_InitPalette().
 extern NativePalette gPalette;
+
+// Convenience color constants for conversation rendering.
+// These reference the global palette — use after InitNativePalette() is called.
+inline const rgb_color& kColAsstBody = gPalette.text_fg;
+inline const rgb_color& kColUserBody = gPalette.text_dim;
 
 // Initialize palette from Haiku system colors (ui_color()).
 void InitNativePalette();
