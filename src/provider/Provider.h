@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <atomic>
+#include <chrono>
 #include <curl/curl.h>
 
 #include "../json.h"
