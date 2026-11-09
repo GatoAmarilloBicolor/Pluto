@@ -64,10 +64,14 @@ public:
     virtual void MoveBy(float dx, float dy) { (void)dx; (void)dy; }
     virtual void ResizeBy(float dw, float dh) { (void)dw; (void)dh; }
     virtual void SetViewColor(rgb_color color) { (void)color; }
+    virtual void SetViewColor(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha = 255) { (void)red; (void)green; (void)blue; (void)alpha; }
     virtual rgb_color ViewColor() const { return {0,0,0,255}; }
     virtual void SetLowColor(rgb_color color) { (void)color; }
+    virtual void SetLowColor(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha = 255) { (void)red; (void)green; (void)blue; (void)alpha; }
     virtual rgb_color LowColor() const { return {0,0,0,255}; }
     virtual void SetHighColor(rgb_color color) { (void)color; }
+    virtual void SetHighColor(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha = 255) { (void)red; (void)green; (void)blue; (void)alpha; }
+    virtual void SetHighUIColor(color_which which) { (void)which; }
     virtual rgb_color HighColor() const { return {0,0,0,255}; }
     virtual void SetFont(const BFont* font) { (void)font; }
     virtual void GetFont(BFont* font) const { (void)font; }
@@ -91,24 +95,37 @@ public:
     virtual void SetExplicitMaxSize(BSize size) { (void)size; }
     virtual void SetExplicitPreferredSize(BSize size) { (void)size; }
     virtual void InvalidateLayout() {}
+    virtual void InvalidateLayout(bool layoutRoot) { (void)layoutRoot; }
     virtual void SetViewUIColor(color_which which) { (void)which; }
     virtual void SetLowUIColor(color_which which) { (void)which; }
     virtual void FillRect(BRect rect) { (void)rect; }
     virtual void StrokeRect(BRect rect) { (void)rect; }
-    virtual BPoint ConvertToScreen(BPoint point) const { return point; }
-    virtual void ConvertToScreen(BPoint* point) { (void)point; }
-    virtual void ConvertToScreen(BPoint& point) { (void)point; }
-    virtual void GetMouse(BPoint* where, uint32* buttons, bool async = false) const { if (where) *where = BPoint(); if (buttons) *buttons = 0; (void)async; }
-    virtual void DrawBitmap(BBitmap* bitmap, BPoint where, uint32 flags = B_OP_COPY) { (void)bitmap; (void)where; (void)flags; }
-    virtual void DrawBitmap(BBitmap* bitmap, BRect dest, BRect src, uint32 flags = B_OP_COPY) { (void)bitmap; (void)dest; (void)src; (void)flags; }
-    virtual BScrollBar* ScrollBar(int32 which) const { (void)which; return nullptr; }
-    virtual void DragMessage(BMessage* message, BBitmap* dragBitmap, drawing_mode mode, BPoint offset) { (void)message; (void)dragBitmap; (void)mode; (void)offset; }
-    
+    virtual void TruncateString(BString* string, uint32 mode, float maxWidth) { (void)string; (void)mode; (void)maxWidth; }
+    virtual void MovePenTo(BPoint point) { (void)point; }
+    virtual void MovePenTo(float x, float y) { (void)x; (void)y; }
+    virtual void MovePenBy(float dx, float dy) { (void)dx; (void)dy; }
+    virtual void DrawString(const char* string) { (void)string; }
+    virtual void DrawString(const char* string, BPoint where) { (void)string; (void)where; }
+    virtual void SetPenSize(float size) { (void)size; }
+    virtual float PenSize() const { return 1.0f; }
+    virtual void StrokeLine(BPoint start, BPoint end) { (void)start; (void)end; }
+    virtual void StrokeBezier(BPoint p1, BPoint p2, BPoint p3, BPoint p4) { (void)p1; (void)p2; (void)p3; (void)p4; }
+    virtual void FillEllipse(BPoint center, float rx, float ry) { (void)center; (void)rx; (void)ry; }
+    virtual void StrokeEllipse(BPoint center, float rx, float ry) { (void)center; (void)rx; (void)ry; }
+    virtual void FillTriangle(BPoint p1, BPoint p2, BPoint p3) { (void)p1; (void)p2; (void)p3; }
+    virtual void FillRoundRect(BRect rect, float rx, float ry) { (void)rect; (void)rx; (void)ry; }
+    virtual void StrokeRoundRect(BRect rect, float rx, float ry) { (void)rect; (void)rx; (void)ry; }
+    virtual float StringWidth(const char* string) const { (void)string; return 0; }
+    virtual void GetMouse(BPoint* where, uint32* buttons = nullptr, bool includeModifiers = false) const { (void)where; (void)buttons; (void)includeModifiers; }
     virtual void SetDrawingMode(drawing_mode mode) { (void)mode; }
+    virtual void SetBlendingMode(int alphaMode, int overlayMode) { (void)alphaMode; (void)overlayMode; }
     virtual drawing_mode DrawingMode() const { return B_OP_COPY; }
-    virtual void DrawString(const char* string, BPoint where = BPoint()) { (void)string; (void)where; }
+    virtual void DrawBitmap(const BBitmap* bitmap, BPoint where) { (void)bitmap; (void)where; }
+    virtual void DrawBitmap(const BBitmap* bitmap, BRect srcRect, BRect dstRect) { (void)bitmap; (void)srcRect; (void)dstRect; }
+    virtual void ConvertToScreen(BPoint* point) const { (void)point; }
+    virtual BPoint ConvertToScreen(BPoint point) const { return point; }
     virtual void Sync() {}
-    
+
     enum {
         B_FOLLOW_LEFT = 1,
         B_FOLLOW_RIGHT = 2,
