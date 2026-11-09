@@ -58,7 +58,7 @@ void ComputeIdf() {
         }
     }
     for (const auto& [term, df] : g_doc_freq) {
-        g_idf[term] = std::log(static_cast<double>(N) / df);
+        g_idf[term] = log(static_cast<double>(N) / df);
     }
     g_idf_dirty = false;
 }
