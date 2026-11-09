@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 #include <algorithm>
 #include <cstdio>
+#include <cmath>
 #include <fstream>
 #include <mutex>
 #include <string>
