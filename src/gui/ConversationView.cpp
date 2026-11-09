@@ -1485,7 +1485,7 @@ public:
 			thumb->RemoveChild(&canvas);
 			thumb->Unlock();
 		}
-		DragMessage(&drag, thumb, B_OP_ALPHA, BPoint(thumbW / 2, thumbH / 2));
+		this->DragMessage(&drag, thumb, B_OP_ALPHA, BPoint(thumbW / 2, thumbH / 2));
 	}
 
 	void MessageReceived(BMessage* msg) override {
