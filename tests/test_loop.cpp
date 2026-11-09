@@ -15,6 +15,14 @@ using namespace pluto;
 class MockProvider : public Provider {
 public:
     std::string name() const override { return "mock"; }
+    ProviderType type() const override { return ProviderType::ANTHROPIC; }
+    ProviderCapabilities capabilities() const override {
+        return {.streaming = true, .tools = true, .vision = false, .reasoning = false, .system_prompt = true, .cache_control = false, .max_context = 100000};
+    }
+    std::vector<ModelInfo> list_models() const override {
+        return {{"mock-model", "Mock Model", "mock", 4096, 100000, true, true, false, false, 0.0, 0.0}};
+    }
+    bool supports_model(const std::string& model) const override { return true; }
     void stream(const CompletionRequest& req, StreamCallback cb) override {
         // Simulate a simple text response
         StreamEvent ev;
@@ -28,6 +36,12 @@ public:
         ev.output_tokens = 5;
         cb(ev);
     }
+    std::string complete_sync(const CompletionRequest& req) override { return "Test response"; }
+    bool validate_config(std::string& error_out) const override { return true; }
+    std::string base_url() const override { return "http://mock"; }
+    void set_base_url(const std::string& url) override { (void)url; }
+    int estimate_tokens(const std::string& text) const override { return text.size() / 4; }
+    double estimate_cost(const std::string& model, int input_tokens, int output_tokens) const override { return 0.0; }
 };
 
 // Mock tool for testing

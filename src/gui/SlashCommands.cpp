@@ -601,20 +601,14 @@ std::thread([messenger, input_arg]() {
 					else
 						self_exe = "pluto";
 				}
-				std::string cmd = "'" + self_exe + "' wiki ingest '"
-					+ input_arg + "' 2>&1";
-				FILE* pipe = popen(cmd.c_str(), "r");
+				std::string cmd = self_exe + " wiki ingest " + input_arg;
+				auto argv = split_command(cmd);
 				std::string output;
-				if (pipe) {
-					char buf[512];
-					while (fgets(buf, sizeof(buf), pipe))
-						output += buf;
-					pclose(pipe);
+				if (execvp_capture(argv, output) == 0) {
+					BMessage* msg = new BMessage('wiki');
+					msg->AddString("result", output.c_str());
+					messenger.SendMessage(msg);
 				}
-				// Post result back to the window thread.
-				BMessage* msg = new BMessage('wiki');
-				msg->AddString("result", output.c_str());
-				messenger.SendMessage(msg);
 			}).detach();
 		}
 		return true;

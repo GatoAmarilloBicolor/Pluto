@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
+#include <set>
 
 namespace pluto {
 namespace mcp {
@@ -50,11 +51,17 @@ int BuiltinMcpManager::launch_server(const BuiltinMcpServer& spec,
 	return count;
 }
 
-int BuiltinMcpManager::init(ToolRegistry& registry) {
+int BuiltinMcpManager::init(ToolRegistry& registry,
+                             const std::vector<std::string>& enabled_server_names) {
 	int total = 0;
 	auto servers = list_builtin_mcp_servers();
+	
+	// Convert enabled_server_names to a set for fast lookup
+	std::set<std::string> enabled_set(enabled_server_names.begin(), enabled_server_names.end());
+	
 	for (auto& s : servers) {
-		if (s.auto_start) {
+		// Only launch if explicitly enabled in config
+		if (enabled_set.count(s.name) > 0) {
 			total += launch_server(s, registry);
 		}
 	}

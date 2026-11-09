@@ -6,78 +6,28 @@ namespace pluto {
 
 enum class AuthType { API_KEY, OAUTH };
 
-// Common HTTP streaming client for provider implementations.
-// Handles: curl setup, retry logic, cancellation, SSE parsing.
-class HttpStreamClient {
-public:
-	explicit HttpStreamClient(std::string user_agent)
-		: fUserAgent(std::move(user_agent)) {}
-
-	struct RequestOptions {
-		std::string url;
-		std::string body;
-		std::vector<std::string> headers;
-		std::atomic<bool>* cancel = nullptr;
-	};
-
-	// Perform a streaming POST request with automatic retries.
-	// Calls cb for each parsed SSE event. Returns false on unrecoverable error.
-	virtual bool stream_post(const RequestOptions& opts, StreamCallback cb) = 0;
-
-protected:
-	// Stream state for SSE parsing
-	struct StreamState {
-		std::string buffer;
-		std::string event_data;
-		StreamCallback cb;
-		bool done = false;
-		bool cb_error = false;
-
-		enum { NONE, TEXT_BLOCK, TOOL_USE_BLOCK } block_type = NONE;
-		std::string tool_id;
-		std::string tool_name;
-		std::string tool_input;
-		int tool_index = -1;  // sequential index for robust matching
-
-		int input_tokens = 0;
-		int output_tokens = 0;
-		int cache_read = 0;
-		int cache_creation = 0;
-	};
-
-	// Build headers list including auth.
-	std::vector<std::string> build_headers(const std::string& token,
-	                                       const std::string& auth_type,
-	                                       const std::vector<std::string>& extra = {}) const;
-
-	// Default retry policy: exponential backoff with cap.
-	// Override in derived classes for provider-specific behavior.
-	virtual int max_attempts() const { return 3; }
-	virtual long initial_backoff_secs() const { return 1; }
-	virtual long max_backoff_secs() const { return 60; }
-
-	// Parse SSE stream. Call cb for each event. Return true if stream ended.
-	virtual bool parse_sse_stream(const std::string& data, StreamState& st,
-	                              StreamCallback cb) = 0;
-
-	const std::string& user_agent() const { return fUserAgent; }
-
-private:
-	std::string fUserAgent;
-};
-
 class AnthropicProvider : public Provider {
 public:
-	AnthropicProvider(std::string token,
-	                  AuthType auth_type = AuthType::API_KEY,
-	                  std::string base_url = "https://api.anthropic.com");
-	void stream(const CompletionRequest& req, StreamCallback cb) override;
-	std::string name() const override { return "anthropic"; }
+    AnthropicProvider(std::string token,
+                      AuthType auth_type = AuthType::API_KEY,
+                      std::string base_url = "https://api.anthropic.com");
+    void stream(const CompletionRequest& req, StreamCallback cb) override;
+    std::string complete_sync(const CompletionRequest& req) override;
+    bool validate_config(std::string& error_out) const override;
+    std::string base_url() const override { return fBaseUrl; }
+    void set_base_url(const std::string& url) override { fBaseUrl = url; }
+    ProviderCapabilities capabilities() const override;
+    std::vector<ModelInfo> list_models() const override;
+    bool supports_model(const std::string& model) const override;
+    int estimate_tokens(const std::string& text) const override;
+    double estimate_cost(const std::string& model, int input_tokens, int output_tokens) const override;
+    ProviderType type() const override { return ProviderType::ANTHROPIC; }
+    std::string name() const override { return "Anthropic"; }
 
 private:
-	std::string fToken;
-	AuthType    fAuthType;
-	std::string fBaseUrl;
+    std::string fToken;
+    AuthType    fAuthType;
+    std::string fBaseUrl;
 };
 
 }  // namespace pluto

@@ -255,6 +255,11 @@ private:
 	Paragraph         fCurrentPara;              // accumulates spans until \n
 	BScrollView*      fOutputScroll = nullptr;
 	BMessageRunner*   fCursorRunner = nullptr;
+	rgb_color         fControlTextColor{};
+	rgb_color         fDocTextColor{};
+	rgb_color         fPanelBgColor{};
+	rgb_color         fErrorColor{};
+	rgb_color         fWarningColor{};
 
 	// Conversation
 	std::vector<Message>   fMessages;

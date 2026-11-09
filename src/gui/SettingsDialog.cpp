@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include "../curl_security.h"
 #include "../json.h"
 #include "../oauth.h"
 #include "../util.h"
@@ -251,7 +252,7 @@ SettingsDialog::SettingsDialog(BMessenger target, const Config& current)
 	fAdvancedToggle = new BButton("advanced", "Advanced \xe2\x96\xb6",
 		new BMessage(kMsgToggleAdvanced));
 	fAdvancedToggle->SetExplicitAlignment(
-		BAlignment(B_ALIGN_LEFT, B_ALIGN_VERTICAL_CENTER));
+		BAlignment(BAlignment::B_ALIGN_LEFT, BAlignment::B_ALIGN_MIDDLE));
 
 	auto* sysLabel = new BStringView("sysLabel",
 		"System prompt (prepended to memory and skills):");
@@ -816,7 +817,7 @@ void SettingsDialog::MessageReceived(BMessage* msg) {
 				fAdvancedBox->Hide();
 				fAdvancedToggle->SetLabel("Advanced \xe2\x96\xb6");
 			}
-			InvalidateLayout();
+			// InvalidateLayout();
 			break;
 		}
 
@@ -927,14 +928,9 @@ int32 SettingsDialog::_FetchThread(void* data) {
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, "pluto/0.3.0 (Haiku)");
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
-	// Enable SSL verification for HTTPS URLs
-	if (url.rfind("https://", 0) == 0) {
-		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
-		curl_easy_setopt(curl, CURLOPT_CAINFO,
-			"/system/data/ssl/CARootCertificates.pem");
-	}
+
+	// Apply centralized TLS security with certificate pinning
+	ApplyCurlSecurityWithPinning(curl, url);
 
 	CURLcode rc = curl_easy_perform(curl);
 	long http_code = 0;

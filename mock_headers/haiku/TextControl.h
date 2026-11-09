@@ -17,12 +17,21 @@ public:
         : BControl(frame, name, label, message, resizingMode, flags) {
         (void)initialText;
     }
+    // 3-argument constructor (label, initialText, message)
+    BTextControl(const char* label, const char* initialText, BMessage* message)
+        : BControl(BRect(), "", label, message, 0, 0) {
+        (void)initialText;
+    }
     virtual ~BTextControl() = default;
     
     virtual void SetText(const char* text) { (void)text; }
     virtual const char* Text() const { return ""; }
     virtual BTextView* TextView() const { return nullptr; }
     virtual void SetModificationMessage(BMessage* msg) { (void)msg; }
+
+    // Layout items for GroupLayoutBuilder
+    class BLayoutItem* CreateTextViewLayoutItem() { return nullptr; }
+    class BLayoutItem* CreateLabelLayoutItem() { return nullptr; }
 };
 
 #endif

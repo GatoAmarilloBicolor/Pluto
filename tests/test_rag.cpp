@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <string>
+#include <unistd.h>
 
 using pluto::json::Value;
 using pluto::json::Array;

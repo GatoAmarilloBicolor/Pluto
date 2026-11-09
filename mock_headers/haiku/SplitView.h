@@ -6,20 +6,8 @@
 
 class BSplitView : public BView {
 public:
-    enum orientation {
-        B_HORIZONTAL = 0,
-        B_VERTICAL = 1
-    };
-    
-    BSplitView(orientation orient = B_HORIZONTAL)
-        : BView(BRect(), "SplitView", B_FOLLOW_ALL_SIDES, B_WILL_DRAW) {
-        (void)orient;
-    }
-    BSplitView(int orient, float spacing)
-        : BView(BRect(), "SplitView", B_FOLLOW_ALL_SIDES, B_WILL_DRAW) {
-        (void)orient; (void)spacing;
-    }
-    BSplitView(orientation orient, float spacing)
+    // Accept both int and enum for orientation
+    BSplitView(int orient = B_HORIZONTAL, float spacing = B_USE_DEFAULT_SPACING)
         : BView(BRect(), "SplitView", B_FOLLOW_ALL_SIDES, B_WILL_DRAW) {
         (void)orient; (void)spacing;
     }

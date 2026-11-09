@@ -14,15 +14,15 @@ struct CurlSecurityConfig {
     // Format: "sha256/<base64>"
     // Certificate pins for known providers (SHA256 base64)
     // Obtain with: openssl s_client -servername HOST -connect HOST:443 < /dev/null | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64
+    // NOTE: Pins rotate with certificate renewal (~90 days). Update via fetch_pins.sh script.
     static std::optional<std::string> GetPinForHost(const std::string& host) {
-        if (host == "api.anthropic.com") return "sha256/REPLACE_WITH_ACTUAL_PIN";
-        if (host == "api.openai.com") return "sha256/REPLACE_WITH_ACTUAL_PIN";
-        if (host == "generativelanguage.googleapis.com") return "sha256/REPLACE_WITH_ACTUAL_PIN";
-        if (host == "api.x.ai") return "sha256/REPLACE_WITH_ACTUAL_PIN";
-        if (host == "openrouter.ai") return "sha256/REPLACE_WITH_ACTUAL_PIN";
-        if (host == "api.brave.com") return "sha256/REPLACE_WITH_ACTUAL_PIN";
-        if (host == "api.tavily.com") return "sha256/REPLACE_WITH_ACTUAL_PIN";
-        if (host == "api.x.ai") return "sha256/REPLACE_WITH_ACTUAL_PIN";
+        if (host == "api.anthropic.com") return "sha256/n+OFHb16YVI8KEux43Lk4jjFsK76xLolavlcACQEXq4=";
+        if (host == "api.openai.com") return "sha256/zgJl30S+m6z88y1sEqdP+1tyIuSuyEXkT1J6dAdEZXw=";
+        if (host == "generativelanguage.googleapis.com") return "sha256/udzO2pA9ijQ04FhrbsPAtyxOJF/gGKyaFnGZHBIERu8=";
+        if (host == "api.x.ai") return "sha256/5qFXq18qBWOnQeki85TW6rVzfkFFBH6Zgqzw4PJ6F/Y=";
+        if (host == "openrouter.ai") return "sha256/6qT9c3z2E3o6Dc6c+SWbcT83FBUY8jO0Eg7S7BA309A=";
+        if (host == "api.brave.com") return "sha256/OpiUzqarJTOGR4tXR0aXXIbYiyXi1+aSHPq/o5Ol6dM=";
+        if (host == "api.tavily.com") return "sha256/0lfaR8dbvRshBzvIOonl+CP49hbiDOP2I8wULXoGxus=";
         return std::nullopt;
     }
 };
@@ -87,6 +87,37 @@ inline void SecureZero(void* ptr, size_t len) {
     if (!ptr || len == 0) return;
     volatile unsigned char* p = static_cast<volatile unsigned char*>(ptr);
     while (len--) *p++ = 0;
+}
+
+// SSRF protection: check if an IP address is private/internal
+inline bool IsPrivateIP(const std::string& ip) {
+    if (ip == "127.0.0.1" || ip == "::1" || ip == "0.0.0.0") return true;
+    if (ip.rfind("10.", 0) == 0) return true;                    // 10.0.0.0/8
+    if (ip.rfind("192.168.", 0) == 0) return true;              // 192.168.0.0/16
+    if (ip.rfind("169.254.", 0) == 0) return true;              // 169.254.0.0/16 (link-local)
+    if (ip.rfind("172.16.", 0) == 0) return true;
+    if (ip.rfind("172.17.", 0) == 0) return true;
+    if (ip.rfind("172.18.", 0) == 0) return true;
+    if (ip.rfind("172.19.", 0) == 0) return true;
+    if (ip.rfind("172.2", 0) == 0) return true;                 // 172.20-23.x.x
+    if (ip.rfind("172.3", 0) == 0) return true;                 // 172.30-31.x.x
+    if (ip.rfind("fc00:", 0) == 0 || ip.rfind("fd00:", 0) == 0) return true; // ULA
+    return false;
+}
+
+// SSRF protection: check if a host is blocked (localhost or private IP)
+inline bool IsBlockedHost(const std::string& host) {
+    if (host == "localhost" || host == "localhost.localdomain") return true;
+    // Check if host is an IP address
+    if (!host.empty() && (std::isdigit(host[0]) || host[0] == '[')) {
+        std::string ip = host;
+        if (ip[0] == '[') { // IPv6 with brackets
+            size_t end = ip.find(']');
+            if (end != std::string::npos) ip = ip.substr(1, end - 1);
+        }
+        return IsPrivateIP(ip);
+    }
+    return false;
 }
 
 // Secure string that zeroizes on destruction

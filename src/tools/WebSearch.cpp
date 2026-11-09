@@ -4,6 +4,7 @@
 #include "WebSearch.h"
 #include "Tool.h"
 #include "../json.h"
+#include "../curl_security.h"
 
 #include <curl/curl.h>
 
@@ -36,11 +37,26 @@ std::string http_get(const std::string& url,
 	curl_easy_setopt(c, CURLOPT_WRITEDATA, &resp);
 	curl_easy_setopt(c, CURLOPT_TIMEOUT, 15L);
 	curl_easy_setopt(c, CURLOPT_USERAGENT, "pluto/0.5.0 (Haiku)");
-	curl_easy_setopt(c, CURLOPT_CAINFO,
-		"/system/data/ssl/CARootCertificates.pem");
-	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
-	curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
-		curl_easy_setopt(c, CURLOPT_SSL_VERIFYSTATUS, 1L);
+
+	// Apply centralized TLS security with certificate pinning
+	ApplyCurlSecurityWithPinning(c, url);
+
+	// SSRF protection: block requests to private/internal addresses
+	std::string host;
+	{
+		size_t proto = url.find("://");
+		if (proto != std::string::npos) {
+			size_t start = proto + 3;
+			size_t end = url.find_first_of(":/?#", start);
+			host = url.substr(start, end == std::string::npos ? end : end - start);
+		}
+	}
+	if (!host.empty() && pluto::IsBlockedHost(host)) {
+		curl_easy_cleanup(c);
+		curl_slist_free_all(hdrs);
+		return {};
+	}
+
 	CURLcode rc = curl_easy_perform(c);
 	curl_slist_free_all(hdrs);
 	curl_easy_cleanup(c);
@@ -64,11 +80,26 @@ std::string http_post(const std::string& url, const std::string& body,
 	curl_easy_setopt(c, CURLOPT_WRITEDATA, &resp);
 	curl_easy_setopt(c, CURLOPT_TIMEOUT, 15L);
 	curl_easy_setopt(c, CURLOPT_USERAGENT, "pluto/0.5.0 (Haiku)");
-	curl_easy_setopt(c, CURLOPT_CAINFO,
-		"/system/data/ssl/CARootCertificates.pem");
-	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
-	curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
-		curl_easy_setopt(c, CURLOPT_SSL_VERIFYSTATUS, 1L);
+
+	// Apply centralized TLS security with certificate pinning
+	ApplyCurlSecurityWithPinning(c, url);
+
+	// SSRF protection: block requests to private/internal addresses
+	std::string host;
+	{
+		size_t proto = url.find("://");
+		if (proto != std::string::npos) {
+			size_t start = proto + 3;
+			size_t end = url.find_first_of(":/?#", start);
+			host = url.substr(start, end == std::string::npos ? end : end - start);
+		}
+	}
+	if (!host.empty() && pluto::IsBlockedHost(host)) {
+		curl_easy_cleanup(c);
+		curl_slist_free_all(hdrs);
+		return {};
+	}
+
 	CURLcode rc = curl_easy_perform(c);
 	curl_slist_free_all(hdrs);
 	curl_easy_cleanup(c);

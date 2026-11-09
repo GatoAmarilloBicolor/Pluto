@@ -373,11 +373,31 @@ void ScheduleDialog::_RunSelected() {
 	Schedule sched;
 	if (!LoadSchedule(name, sched)) return;
 
-	std::string cmd = "Terminal -t 'pluto schedule: " + name
-		+ "' /bin/sh -c 'pluto agent run " + sched.prompt_file;
-	if (!sched.model.empty()) cmd += " --model " + sched.model;
-	cmd += "; echo; echo \"— Done. Press Enter —\"; read' &";
-	std::system(cmd.c_str());
+	// Build command for Terminal: run pluto agent run directly (no shell)
+	// Terminal takes the command as arguments after the title
+	std::vector<std::string> argv = {"Terminal", "-t", "pluto schedule: " + name,
+	                                 "pluto", "agent", "run", sched.prompt_file};
+	if (!sched.model.empty()) {
+		argv.push_back("--model");
+		argv.push_back(sched.model);
+	}
+	argv.push_back("--"); // separator for Terminal
+	// Add a small wrapper to keep terminal open
+	argv.push_back("sh");
+	argv.push_back("-c");
+	argv.push_back("echo; echo \"— Done. Press Enter —\"; read");
+
+	// Fork and exec Terminal directly (no std::system)
+	pid_t pid = fork();
+	if (pid == 0) {
+		std::vector<char*> args;
+		args.reserve(argv.size() + 1);
+		for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
+		args.push_back(nullptr);
+		execvp(args[0], args.data());
+		_exit(127);
+	}
+	// Don't wait - Terminal runs independently
 }
 
 // ==================================================================

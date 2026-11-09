@@ -63,30 +63,121 @@ std::string Trim(const std::string& s) {
 }
 
 PipeGuard::PipeGuard(const char* command, const char* mode)
-    : fPipe(popen(command, mode)) {}
+    : fPipe(nullptr), fPid(-1) {
+    // Only support "r" mode (reading from command stdout)
+    if (std::strcmp(mode, "r") != 0) return;
+
+    // Parse command into argv
+    std::vector<std::string> argv = split_command(command);
+    if (argv.empty()) return;
+
+    int pipefd[2];
+    if (pipe(pipefd) != 0) return;
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        ::close(pipefd[0]);
+        ::close(pipefd[1]);
+        return;
+    }
+
+    if (pid == 0) {
+        // Child process
+        ::close(pipefd[0]);
+        dup2(pipefd[1], STDOUT_FILENO);
+        dup2(pipefd[1], STDERR_FILENO);
+        ::close(pipefd[1]);
+        std::vector<char*> args;
+        args.reserve(argv.size() + 1);
+        for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
+        args.push_back(nullptr);
+        execvp(args[0], args.data());
+        _exit(127);
+    }
+
+    // Parent process
+    fPid = pid;
+    ::close(pipefd[1]);
+    fPipe = fdopen(pipefd[0], "r");
+}
 
 PipeGuard::~PipeGuard() {
-	close();
+	this->Close();
 }
 
-int PipeGuard::close() {
-	if (fPipe == nullptr) return -1;
-	int rc = pclose(fPipe);
-	fPipe = nullptr;
-	return rc;
+int PipeGuard::Close() {
+    if (fPipe == nullptr && fPid <= 0) return -1;
+    int rc = -1;
+    if (fPipe) {
+        fclose(fPipe);
+        fPipe = nullptr;
+    }
+    if (fPid > 0) {
+        int status = 0;
+        waitpid(fPid, &status, 0);
+        rc = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+        fPid = -1;
+    }
+    return rc;
 }
 
-int RunHookSafe(const char* cmd, const char* env_name, const std::string& env_value) {
+// Split command string into argv array (simple shell-like parsing, no shell execution)
+std::vector<std::string> split_command(const std::string& cmd) {
+	std::vector<std::string> args;
+	std::string current;
+	bool in_single = false;
+	bool in_double = false;
+	bool escaped = false;
+
+	for (size_t i = 0; i < cmd.size(); ++i) {
+		char c = cmd[i];
+		if (escaped) {
+			current += c;
+			escaped = false;
+		} else if (c == '\\') {
+			escaped = true;
+		} else if (c == '\'' && !in_double) {
+			in_single = !in_single;
+		} else if (c == '"' && !in_single) {
+			in_double = !in_double;
+		} else if ((c == ' ' || c == '\t') && !in_single && !in_double) {
+			if (!current.empty()) {
+				args.push_back(current);
+				current.clear();
+			}
+		} else {
+			current += c;
+		}
+	}
+	if (!current.empty()) args.push_back(current);
+	return args;
+}
+
+// Execute command via execvp with argv array (no shell).
+// Returns exit code, or -1 on error.
+static int execvp_with_env(const std::vector<std::string>& argv, const char* env_name, const std::string& env_value) {
+	if (argv.empty()) return -1;
 	pid_t pid = fork();
 	if (pid < 0) return -1;
 	if (pid == 0) {
-		::setenv(env_name, env_value.c_str(), 1);
-		::execl("/bin/sh", "sh", "-c", cmd, nullptr);
+		if (env_name && !env_value.empty()) {
+			::setenv(env_name, env_value.c_str(), 1);
+		}
+		std::vector<char*> args;
+		args.reserve(argv.size() + 1);
+		for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
+		args.push_back(nullptr);
+		execvp(args[0], args.data());
 		::_exit(127);
 	}
 	int status = 0;
 	::waitpid(pid, &status, 0);
 	return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+int RunHookSafe(const char* cmd, const char* env_name, const std::string& env_value) {
+	auto argv = split_command(cmd);
+	return execvp_with_env(argv, env_name, env_value);
 }
 
 void RunHooksSafe(const std::vector<std::string>& hooks, const char* phase, const std::string& env_value) {
@@ -100,6 +191,9 @@ void RunHooksSafe(const std::vector<std::string>& hooks, const char* phase, cons
 }
 
 int RunCommandCapture(const char* cmd, std::string& output) {
+	auto argv = split_command(cmd);
+	if (argv.empty()) return -1;
+
 	int pipefd[2];
 	if (pipe(pipefd) != 0) return -1;
 
@@ -115,7 +209,52 @@ int RunCommandCapture(const char* cmd, std::string& output) {
 		dup2(pipefd[1], STDOUT_FILENO);
 		dup2(pipefd[1], STDERR_FILENO);
 		close(pipefd[1]);
-		execl("/bin/sh", "sh", "-c", cmd, nullptr);
+		std::vector<char*> args;
+		args.reserve(argv.size() + 1);
+		for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
+		args.push_back(nullptr);
+		execvp(args[0], args.data());
+		_exit(127);
+	}
+
+	close(pipefd[1]);
+	char buf[4096];
+	ssize_t n;
+	while ((n = read(pipefd[0], buf, sizeof(buf))) > 0) {
+		output.append(buf, n);
+	}
+	close(pipefd[0]);
+
+	int status = 0;
+	waitpid(pid, &status, 0);
+	return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+// Execute command via fork/execvp with argv array (no shell).
+// Returns exit code, or -1 on error. Captures stdout+stderr into output.
+int execvp_capture(const std::vector<std::string>& argv, std::string& output) {
+	if (argv.empty()) return -1;
+
+	int pipefd[2];
+	if (pipe(pipefd) != 0) return -1;
+
+	pid_t pid = fork();
+	if (pid < 0) {
+		close(pipefd[0]);
+		close(pipefd[1]);
+		return -1;
+	}
+
+	if (pid == 0) {
+		close(pipefd[0]);
+		dup2(pipefd[1], STDOUT_FILENO);
+		dup2(pipefd[1], STDERR_FILENO);
+		close(pipefd[1]);
+		std::vector<char*> args;
+		args.reserve(argv.size() + 1);
+		for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
+		args.push_back(nullptr);
+		execvp(args[0], args.data());
 		_exit(127);
 	}
 

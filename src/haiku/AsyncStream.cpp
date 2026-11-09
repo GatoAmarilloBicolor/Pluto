@@ -1,6 +1,7 @@
 // AsyncStream.cpp — libcurl multi-based concurrent streaming.
 
 #include "AsyncStream.h"
+#include "../curl_security.h"
 
 #include <cstdio>
 #include <cstring>
@@ -108,15 +109,9 @@ int64_t AsyncStreamManager::PostStream(const std::string& url,
 	curl_easy_setopt(easy, CURLOPT_TIMEOUT, 120L);
 	curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT, 10L);
 	curl_easy_setopt(easy, CURLOPT_USERAGENT, "pluto/0.7.1 (Haiku)");
-	// Enable SSL verification for HTTPS URLs
-	if (url.rfind("https://", 0) == 0) {
-		curl_easy_setopt(easy, CURLOPT_SSL_VERIFYPEER, 1L);
-		curl_easy_setopt(easy, CURLOPT_SSL_VERIFYHOST, 2L);
-		curl_easy_setopt(easy, CURLOPT_SSL_VERIFYSTATUS, 1L);
-		curl_easy_setopt(easy, CURLOPT_CAINFO,
-			"/system/data/ssl/CARootCertificates.pem");
-		curl_easy_setopt(easy, CURLOPT_MAXFILESIZE, (curl_off_t)50 * 1024 * 1024); // 50MB
-	}
+
+	// Apply centralized TLS security with certificate pinning
+	ApplyCurlSecurityWithPinning(easy, url);
 
 	struct curl_slist* hlist = nullptr;
 	for (const auto& h : headers)

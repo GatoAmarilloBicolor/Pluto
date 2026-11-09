@@ -490,16 +490,45 @@ int RunWikiCli(int argc, char** argv) {
 			std::string url = input;
 			if (url.substr(0, 4) == "www.")
 				url = "https://" + url;
-			std::string cmd = "curl -sL --max-time 30 '" + url + "'";
-			FILE* pipe = popen(cmd.c_str(), "r");
-			if (!pipe) {
-				std::fprintf(stderr, "failed to fetch: %s\n", input.c_str());
+			
+			// Use fork/execvp for security (no shell)
+			std::vector<std::string> argv = {"curl", "-sL", "--max-time", "30", url};
+			int pipefd[2];
+			if (pipe(pipefd) != 0) {
+				std::fprintf(stderr, "pipe failed\n");
 				return 1;
 			}
+			pid_t pid = fork();
+			if (pid < 0) {
+				close(pipefd[0]);
+				close(pipefd[1]);
+				std::fprintf(stderr, "fork failed\n");
+				return 1;
+			}
+			if (pid == 0) {
+				close(pipefd[0]);
+				dup2(pipefd[1], STDOUT_FILENO);
+				dup2(pipefd[1], STDERR_FILENO);
+				close(pipefd[1]);
+				std::vector<char*> args;
+				for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
+				args.push_back(nullptr);
+				execvp(args[0], args.data());
+				_exit(127);
+			}
+			close(pipefd[1]);
 			char buf[4096];
-			while (size_t n = fread(buf, 1, sizeof(buf), pipe))
+			ssize_t n;
+			while ((n = read(pipefd[0], buf, sizeof(buf))) > 0) {
 				content.append(buf, n);
-			pclose(pipe);
+			}
+			close(pipefd[0]);
+			int status = 0;
+			waitpid(pid, &status, 0);
+			if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+				std::fprintf(stderr, "curl failed: %s\n", input.c_str());
+				return 1;
+			}
 		} else {
 			// File path.
 			std::ifstream f(input);

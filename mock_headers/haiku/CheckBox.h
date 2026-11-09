@@ -10,6 +10,7 @@ public:
     virtual ~BCheckBox();
     virtual void SetValue(int32 value);
     virtual int32 Value() const;
+    virtual void SetToolTip(const char* tip) { (void)tip; }
 };
 
 #endif // _CHECK_BOX_H

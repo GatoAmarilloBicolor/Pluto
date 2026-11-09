@@ -1,4 +1,5 @@
 #include "oauth.h"
+#include "curl_security.h"
 
 #ifdef __HAIKU__
 
@@ -31,10 +32,167 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <openssl/sha.h>
+#include <openssl/aes.h>
+#include <openssl/err.h>
 
 namespace pluto {
 
 namespace oauth_internal {
+
+// =============================================================================
+// Token Encryption (AES-256-GCM)
+// =============================================================================
+
+static const size_t kKeySize = 32;      // 256 bits
+static const size_t kIvSize = 12;       // 96 bits for GCM
+static const size_t kTagSize = 16;      // 128 bits
+static const size_t kSaltSize = 16;     // For PBKDF2
+
+std::string EncryptionKeyPath() {
+    return HomeDir() + "/config/settings/pluto/oauth-key";
+}
+
+// Generate or load the encryption key
+static bool GetOrCreateEncryptionKey(unsigned char* key_out) {
+    std::string key_path = EncryptionKeyPath();
+    
+    // Try to read existing key
+    {
+        int fd = ::open(key_path.c_str(), O_RDONLY);
+        if (fd >= 0) {
+            ssize_t n = ::read(fd, key_out, kKeySize);
+            ::close(fd);
+            if (n == (ssize_t)kKeySize) return true;
+        }
+    }
+    
+    // Generate new key
+    if (RAND_bytes(key_out, kKeySize) != 1) return false;
+    
+    // Write key with restricted permissions
+    int fd = ::open(key_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+    if (fd < 0) return false;
+    ssize_t written = ::write(fd, key_out, kKeySize);
+    ::close(fd);
+    return written == (ssize_t)kKeySize;
+}
+
+// Encrypt plaintext with AES-256-GCM
+static std::string EncryptTokenData(const std::string& plaintext, const unsigned char* key) {
+    unsigned char iv[kIvSize];
+    if (RAND_bytes(iv, kIvSize) != 1) return "";
+    
+    unsigned char tag[kTagSize];
+    
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) return "";
+    
+    std::string ciphertext;
+    ciphertext.resize(plaintext.size() + kTagSize);
+    
+    int len = 0;
+    int ciphertext_len = 0;
+    
+    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, kIvSize, nullptr) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    
+    if (EVP_EncryptInit_ex(ctx, nullptr, nullptr, key, iv) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    
+    if (EVP_EncryptUpdate(ctx, reinterpret_cast<unsigned char*>(ciphertext.data()), &len,
+                          reinterpret_cast<const unsigned char*>(plaintext.data()), plaintext.size()) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    ciphertext_len = len;
+    
+    if (EVP_EncryptFinal_ex(ctx, reinterpret_cast<unsigned char*>(ciphertext.data()) + len, &len) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    ciphertext_len += len;
+    
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, kTagSize, tag) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    EVP_CIPHER_CTX_free(ctx);
+    
+    // Format: salt(16) || iv(12) || ciphertext || tag(16)
+    // Note: we don't use salt here since key is randomly generated and stored separately
+    // Format: iv(12) || ciphertext || tag(16)
+    std::string result;
+    result.reserve(kIvSize + ciphertext_len + kTagSize);
+    result.append(reinterpret_cast<char*>(iv), kIvSize);
+    result.append(ciphertext.data(), ciphertext_len);
+    result.append(reinterpret_cast<char*>(tag), kTagSize);
+    
+    return result;
+}
+
+// Decrypt ciphertext with AES-256-GCM
+static std::string DecryptTokenData(const std::string& ciphertext, const unsigned char* key) {
+    if (ciphertext.size() < kIvSize + kTagSize) return "";
+    
+    const unsigned char* iv = reinterpret_cast<const unsigned char*>(ciphertext.data());
+    const unsigned char* ct = iv + kIvSize;
+    size_t ct_len = ciphertext.size() - kIvSize - kTagSize;
+    const unsigned char* tag = ct + ct_len;
+    
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) return "";
+    
+    std::string plaintext;
+    plaintext.resize(ct_len);
+    
+    int len = 0;
+    int plaintext_len = 0;
+    
+    if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, kIvSize, nullptr) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    
+    if (EVP_DecryptInit_ex(ctx, nullptr, nullptr, key, iv) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    
+    if (EVP_DecryptUpdate(ctx, reinterpret_cast<unsigned char*>(plaintext.data()), &len, ct, ct_len) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    plaintext_len = len;
+    
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, kTagSize, const_cast<unsigned char*>(tag)) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    
+    if (EVP_DecryptFinal_ex(ctx, reinterpret_cast<unsigned char*>(plaintext.data()) + len, &len) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        return "";
+    }
+    plaintext_len += len;
+    
+    EVP_CIPHER_CTX_free(ctx);
+    plaintext.resize(plaintext_len);
+    return plaintext;
+}
 
 // Fallback implementations for crypto operations (Haiku doesn't have BHash/BRandom/BBase64)
 
@@ -151,12 +309,11 @@ std::string http_post_json(const std::string& url, const std::string& body) {
     curl_easy_setopt(c, CURLOPT_WRITEDATA, &resp);
     curl_easy_setopt(c, CURLOPT_TIMEOUT, 30L);
     curl_easy_setopt(c, CURLOPT_USERAGENT, "pluto/0.3.0 (Haiku)");
-    curl_easy_setopt(c, CURLOPT_CAINFO,
-        "/system/data/ssl/CARootCertificates.pem");
-    curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
-    curl_easy_setopt(c, CURLOPT_SSL_VERIFYSTATUS, 1L);
     curl_easy_setopt(c, CURLOPT_MAXFILESIZE, (curl_off_t)50 * 1024 * 1024); // 50MB
+
+    // Apply centralized TLS security with certificate pinning
+    ApplyCurlSecurityWithPinning(c, url);
+
     CURLcode rc = curl_easy_perform(c);
     curl_slist_free_all(hdrs);
     curl_easy_cleanup(c);
@@ -185,12 +342,11 @@ std::string http_get_auth(const std::string& url,
     curl_easy_setopt(c, CURLOPT_WRITEDATA, &resp);
     curl_easy_setopt(c, CURLOPT_TIMEOUT, 30L);
     curl_easy_setopt(c, CURLOPT_USERAGENT, "pluto/0.3.0 (Haiku)");
-    curl_easy_setopt(c, CURLOPT_CAINFO,
-        "/system/data/ssl/CARootCertificates.pem");
-    curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
-    curl_easy_setopt(c, CURLOPT_SSL_VERIFYSTATUS, 1L);
     curl_easy_setopt(c, CURLOPT_MAXFILESIZE, (curl_off_t)50 * 1024 * 1024); // 50MB
+
+    // Apply centralized TLS security with certificate pinning
+    ApplyCurlSecurityWithPinning(c, url);
+
     CURLcode rc = curl_easy_perform(c);
     curl_slist_free_all(hdrs);
     curl_easy_cleanup(c);
@@ -210,18 +366,29 @@ bool SaveOAuthTokens(const OAuthTokens& tokens) {
     ScopedFileLock lock(path + ".lock");
     if (!lock.locked()) return false;
 
+    unsigned char key[kKeySize];
+    if (!GetOrCreateEncryptionKey(key)) return false;
+
     std::string tmp = path + ".tmp." + std::to_string(getpid());
-    // Create with restricted permissions from start (no TOCTOU window).
     int fd = ::open(tmp.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
     if (fd < 0) return false;
+    
     json::Value v;
     v.set("access_token", tokens.access_token);
     v.set("refresh_token", tokens.refresh_token);
     v.set("expires_at", static_cast<double>(tokens.expires_at));
-    std::string data = v.serialize();
-    ssize_t written = ::write(fd, data.c_str(), data.size());
+    std::string plaintext = v.serialize();
+    
+    std::string encrypted = EncryptTokenData(plaintext, key);
+    if (encrypted.empty()) {
+        ::close(fd);
+        std::remove(tmp.c_str());
+        return false;
+    }
+    
+    ssize_t written = ::write(fd, encrypted.c_str(), encrypted.size());
     ::close(fd);
-    if (written != (ssize_t)data.size()) {
+    if (written != (ssize_t)encrypted.size()) {
         std::remove(tmp.c_str());
         return false;
     }
@@ -235,14 +402,22 @@ bool SaveOAuthTokens(const OAuthTokens& tokens) {
 
 OAuthTokens LoadOAuthTokens() {
     OAuthTokens tokens;
-    std::ifstream f(OAuthTokensPath());
+    std::ifstream f(OAuthTokensPath(), std::ios::binary);
     if (!f) return tokens;
+    
+    unsigned char key[kKeySize];
+    if (!GetOrCreateEncryptionKey(key)) return tokens;
+    
     std::ostringstream os;
     os << f.rdbuf();
-    std::string body = os.str();
-    if (body.empty()) return tokens;
+    std::string encrypted = os.str();
+    if (encrypted.empty()) return tokens;
+    
+    std::string plaintext = DecryptTokenData(encrypted, key);
+    if (plaintext.empty()) return tokens;
+    
     try {
-        json::Value v = json::Value::parse(body);
+        json::Value v = json::Value::parse(plaintext);
         tokens.access_token = v.str("access_token");
         tokens.refresh_token = v.str("refresh_token");
         const json::Value* ea = v.find("expires_at");
@@ -326,9 +501,13 @@ bool OAuthLogin() {
     if (be_roster && be_roster->Launch("text/html", 1, const_cast<const char**>(argv)) == B_OK) {
         // Success
     } else {
-        // Fallback to system() with open command
-        std::string cmd = "open \"" + auth_url + "\" >/dev/null 2>&1 &";
-        std::system(cmd.c_str());
+        // Fallback: fork/exec open command (no shell)
+        pid_t pid = fork();
+        if (pid == 0) {
+            execlp("open", "open", auth_url.c_str(), nullptr);
+            _exit(127);
+        }
+        // Don't wait - browser opens independently
     }
 
     // Wait for callback with timeout.

@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <string>
 #include <vector>
+#include <sys/types.h>
 
 namespace pluto {
 
@@ -35,8 +36,8 @@ std::string Slugify(const std::string& text);
 std::string Trim(const std::string& s);
 
 
-// RAII wrapper for FILE* obtained from popen().
-// Automatically calls pclose() on destruction.
+// RAII wrapper for pipe obtained from fork/execvp (no shell injection).
+// Automatically waits for child process on destruction.
 //
 // Usage:
 //   PipeGuard pipe("ls -la", "r");
@@ -59,12 +60,13 @@ public:
 	// Boolean conversion: true if pipe is open.
 	explicit operator bool() const { return fPipe != NULL; }
 
-	// Explicitly close and return the exit status (like pclose).
+	// Explicitly close and return the exit status.
 	// Returns -1 if already closed or was never opened.
-	int close();
+	int Close();
 
 private:
 	FILE* fPipe;
+	pid_t fPid;
 };
 
 // Execute a hook command safely using fork/exec (no shell injection).
@@ -79,5 +81,12 @@ void RunHooksSafe(const std::vector<std::string>& hooks, const char* phase, cons
 // Returns exit code, fills output with combined stdout+stderr.
 // Returns -1 on fork/exec failure.
 int RunCommandCapture(const char* cmd, std::string& output);
+
+// Split command string into argv array (simple shell-like parsing, no shell execution).
+std::vector<std::string> split_command(const std::string& cmd);
+
+// Execute command via fork/execvp with argv array (no shell).
+// Returns exit code, or -1 on error. Captures stdout+stderr into output.
+int execvp_capture(const std::vector<std::string>& argv, std::string& output);
 
 }  // namespace pluto

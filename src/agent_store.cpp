@@ -397,7 +397,8 @@ bool InstallAgentFromUrl(const std::string& url, std::string& error) {
 	std::fprintf(stderr, "[agent] cloning %s (unverified source)\n",
 		url.c_str());
 
-	std::string cmd = "git clone --depth=1 " + shq(url) + " " + shq(tmp) + " 2>&1";
+	// Execute git clone via execvp (no shell) to prevent injection.
+	std::vector<std::string> git_argv = {"git", "clone", "--depth=1", url, tmp};
     // Use fork/exec instead of popen for security
     pid_t pid = fork();
     if (pid < 0) {
@@ -406,9 +407,11 @@ bool InstallAgentFromUrl(const std::string& url, std::string& error) {
         return false;
     }
     if (pid == 0) {
-        execl("/bin/sh", "sh", "-c",
-            ("git clone --depth=1 " + shq(url) + " " + shq(tmp) + " 2>&1").c_str(),
-        nullptr);
+        std::vector<char*> args;
+        args.reserve(git_argv.size() + 1);
+        for (const auto& s : git_argv) args.push_back(const_cast<char*>(s.c_str()));
+        args.push_back(nullptr);
+        execvp(args[0], args.data());
         _exit(127);
     }
     int status = 0;
@@ -543,7 +546,8 @@ bool UpdateAgent(const std::string& name, std::string& error) {
 	}
 	std::string tmp = std::string(tmpdir);
 
-	std::string cmd = "git clone --depth=1 " + shq(url) + " " + shq(tmp) + " 2>&1";
+	// Execute git clone via execvp (no shell) to prevent injection.
+	std::vector<std::string> git_argv = {"git", "clone", "--depth=1", url, tmp};
     // Use fork/exec instead of popen for security
     pid_t pid = fork();
     if (pid < 0) {
@@ -552,9 +556,11 @@ bool UpdateAgent(const std::string& name, std::string& error) {
         return false;
     }
     if (pid == 0) {
-        execl("/bin/sh", "sh", "-c",
-            ("git clone --depth=1 " + shq(url) + " " + shq(tmp) + " 2>&1").c_str(),
-        nullptr);
+        std::vector<char*> args;
+        args.reserve(git_argv.size() + 1);
+        for (const auto& s : git_argv) args.push_back(const_cast<char*>(s.c_str()));
+        args.push_back(nullptr);
+        execvp(args[0], args.data());
         _exit(127);
     }
     int status = 0;
@@ -780,8 +786,8 @@ int RunAgentStoreCli(int argc, char** argv) {
 				return 1;
 			}
 			tmp = std::string(tmpdir);
-			std::string cmd = "git clone --depth=1 " + shq(source) + " "
-				+ shq(tmp) + " 2>&1";
+			// Execute git clone via execvp (no shell) to prevent injection.
+			std::vector<std::string> git_argv = {"git", "clone", "--depth=1", source, tmp};
     // Use fork/exec instead of popen for security
     pid_t pid = fork();
     if (pid < 0) {
@@ -790,9 +796,11 @@ int RunAgentStoreCli(int argc, char** argv) {
         return 1;
     }
     if (pid == 0) {
-        execl("/bin/sh", "sh", "-c",
-            ("git clone --depth=1 " + shq(source) + " " + shq(tmp) + " 2>&1").c_str(),
-        nullptr);
+        std::vector<char*> args;
+        args.reserve(git_argv.size() + 1);
+        for (const auto& s : git_argv) args.push_back(const_cast<char*>(s.c_str()));
+        args.push_back(nullptr);
+        execvp(args[0], args.data());
         _exit(127);
     }
     int status = 0;
@@ -1096,8 +1104,8 @@ bool InstallAgentFromRegistry(const std::string& name, std::string& error) {
 	}
 	std::string tmp = std::string(tmpdir);
 
-	std::string cmd = "git clone --depth=1 "
-		+ shq(std::string(kDefaultRegistryUrl)) + " " + shq(tmp) + " 2>&1";
+	// Execute git clone via execvp (no shell) to prevent injection.
+	std::vector<std::string> git_argv = {"git", "clone", "--depth=1", std::string(kDefaultRegistryUrl), tmp};
 	std::fprintf(stderr, "Fetching from default registry...\n");
     // Use fork/exec instead of popen for security
     pid_t pid = fork();
@@ -1107,9 +1115,11 @@ bool InstallAgentFromRegistry(const std::string& name, std::string& error) {
         return false;
     }
     if (pid == 0) {
-        execl("/bin/sh", "sh", "-c",
-            ("git clone --depth=1 " + shq(std::string(kDefaultRegistryUrl)) + " " + shq(tmp) + " 2>&1").c_str(),
-            nullptr);
+        std::vector<char*> args;
+        args.reserve(git_argv.size() + 1);
+        for (const auto& s : git_argv) args.push_back(const_cast<char*>(s.c_str()));
+        args.push_back(nullptr);
+        execvp(args[0], args.data());
         _exit(127);
     }
     int status = 0;

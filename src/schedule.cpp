@@ -16,6 +16,7 @@
 
 #include <dirent.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <cerrno>
@@ -343,10 +344,24 @@ int RunScheduleCli(int argc, char** argv) {
 			std::fprintf(stderr, "schedule not found: %s\n", argv[1]);
 			return 1;
 		}
-		std::string cmd = "pluto agent run " + shq(sched.prompt_file);
-		if (!sched.model.empty()) cmd += " --model " + shq(sched.model);
-		std::printf("running: %s\n", cmd.c_str());
-		return std::system(cmd.c_str());
+		// Execute pluto agent run via execvp (no shell)
+		std::vector<std::string> argv_run = {"pluto", "agent", "run", sched.prompt_file};
+		if (!sched.model.empty()) {
+			argv_run.push_back("--model");
+			argv_run.push_back(sched.model);
+		}
+		std::printf("running: pluto agent run %s", sched.prompt_file.c_str());
+		if (!sched.model.empty()) std::printf(" --model %s", sched.model.c_str());
+		std::printf("\n");
+
+		std::vector<char*> args;
+		args.reserve(argv_run.size() + 1);
+		for (const auto& s : argv_run) args.push_back(const_cast<char*>(s.c_str()));
+		args.push_back(nullptr);
+		execvp(args[0], args.data());
+		// If execvp returns, it failed
+		std::fprintf(stderr, "execvp failed: %s\n", strerror(errno));
+		return 1;
 	}
 
 	std::fprintf(stderr, "unknown subcommand: %s\n", sub.c_str());

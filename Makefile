@@ -4,11 +4,12 @@ UNAME := $(shell uname -s)
 ifeq ($(UNAME),Haiku)
     # On Haiku, use real SDK headers
     CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -O2 -Isrc -idirafter src/compat/haiku -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -isystem /boot/system/develop/headers -isystem /boot/system/develop/headers/interface -isystem /boot/system/develop/headers/support -isystem /boot/system/develop/headers/storage -isystem /boot/system/develop/headers/app -isystem /boot/system/develop/headers/kernel -isystem /boot/system/develop/headers/locale -isystem /boot/system/develop/headers/posix -isystem /boot/system/develop/headers/bsd -isystem /boot/system/develop/headers/compatibility -isystem /boot/system/develop/tools/lib/gcc/x86_64-unknown-haiku/13.3.0/include-fixed -MMD -MP
+    LDLIBS   = -lcurl -lbe -lcrypto -lnetwork -ledit
 else
     # On macOS/Linux, use mock headers for cross-compilation
-    CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -O2 -Isrc -Imock_headers/haiku -I/opt/homebrew/include -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support -I/boot/system/develop/headers/private/locale -I/boot/system/develop/headers/private/shared -I/boot/system/develop/headers/private/kernel -I/boot/system/develop/headers/private/storage -I/boot/system/develop/headers/private/app -MMD -MP
+    CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -O2 -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include -Imock_headers/override -idirafter mock_headers/haiku -Isrc -I/opt/homebrew/include -MMD -MP
+    LDLIBS   = -lcurl -lcrypto -ledit -Lmock_libs -lbe -lnetwork -ltranslation -ltracker -L/opt/homebrew/lib
 endif
-LDLIBS   = -lcurl -lbe -lcrypto -lnetwork -ledit
 
 PKG_NAME    = pluto
 PKG_VERSION = 0.7.1
@@ -76,7 +77,8 @@ CORE_SRCS = src/lsp/LspClient.cpp \
             src/mcp/SseSubscriber.cpp \
             src/mcp/SseTransport.cpp \
             src/provider/Anthropic.cpp \
-            src/provider/OpenAICompat.cpp
+            src/provider/OpenAICompat.cpp \
+            src/provider/Provider.cpp
 
 # Haiku-specific sources (only on Haiku)
 HAIKU_SRCS = src/haiku/BfsTools.cpp \
@@ -144,32 +146,35 @@ CORE_OBJS = $(CORE_SRCS:.cpp=.o)
 CLI_OBJS  = $(CLI_SRCS:.cpp=.o)
 GUI_OBJS  = $(GUI_SRCS:.cpp=.o)
 
-ifeq ($(UNAME),Haiku)
-    CORE_OBJS += $(HAIKU_SRCS:.cpp=.o)
-endif
+# Include Haiku-specific sources for cross-compilation with mock headers
+CORE_OBJS += $(HAIKU_SRCS:.cpp=.o)
 
 all: Pluto_cli Pluto build-addon systemone_server
 
-# Compile resource definition (icon + app metadata).
+# Compile resource definition (icon + app metadata) - Haiku only.
+ifeq ($(UNAME),Haiku)
 pluto.rsrc: pluto.rdef pluto.hvif
 	rc -o $@ pluto.rdef
 
-Pluto_cli: $(CORE_OBJS) $(CLI_OBJS) pluto.rsrc
+PLUTO_RSRC_DEP = pluto.rsrc
+PLUTO_RSRC_LINK = xres -o $@ pluto.rsrc; resattr -o $@ pluto.rsrc; addattr -t icon -f pluto.hvif BEOS:ICON $@
+else
+PLUTO_RSRC_DEP =
+PLUTO_RSRC_LINK =
+endif
+
+Pluto_cli: $(CORE_OBJS) $(CLI_OBJS) $(PLUTO_RSRC_DEP)
 	$(CXX) $(CXXFLAGS) -o $@ $(CORE_OBJS) $(CLI_OBJS) $(LDLIBS)
-	xres -o $@ pluto.rsrc
-	resattr -o $@ pluto.rsrc
-	addattr -t icon -f pluto.hvif BEOS:ICON $@
+	$(PLUTO_RSRC_LINK)
 
 # Compile md4c (C file) separately.
 CC ?= gcc
 src/gui/textview/md4c.o: src/gui/textview/md4c.c
 	$(CC) -Wall -O2 -MMD -MP -c -o $@ $<
 
-Pluto: $(CORE_OBJS) $(GUI_OBJS) $(MD4C_OBJ) pluto.rsrc
+Pluto: $(CORE_OBJS) $(GUI_OBJS) $(MD4C_OBJ) $(PLUTO_RSRC_DEP)
 	$(CXX) $(CXXFLAGS) -o $@ $(CORE_OBJS) $(GUI_OBJS) $(MD4C_OBJ) $(LDLIBS) -ltracker -ltranslation
-	xres -o $@ pluto.rsrc
-	resattr -o $@ pluto.rsrc
-	addattr -t icon -f pluto.hvif BEOS:ICON $@
+	$(PLUTO_RSRC_LINK)
 
 # Tracker add-on (shared library).
 # The name contains a space — use a simple variable and quote everywhere.
@@ -179,7 +184,9 @@ TRACKER_ADDON := Ask pluto
 
 build-addon: src/haiku/TrackerAddOn.cpp pluto.hvif
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o '$(TRACKER_ADDON)' $< -lbe
+ifeq ($(UNAME),Haiku)
 	addattr -t icon -f pluto.hvif BEOS:ICON '$(TRACKER_ADDON)'
+endif
 
 install-addon: build-addon
 	mkdir -p '$(HOME)/config/non-packaged/add-ons/Tracker'

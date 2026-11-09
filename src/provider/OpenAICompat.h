@@ -14,15 +14,24 @@ namespace pluto {
 // transparently to/from pluto's ContentBlock types.
 class OpenAICompatProvider : public Provider {
 public:
-	OpenAICompatProvider(std::string api_key, std::string base_url);
-	void stream(const CompletionRequest& req, StreamCallback cb) override;
-	std::string name() const override { return "openai-compat"; }
+    OpenAICompatProvider(std::string api_key, std::string base_url);
+    void complete(const CompletionRequest& req, StreamCallback cb) override;
+    void stream(const CompletionRequest& req, StreamCallback cb) override;
+    std::string complete_sync(const CompletionRequest& req) override;
+    bool validate_config(std::string& error_out) const override;
+    std::string base_url() const override { return fBaseUrl; }
+    void set_base_url(const std::string& url) override { fBaseUrl = url; }
+    ProviderCapabilities capabilities() const override;
+    std::vector<ModelInfo> list_models() const override;
+    bool supports_model(const std::string& model) const override;
+    int estimate_tokens(const std::string& text) const override;
+    double estimate_cost(const std::string& model, int input_tokens, int output_tokens) const override;
+    ProviderType type() const override { return ProviderType::OPENAI_COMPAT; }
+    std::string name() const override { return "OpenAI Compatible"; }
 
 private:
-	void _StreamImageGen(const CompletionRequest& req, StreamCallback cb);
-
-	std::string fApiKey;
-	std::string fBaseUrl;
+    std::string fApiKey;
+    std::string fBaseUrl;
 };
 
 }  // namespace pluto

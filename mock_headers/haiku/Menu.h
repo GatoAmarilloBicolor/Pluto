@@ -24,6 +24,7 @@ public:
     virtual void RemoveItem(BMenuItem* item) { (void)item; }
     virtual BMenuItem* RemoveItem(int32 index) { (void)index; return nullptr; }
     virtual BMenuItem* FindItem(const char* label) const { (void)label; return nullptr; }
+    virtual BMenuItem* FindMarked() const { return nullptr; }
     virtual BMenuItem* ItemAt(int32 index) const { (void)index; return nullptr; }
     virtual int32 CountItems() const { return 0; }
     virtual void AddSeparatorItem() { AddItem(static_cast<BMenuItem*>(nullptr)); }
@@ -46,7 +47,7 @@ public:
         (void)screenWhere; (void)async; (void)autoClose; (void)centered;
     }
     virtual void SetBorder(uint32 border) { (void)border; }
-    virtual void SetFont(BFont* font) { (void)font; }
+    virtual void SetFont(const BFont* font) { (void)font; }
     virtual void SetFontSize(float size) { (void)size; }
 };
 

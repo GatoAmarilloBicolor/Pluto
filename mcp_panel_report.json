@@ -1,0 +1,277 @@
+{
+  "panel": "mcp",
+  "title": "MCP & System One Integration",
+  "experts": 95,
+  "real_issues": [
+    {
+      "severity": "critical",
+      "file": "src/mcp/systemone_server.cpp",
+      "line": 92,
+      "title": "System One MCP server proxies to external HTTP server, not local model",
+      "description": "The systemone_server.cpp (lines 92-95) reads KEV_MCP_URL from env and forwards all tool calls to an external HTTP endpoint (default http://localhost:8080/mcp). It does NOT run a decision model locally. This creates a hard external dependency, adds ~50-200ms latency per call, and fails silently if the kev server isn't running. The binary name 'systemone_server' implies it IS the server, but it's just a proxy.",
+      "evidence": "static const std::string KEV_SERVER_URL = []() { const char* env = std::getenv(\"KEV_MCP_URL\"); return env ? env : \"http://localhost:8080/mcp\"; }();"
+    },
+    {
+      "severity": "critical",
+      "file": "src/mcp/systemone_server.cpp",
+      "line": 393,
+      "title": "Fragile manual JSON parsing instead of using project's json.h parser",
+      "description": "The tool handlers (lines 413-560) use hand-rolled extract_str/extract_num functions (lines 13-37) that do string search/substring extraction instead of the proper json::Value parser used everywhere else in the codebase. This is brittle, breaks on whitespace/formatting changes, and doesn't validate JSON structure.",
+      "evidence": "std::string text = extract_str(input, \"text\"); // line 42\nstd::string threshold_s = extract_str(input, \"threshold\"); // line 43"
+    },
+    {
+      "severity": "high",
+      "file": "src/mcp/builtin/builtin_servers.cpp",
+      "line": 12,
+      "title": "7 built-in MCP servers auto-start by default with no user consent",
+      "description": "All 7 built-in servers (serena, context7, deepwiki, rea, memory, playwright, sqlite) have auto_start=true and require_approval=false. On first Pluto launch, all 7 subprocesses spawn simultaneously via stdio transport. No prompt, no opt-in. If binaries aren't in PATH, they fail silently (logged to stderr only). This is a supply-chain risk and resource exhaustion vector.",
+      "evidence": "s.auto_start = true; s.require_approval = false; // repeated for all 7 servers"
+    },
+    {
+      "severity": "high",
+      "file": "src/systemone/LocalDecisionModel.cpp",
+      "line": 67,
+      "title": "LocalDecisionModel uses keyword overlap, not ML — misleading 'AI' branding",
+      "description": "The 'local' decision model (lines 67-95, 97-112) implements classification via keyword_overlap() — a simple Jaccard similarity on token sets. No embeddings, no neural net, no statistical model. It returns 'probability' and 'confidence' scores that are just keyword overlap ratios. Marketing this as a 'decision model' with '94% accuracy' (claimed in repl.cpp line 639) is misleading.",
+      "evidence": "double score = keyword_overlap(text, label) * 0.5 + keyword_overlap(text, desc) * 0.5; result.probability = best_score; result.confidence = best_score;"
+    },
+    {
+      "severity": "high",
+      "file": "src/mcp/StdioTransport.cpp",
+      "line": 28,
+      "title": "Pipe fd leak on fork/exec failure in StdioTransport::start",
+      "description": "If fork() succeeds but execvp() fails (line 59), the child calls _exit(127) but the parent's in_pipe[1] and out_pipe[0] remain open. The error path at line 38-43 closes pipes only on fork() failure, not exec failure. Also, the child doesn't close unused pipe ends before exec (only dup2's stdin/stdout), leaking fds to the spawned process.",
+      "evidence": "if (pid < 0) { close(in_pipe[0]); close(in_pipe[1]); close(out_pipe[0]); close(out_pipe[1]); return false; } // missing cleanup on exec failure"
+    },
+    {
+      "severity": "high",
+      "file": "src/mcp/HttpTransport.cpp",
+      "line": 37,
+      "title": "HTTP transport lacks SSRF protection — no origin validation",
+      "description": "Unlike SseTransport (lines 82-104 in SseTransport.cpp) which validates endpoint origin matches base URL, HttpTransport posts directly to the configured URL with no validation. A compromised .mcp.json could point to internal metadata services (169.254.169.254, localhost admin panels). The config allows env var expansion in URLs.",
+      "evidence": "curl_easy_setopt(curl, CURLOPT_URL, fUrl.c_str()); // no origin check"
+    },
+    {
+      "severity": "medium",
+      "file": "src/main.cpp",
+      "line": 523,
+      "title": "Duplicate System One integration — MCP server AND direct tools",
+      "description": "Two completely separate System One code paths exist: (1) systemone_server.cpp MCP server (stdio, 9 tools, proxies to kev) and (2) SystemOneClient.cpp direct integration (20+ tools, local or remote model). Both register tools with similar names (systemone_classify, systemone_guard, etc.). User gets duplicate/conflicting tools. No documentation explains which to use.",
+      "evidence": "pluto::systemone::SystemOneClient in main.cpp (line 541) AND systemone_server in builtin_servers.cpp (line 49-59)"
+    },
+    {
+      "severity": "medium",
+      "file": "src/mcp/systemone_server.cpp",
+      "line": 60,
+      "title": "curl_global_init/cleanup in systemone_server main() but not in library transports",
+      "description": "systemone_server.cpp calls curl_global_init() implicitly via first curl_easy_init and curl_global_cleanup() at line 660. But HttpTransport, SseTransport, and StdioTransport (via Client) also use curl without global init/cleanup coordination. On Haiku, libcurl may not be thread-safe for global state. Multiple init/cleanup cycles cause crashes.",
+      "evidence": "curl_global_cleanup(); // line 660 in main() only"
+    },
+    {
+      "severity": "medium",
+      "file": "src/mcp/Client.cpp",
+      "line": 141,
+      "title": "MCP tool call has no request-level timeout — only 60s per read_line",
+      "description": "StdioTransport::request (line 141) uses read_line with 60s timeout per line, but no overall request deadline. A hung server that streams partial responses or sends periodic newlines can block indefinitely. No circuit breaker or cancellation propagation from the agent's atomic<bool>* cancel.",
+      "evidence": "if (!read_line(line, 60000, err)) return {}; // per-line timeout only"
+    },
+    {
+      "severity": "medium",
+      "file": "src/mcp/builtin/mcp_builtin_manager.cpp",
+      "line": 76,
+      "title": "call_tool fallback searches ALL servers — ambiguous tool routing",
+      "description": "When tool name lacks 'server__tool' prefix (line 76-97), call_tool searches all connected servers for a matching tool name and uses the first match. If multiple servers expose 'read_file' or 'search', behavior is non-deterministic (map iteration order). No warning or error on ambiguity.",
+      "evidence": "for (auto& [name, client] : fClients) { for (const auto& info : client->tools()) { if (info.name == tool_name) { server_name = name; break; } } }"
+    },
+    {
+      "severity": "medium",
+      "file": "src/systemone/RemoteDecisionModel.h",
+      "line": 135,
+      "title": "RemoteDecisionModel holds raw CURL* without RAII — leak on exception",
+      "description": "fCurl is a raw CURL* pointer (line 135) initialized in init_curl() and cleaned up in destructor. If any virtual method throws before destructor runs (e.g., parse_* methods), the curl handle leaks. No unique_ptr<CURL, decltype(&curl_easy_cleanup)> wrapper used.",
+      "evidence": "CURL* fCurl = nullptr; // line 135"
+    },
+    {
+      "severity": "medium",
+      "file": "src/systemone/LocalDecisionModel.cpp",
+      "line": 606,
+      "title": "decide_program returns hardcoded mock — not executable",
+      "description": "The decide_program method (lines 606-616) ignores program_json and state parameters, returns a static JSON string with tokens_saved=0, steps_executed=0. The 'full pipeline (token-efficient)' tool (systemone_decide_program) is non-functional in local mode. Remote model may work but no tests verify.",
+      "evidence": "result.results = \"{\\\"executed\\\":\\\"local\\\",\\\"steps\\\":0,\\\"note\\\":\\\"local heuristic model\\\"}\"; result.tokens_saved = 0;"
+    },
+    {
+      "severity": "medium",
+      "file": "src/mcp/Config.cpp",
+      "line": 395,
+      "title": "Auto-discovery probes localhost ports without rate limiting or auth",
+      "description": "DiscoverMcpServers (lines 395-427) iterates a hardcoded port list (8080-8090, 3000, 3001, 8000, 8001, 8081, 8082) and sends HTTP probes to each. No rate limiting, no authentication, no respect for robots.txt or security policies. Could trigger IDS alerts or DoS local services. Runs on every Pluto startup.",
+      "evidence": "static const int ports[] = {8080, 8081, 8082, 8083, 8084, 8085, 8086, 8087, 8088, 8089, 8090, 3000, 3001, 8000, 8001};"
+    },
+    {
+      "severity": "low",
+      "file": "src/mcp/builtin/builtin_servers.cpp",
+      "line": 52,
+      "title": "REA server listed but systemone_server is the actual binary",
+      "description": "builtin_servers.cpp defines 'rea' server (lines 49-59) with command 'rea-mcp-server', but the actual System One binary is 'systemone_server' (built via make systemone_server). The REA entry will fail to start. Meanwhile systemone_server is NOT in the builtin list — it's added via Config.cpp line 217-223 as a special case.",
+      "evidence": "s.command = \"rea-mcp-server\"; // vs actual binary: systemone_server"
+    },
+    {
+      "severity": "low",
+      "file": "src/mcp/SseTransport.cpp",
+      "line": 132,
+      "title": "SSE handshake timeout increased from 10s to 30s — masks slow server issues",
+      "description": "Comment at lines 129-132 admits the 10s timeout was 'too tight for slow MCP servers or first-time TLS negotiations'. Instead of fixing server startup, they papered over it with 30s timeout. This delays failure detection for all SSE connections. No exponential backoff or retry.",
+      "evidence": "curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L); // was 10s"
+    },
+    {
+      "severity": "low",
+      "file": "src/systemone/SystemOneConfig.h",
+      "line": 24,
+      "title": "Three separate URLs (kev/laya/jev) but single model type enum",
+      "description": "Config has kev_url, laya_url, jev_url (lines 24-26) but DecisionModelType only has REMOTE_KEV, REMOTE_LAYA, REMOTE_JEV (one active). No support for routing different tool categories to different servers (e.g., classify→kev, verify→laya). Over-engineered config for single-backend usage.",
+      "evidence": "std::string kev_url = \"http://localhost:8080/mcp\"; std::string laya_url = \"http://localhost:8081/mcp\"; std::string jev_url = \"http://localhost:8082/mcp\";"
+    },
+    {
+      "severity": "low",
+      "file": "src/mcp/Client.cpp",
+      "line": 222,
+      "title": "Silent skipping of 'app_' prefixed tools with only stderr log",
+      "description": "register_mcp_tools skips any tool starting with 'app_' (line 222) — these are per-app scripting wrappers from some MCP servers. The skip is logged to stderr only (line 231). The model never knows these tools exist. No config to disable this filter. Could hide legitimate tools if a server uses 'app_' prefix differently.",
+      "evidence": "if (info.name.substr(0, 4) == \"app_\") { ++skipped; continue; }"
+    }
+  ],
+  "hypothetical_findings": [
+    {
+      "category": "coupling",
+      "count": 12,
+      "description": "System One dual integration (MCP server + direct tools) creates tight coupling between agent core and decision engine. Any change to tool schemas requires updates in 3 places: systemone_server.cpp, SystemOneClient.cpp, DecisionModel.h. 95 devs would demand a single source of truth.",
+      "risk": "high",
+      "examples": [
+        "systemone_classify defined in systemone_server.cpp:316 AND SystemOneClient.h:19",
+        "systemone_guard defined in systemone_server.cpp:331 AND SystemOneClient.h:22",
+        "Tool schemas duplicated across MCP JSON-RPC and direct ToolRegistry registration"
+      ]
+    },
+    {
+      "category": "scaling",
+      "count": 8,
+      "description": "stdio transport spawns one process per MCP server. With 7 built-in + user-configured + discovered servers, a single Pluto session could spawn 15+ child processes. No process pool, no connection reuse across sessions, no shared memory for tool schemas. Each stdio round-trip incurs fork/exec/pipe overhead.",
+      "risk": "high",
+      "examples": [
+        "7 built-in servers auto-start = 7 processes on launch",
+        "Discovered servers add more processes",
+        "No stdin/stdout multiplexing — one process per server"
+      ]
+    },
+    {
+      "category": "tech_debt",
+      "count": 15,
+      "description": "LocalDecisionModel is a keyword-matching heuristic masquerading as an ML decision model. The '94% accuracy', '90% recall', '80% precision' claims in repl.cpp and AGENTS.md have zero benchmarks, zero test coverage, and zero validation. This is technical debt that will require complete rewrite when real model integration lands.",
+      "risk": "critical",
+      "examples": [
+        "keyword_overlap() used for classify, classify_multi, verify, guard, triage",
+        "decide_program returns hardcoded mock",
+        "No unit tests for any DecisionModel method"
+      ]
+    },
+    {
+      "category": "ux_friction",
+      "count": 6,
+      "description": "MCP tool names are prefixed as 'server__tool' (e.g., 'systemone__classify', 'serena__read_file'). The model must learn this naming convention. System prompt block (Manager.cpp:59-92) dumps ALL tools into context — hundreds of tools possible. No tool filtering by relevance, no hierarchical namespaces.",
+      "risk": "medium",
+      "examples": [
+        "system_prompt_block() lists every tool from every server",
+        "No 'tool categories' or 'capabilities' filtering",
+        "Model must parse flat list of 50-200 tool names"
+      ]
+    },
+    {
+      "category": "platform_risk",
+      "count": 5,
+      "description": "Haiku-only codebase uses fork/exec/pipe for stdio transport (StdioTransport.cpp). No Windows/Linux/macOS support. If Pluto ever ports, entire transport layer needs rewrite. Also uses Haiku-specific SSL cert path '/system/data/ssl/CARootCertificates.pem' (systemone_server.cpp:51, HttpTransport.cpp via curl_security.h).",
+      "risk": "high",
+      "examples": [
+        "fork()/pipe()/dup2()/execvp() in StdioTransport",
+        "Hardcoded Haiku CA cert path",
+        "No abstraction for process spawning"
+      ]
+    },
+    {
+      "category": "testing_gaps",
+      "count": 22,
+      "description": "Zero tests for MCP client, transports, System One tools, or decision models. 27 test binaries in tests/ — none test mcp/ or systemone/. No integration tests for stdio/HTTP/SSE transports. No contract tests for MCP protocol compliance. No benchmark for '5-10x token savings' claims.",
+      "risk": "critical",
+      "examples": [
+        "grep 'mcp|systemone' in tests/ returns 0 matches",
+        "No test for StdioTransport fork/exec error paths",
+        "No test for SSE origin validation",
+        "No test for tool schema registration"
+      ]
+    },
+    {
+      "category": "knowledge_silos",
+      "count": 4,
+      "description": "System One integration spans 4 namespaces (pluto::mcp, pluto::mcp::builtin, pluto::systemone, pluto::agent) with different conventions. MCP uses json::Value; systemone_server.cpp uses manual string parsing; SystemOneClient uses DecisionModel virtual interface. Only 1-2 devs likely understand the full flow.",
+      "risk": "high",
+      "examples": [
+        "systemone_server.cpp: extract_str() vs json::Value everywhere else",
+        "BuiltinMcpManager vs McpManager — two manager classes, similar purpose",
+        "SystemOneConfig loaded in main.cpp but also in SystemOneConfig.cpp"
+      ]
+    },
+    {
+      "category": "abstraction_leaks",
+      "count": 7,
+      "description": "MCP transport abstraction leaks: Client::connect() hardcodes protocol version '2024-11-05' (Client.cpp:66), clientInfo 'pluto/0.3.0' (line 70). Transport interface exposes request/notify but Client assumes request-response semantics. No support for MCP streaming responses or progress notifications.",
+      "risk": "medium",
+      "examples": [
+        "Hardcoded protocol version in Client.cpp",
+        "Transport::request assumes single response per request",
+        "No support for MCP 'streaming' or 'batch' methods"
+      ]
+    },
+    {
+      "category": "overengineering",
+      "count": 9,
+      "description": "SystemOneConfig has 16 fields including 3 server URLs, compaction thresholds, token targets, key point limits — but LocalDecisionModel ignores most. RemoteDecisionModel only uses model type + one URL. TokenSaver.h declares 15 functions/structs but only compute_context_headroom and select_messages_to_compact are implemented in LocalDecisionModel. Vaporware API surface.",
+      "risk": "medium",
+      "examples": [
+        "context_compaction_threshold, max_summary_tokens, max_key_points unused",
+        "TokenSaveOp, TokenSaveResult, execute_token_save_program — declared but not implemented",
+        "RemoteDecisionModel::decide_program not implemented (pure virtual in base)"
+      ]
+    },
+    {
+      "category": "legacy_burden",
+      "count": 3,
+      "description": "MCP spec version '2024-11-05' hardcoded. MCP protocol evolves; no version negotiation. Built-in server list (serena, context7, deepwiki, rea, memory, playwright, sqlite) assumes specific external binaries exist. No version pinning, no compatibility matrix. Will bit-rot as MCP ecosystem moves.",
+      "risk": "medium",
+      "examples": [
+        "params.set(\"protocolVersion\", std::string(\"2024-11-05\")); // Client.cpp:66",
+        "serena-mcp-server, context7-mcp-server — no version specs",
+        "No MCP capability negotiation beyond tools/list"
+      ]
+    }
+  ],
+  "top_5_concerns": [
+    "Duplicate System One integration (MCP server + direct tools) creates confusion, tool conflicts, and maintenance burden — pick one architecture",
+    "LocalDecisionModel is keyword matching, not ML — '94% accuracy' claims are unverifiable marketing; will misroute/guard/verify in production",
+    "Zero test coverage for MCP transports, System One tools, or decision models — 22 hypothetical testing gaps, 0 real tests",
+    "7 built-in MCP servers auto-spawn on launch with no user consent — resource exhaustion, supply chain risk, silent failures",
+    "systemone_server.cpp is a proxy to external HTTP server, not a real MCP server — adds latency, external dependency, fragile JSON parsing"
+  ],
+  "architecture_smells": [
+    "Two parallel System One integrations (MCP stdio server + direct ToolRegistry tools) with overlapping tool names — architectural schizophrenia",
+    "MCP transport abstraction (stdio/HTTP/SSE) leaks protocol details into Client (hardcoded version, client info) and assumes request-response only"
+  ],
+  "praise": [
+    "SSE transport implements proper SSRF protection with origin validation (SseTransport.cpp:82-104) — rare to see this done correctly",
+    "MCP config system with local/project/user scopes, atomic writes, env var expansion, and project approval flow is well-designed",
+    "Tool prefixing ('server__tool') prevents name collisions across MCP servers — clean namespace isolation"
+  ],
+  "veteran_quotes": [
+    "\"We shipped an MCP client in 2024. The stdio transport is fine for 2-3 servers. At 7 auto-starting? That's a fork bomb waiting for a user who installs Serena, Context7, and Playwright simultaneously. Where's the process pool?\" — 20-year engine dev, ex-Blizzard",
+    "\"Calling keyword overlap a 'decision model with 94% accuracy' is the kind of marketing that gets you sued when the guard tool misses a prompt injection. Ship the heuristic, call it a heuristic, benchmark it. Don't lie.\" — Tools programmer, ex-GitHub Copilot",
+    "\"Two System One integrations? That's not a feature, that's a reorg that never finished. One team built the MCP server, another built the direct tools, nobody talked. The model sees 'systemone_classify' twice with different schemas. Good luck debugging that.\" — 15-year infra lead, ex-Stripe"
+  ]
+}

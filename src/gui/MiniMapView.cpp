@@ -27,7 +27,8 @@ void MiniMapView::Draw(BRect /*updateRect*/) {
 	float h = bounds.Height();
 
 	// Background.
-	SetHighUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+	rgb_color bg = (rgb_color){255, 255, 255, 255};
+	SetHighColor(bg);
 	FillRect(bounds);
 
 	// Draw each segment as a colored rectangle.

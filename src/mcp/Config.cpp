@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <utility>
 
+#include "../curl_security.h"
 #include "../filelock.h"
 #include "../json.h"
 #include "../util.h"
@@ -35,6 +36,29 @@ std::string cwd() {
 }
 
 // ${VAR} or ${VAR:-default}
+// SECURITY: Only allow expansion of whitelisted environment variables.
+// Prevents secret exfiltration via malicious .mcp.json (e.g. ${ANTHROPIC_API_KEY})
+static bool is_safe_env_var(const std::string& var) {
+    static const std::set<std::string> kSafeVars = {
+        "HOME", "USER", "USERNAME", "HOMEPATH", "USERPROFILE",
+        "PATH", "SHELL", "TERM", "LANG", "LC_ALL", "LC_CTYPE",
+        "TMPDIR", "TEMP", "TMP",
+        "PWD", "OLDPWD",
+        "HOSTNAME", "HOST",
+        "DISPLAY", "WAYLAND_DISPLAY",
+        "EDITOR", "VISUAL",
+        "PLUTO_",  // prefix for Pluto-specific vars
+    };
+    
+    // Allow PLUTO_* prefix
+    if (var.rfind("PLUTO_", 0) == 0) return true;
+    
+    // Check exact matches
+    return kSafeVars.count(var) > 0;
+}
+
+// ${VAR} or ${VAR:-default}
+// SECURITY: Only expand whitelisted env vars to prevent secret exfiltration
 std::string expand_env(const std::string& s) {
 	std::string out;
 	out.reserve(s.size());
@@ -51,7 +75,15 @@ std::string expand_env(const std::string& s) {
 				var = inner.substr(0, colon);
 				def = inner.substr(colon + 2);
 			}
-			const char* val = std::getenv(var.c_str());
+			
+			// SECURITY: Only expand safe/whitelisted variables
+			const char* val = nullptr;
+			if (is_safe_env_var(var)) {
+				val = std::getenv(var.c_str());
+			} else {
+				// Log warning for blocked expansion attempt
+				std::fprintf(stderr, "[mcp] blocked expansion of non-whitelisted env var: %s\n", var.c_str());
+			}
 			out += (val && *val) ? std::string(val) : def;
 			i = end + 1;
 		} else {
@@ -400,16 +432,10 @@ curl_easy_setopt(curl, CURLOPT_URL, p.url);
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 2L);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 1L);
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
-	// Enable SSL verification for HTTPS URLs
-	std::string probe_url(p.url);
-	if (probe_url.rfind("https://", 0) == 0) {
-		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
-		curl_easy_setopt(curl, CURLOPT_CAINFO,
-			"/system/data/ssl/CARootCertificates.pem");
-		curl_easy_setopt(curl, CURLOPT_MAXFILESIZE, (curl_off_t)1024 * 1024); // 1MB for probe
-	}
+
+	// Apply centralized TLS security with certificate pinning
+	ApplyCurlSecurityWithPinning(curl, p.url);
+
 	CURLcode rc = curl_easy_perform(curl);
 		long code = 0;
 		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);

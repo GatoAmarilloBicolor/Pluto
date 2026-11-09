@@ -4,6 +4,7 @@
 #include "WebFetch.h"
 #include "Tool.h"
 #include "../json.h"
+#include "../curl_security.h"
 
 #include <curl/curl.h>
 
@@ -170,16 +171,7 @@ public:
 			size_t hostEnd = url.find_first_of(":/?#", hostStart);
 			std::string host = url.substr(hostStart,
 				hostEnd == std::string::npos ? hostEnd : hostEnd - hostStart);
-			if (host == "localhost" || host == "127.0.0.1" || host == "::1"
-			    || host == "0.0.0.0" || host.rfind("10.", 0) == 0
-			    || host.rfind("192.168.", 0) == 0
-			    || host.rfind("169.254.", 0) == 0
-			    || host.rfind("172.16.", 0) == 0
-			    || host.rfind("172.17.", 0) == 0
-			    || host.rfind("172.18.", 0) == 0
-			    || host.rfind("172.19.", 0) == 0
-			    || host.rfind("172.2", 0) == 0
-			    || host.rfind("172.3", 0) == 0) {
+			if (pluto::IsBlockedHost(host)) {
 				r.is_error = true;
 				r.output = "requests to local/private network addresses are blocked";
 				return r;
@@ -203,14 +195,13 @@ public:
 		curl_easy_setopt(c, CURLOPT_TIMEOUT, 30L);
 		curl_easy_setopt(c, CURLOPT_USERAGENT,
 			"Mozilla/5.0 (compatible; pluto/0.5.0; +https://haiku-os.org)");
-curl_easy_setopt(c, CURLOPT_CAINFO,
-			"/system/data/ssl/CARootCertificates.pem");
-	curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
-	curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
-	curl_easy_setopt(c, CURLOPT_SSL_VERIFYSTATUS, 1L);
-	curl_easy_setopt(c, CURLOPT_MAXFILESIZE, (curl_off_t)50 * 1024 * 1024); // 50MB
-	// Accept compressed responses.
+
+		curl_easy_setopt(c, CURLOPT_MAXFILESIZE, (curl_off_t)50 * 1024 * 1024); // 50MB
+		// Accept compressed responses.
 		curl_easy_setopt(c, CURLOPT_ACCEPT_ENCODING, "");
+
+		// Apply centralized TLS security with certificate pinning
+		ApplyCurlSecurityWithPinning(c, url);
 
 		CURLcode rc = curl_easy_perform(c);
 

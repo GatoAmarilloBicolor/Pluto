@@ -1,5 +1,6 @@
 #include "Anthropic.h"
 #include "../version.h"
+#include "curl_security.h"
 
 #ifdef __HAIKU__
 #include <OS.h>
@@ -358,6 +359,10 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers.get());
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &st);
+
+	// Apply centralized TLS security with certificate pinning
+	ApplyCurlSecurityWithPinning(curl, url);
+
 	curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
 	curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 30L);
 	curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 10L);
@@ -365,8 +370,6 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
 	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 300L);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
 
 	// Cancellation support
 	if (req.cancel) {
@@ -451,6 +454,80 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
 		cb(err);
 		return;
 	}
+}
+
+// Missing method implementations for AnthropicProvider
+
+AnthropicProvider::AnthropicProvider(std::string token, AuthType auth_type, std::string base_url)
+    : fToken(std::move(token)), fAuthType(auth_type), fBaseUrl(std::move(base_url)) {}
+
+std::string AnthropicProvider::complete_sync(const CompletionRequest& req) {
+    // For sync completion, we collect all stream events and concatenate text
+    std::string result;
+    stream(req, [&](const StreamEvent& ev) {
+        if (ev.type == StreamEvent::TEXT_DELTA) {
+            result += ev.text;
+        } else if (ev.type == StreamEvent::ERROR) {
+            result = "Error: " + ev.error;
+        }
+    });
+    return result;
+}
+
+bool AnthropicProvider::validate_config(std::string& error_out) const {
+    if (fToken.empty() && getenv("ANTHROPIC_API_KEY") == nullptr) {
+        error_out = "ANTHROPIC_API_KEY not set";
+        return false;
+    }
+    return true;
+}
+
+ProviderCapabilities AnthropicProvider::capabilities() const {
+    ProviderCapabilities caps;
+    caps.streaming = true;
+    caps.tools = true;
+    caps.vision = true;
+    caps.reasoning = false;
+    caps.system_prompt = true;
+    caps.cache_control = true;
+    caps.max_context = 200000;
+    return caps;
+}
+
+std::vector<ModelInfo> AnthropicProvider::list_models() const {
+    return {
+        {"claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet", "Anthropic", 8192, 200000, true, true, true, false, 3.0, 15.0},
+        {"claude-3-5-haiku-20241022", "Claude 3.5 Haiku", "Anthropic", 8192, 200000, true, true, true, false, 0.8, 4.0},
+        {"claude-3-opus-20240229", "Claude 3 Opus", "Anthropic", 4096, 200000, true, true, true, false, 15.0, 75.0},
+    };
+}
+
+bool AnthropicProvider::supports_model(const std::string& model) const {
+    static const std::vector<std::string> known = {
+        "claude-3-5-sonnet", "claude-3-5-haiku", "claude-3-opus",
+        "claude-3-sonnet", "claude-3-haiku"
+    };
+    for (const auto& m : known) {
+        if (model.find(m) != std::string::npos) return true;
+    }
+    return false;
+}
+
+int AnthropicProvider::estimate_tokens(const std::string& text) const {
+    // Rough estimate: ~4 chars per token
+    return static_cast<int>(text.size() / 4) + 1;
+}
+
+double AnthropicProvider::estimate_cost(const std::string& model, int input_tokens, int output_tokens) const {
+    double in_cost = 0.0, out_cost = 0.0;
+    if (model.find("opus") != std::string::npos) {
+        in_cost = 15.0; out_cost = 75.0;
+    } else if (model.find("sonnet") != std::string::npos) {
+        in_cost = 3.0; out_cost = 15.0;
+    } else if (model.find("haiku") != std::string::npos) {
+        in_cost = 0.8; out_cost = 4.0;
+    }
+    return (input_tokens / 1000000.0) * in_cost + (output_tokens / 1000000.0) * out_cost;
 }
 
 }  // namespace pluto

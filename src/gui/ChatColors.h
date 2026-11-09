@@ -5,10 +5,10 @@
 
 #include <InterfaceDefs.h>
 #include <Message.h>
-#include <StringView.h>
 #include <SupportDefs.h>
-#include <TextView.h>
 #include <View.h>
+#include <StringView.h>
+#include <TextView.h>
 #include <Window.h>
 
 #include <string>

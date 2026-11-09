@@ -1,0 +1,230 @@
+{
+  "panel": "agent",
+  "title": "Agent Loop & Tool System",
+  "experts": 100,
+  "real_issues": [
+    {
+      "severity": "critical",
+      "file": "src/agent/Loop.cpp",
+      "line": 565,
+      "title": "Sequential tool execution blocks parallelization",
+      "description": "Tools execute one-at-a-time in a for-loop (lines 529-573). When the model emits multiple tool_use blocks in a single assistant message, they are executed sequentially with no parallelism. This adds latency equal to sum of all tool latencies. For I/O-bound tools (bash, web_fetch, read_file), this is a massive perf hit. No concurrency control, no semaphore, no async execution model.",
+      "evidence": "for (const auto& block : assistant.content) { if (block.type != ContentBlock::TOOL_USE) continue; ... ToolResult tr = tool->execute(block.tool_input); }"
+    },
+    {
+      "severity": "critical",
+      "file": "src/agent/Loop.cpp",
+      "line": 108,
+      "title": "Orphaned tool_use repair mutates history without user consent",
+      "description": "RunTurn begins by silently 'repairing' ALL orphaned tool_use blocks in the entire conversation history (lines 108-158). It injects synthetic tool_result messages with '[pluto] repairing orphaned tool_use' error text. This mutates user-visible history, can confuse the model, and violates the principle that the conversation log is a faithful record. The API requires tool_use/tool_result pairing, but silent injection of error results is a footgun — the model sees 'tool failed' for tools it never actually called.",
+      "evidence": "if (!has_tool_result) { ContentBlock repair; repair.type = ContentBlock::TOOL_RESULT; repair.tool_id = b.tool_id; repair.is_error = true; repair.text = \"[pluto] repairing orphaned tool_use at message \" + std::to_string(i) + \": \" + b.tool_name; fixed.content.push_back(std::move(repair)); }"
+    },
+    {
+      "severity": "high",
+      "file": "src/agent/Loop.cpp",
+      "line": 548,
+      "title": "Permission prompt fires per-tool, not per-turn",
+      "description": "InteractivePrompt() is called for EACH tool in a multi-tool turn (line 551). If the model emits 5 tool_use blocks, the user gets 5 sequential y/n/a prompts. No 'allow all for this turn' option. The 'always' set (line 33) is tool-name-scoped, not turn-scoped. This creates UX friction and can leave the conversation in a half-executed state if user denies tool #3 of 5.",
+      "evidence": "Permission p = permission(*tool, preview); if (p == Permission::Deny) { result.is_error = true; result.text = \"user denied tool execution\"; ... continue; }"
+    },
+    {
+      "severity": "high",
+      "file": "src/cancel.h",
+      "line": 13,
+      "title": "Global cancel flag is process-wide, not per-turn",
+      "description": "g_cancel_flag is a single volatile sig_atomic_t (line 13). SIGINT sets it globally. There is no per-turn cancellation token — if the user hits Ctrl+C during a multi-tool turn, ALL in-flight and subsequent turns see the flag. The GUI passes a per-thread atomic<bool>* (ConversationView.cpp:983) but the CLI uses the global. Inconsistent cancellation semantics between UI and CLI.",
+      "evidence": "extern volatile sig_atomic_t g_cancel_flag; inline void RequestCancel() { g_cancel_flag = 1; }"
+    },
+    {
+      "severity": "high",
+      "file": "src/agent/Loop.cpp",
+      "line": 333,
+      "title": "max_iterations config ignored for tool execution loop",
+      "description": "Config.max_iterations (default 25) limits the agent's outer loop (model → tools → model), but the inner tool-execution loop (lines 529-573) has no iteration cap. A single assistant message with 100 tool_use blocks would execute all 100 sequentially. The model could emit unbounded tool calls in one turn, DoS-ing the agent.",
+      "evidence": "for (const auto& block : assistant.content) { if (block.type != ContentBlock::TOOL_USE) continue; ... ToolResult tr = tool->execute(block.tool_input); }"
+    },
+    {
+      "severity": "medium",
+      "file": "src/tools/Tool.h",
+      "line": 50,
+      "title": "ToolRegistry mutex contention on every tool lookup",
+      "description": "ToolRegistry::find() takes a mutex lock (line 23) for every tool execution. In a parallel execution world (which doesn't exist yet but should), this becomes a contention hotspot. The mutex protects a std::map — but tool registration is single-threaded at startup. Read-heavy workload should use shared_mutex or lock-free lookup.",
+      "evidence": "Tool* ToolRegistry::find(const std::string& name) { std::lock_guard<std::mutex> lock(fMutex); auto it = fTools.find(name); return it == fTools.end() ? nullptr : it->second.get(); }"
+    },
+    {
+      "severity": "medium",
+      "file": "src/agent/Loop.cpp",
+      "line": 564,
+      "title": "Hook execution is synchronous and blocks the agent loop",
+      "description": "Pre/post tool hooks (run_hooks) fork/exec a shell for EACH tool call (lines 89-98, 564, 566). With 10 tools in a turn, that's 20 fork/exec cycles. No async hook support, no timeout on hooks (child process can hang indefinitely), no capture of hook stdout/stderr. A misconfigured hook can deadlock the entire agent.",
+      "evidence": "run_hooks(cfg.hooks_pre_tool, \"pre\", block.tool_name); ToolResult tr = tool->execute(block.tool_input); run_hooks(cfg.hooks_post_tool, \"post\", block.tool_name);"
+    },
+    {
+      "severity": "medium",
+      "file": "src/agent/Loop.cpp",
+      "line": 689,
+      "title": "Auto-compact uses the same provider/model — recursive compaction risk",
+      "description": "MaybeCompact() calls provider.stream() with a summarization prompt (lines 675-698). If the summary itself triggers compaction (e.g., conversation is huge), you get recursive compaction. No recursion guard, no separate smaller/faster model for summarization. The summary prompt is hardcoded — not configurable, not a skill, not a template.",
+      "evidence": "provider.stream(req, [&](const StreamEvent& ev) { if (ev.type == StreamEvent::TEXT_DELTA) summary += ev.text; else if (ev.type == StreamEvent::ERROR) had_error = true; });"
+    },
+    {
+      "severity": "medium",
+      "file": "src/mcp/StdioTransport.cpp",
+      "line": 141,
+      "title": "StdioTransport request() has no timeout on response",
+      "description": "request() calls read_line() with a 60s timeout (line 153), but that's per-line. If the MCP server sends a partial response then hangs, the client waits forever. No overall request deadline. The 60s is also hardcoded — not configurable. For slow tools (e.g., LSP indexing), this causes apparent hangs.",
+      "evidence": "if (!read_line(line, 60000, err)) return {};"
+    },
+    {
+      "severity": "low",
+      "file": "src/agent/Loop.cpp",
+      "line": 279,
+      "title": "thread_local tools_disabled state leaks across turns",
+      "description": "tools_disabled and tools_disabled_model are thread_local statics (lines 279-280) used to suppress tool schema emission for models that don't support tools. But they persist across turns in the same thread. If a session switches models mid-conversation (via /model), the flag may incorrectly suppress tools for the new model.",
+      "evidence": "static thread_local bool tools_disabled = false; static thread_local std::string tools_disabled_model;"
+    },
+    {
+      "severity": "low",
+      "file": "src/tools/Tool.cpp",
+      "line": 8,
+      "title": "Tool::preview() truncates at 200 chars — loses critical args",
+      "description": "The default preview() concatenates name + input_json and truncates at 200 chars (lines 8-13). For tools with complex arguments (edit_file with large old_string/new_string, bash with long commands), the preview shown to the user in permission prompts is useless. Individual tools override preview() (e.g., Bash.cpp:33), but many don't.",
+      "evidence": "std::string Tool::preview(const std::string& input_json) const { std::string line = name() + \"(\" + input_json + \")\"; if (line.size() > 200) { line.resize(197); line += \"...\"; } return line; }"
+    }
+  ],
+  "hypothetical_findings": [
+    {
+      "category": "scaling",
+      "count": 15,
+      "description": "No parallel tool execution — sequential bottleneck will kill latency at scale. 100 veterans would design a DAG executor with dependency detection (tool_use blocks with no inter-dependencies run in parallel). Current architecture makes this retrofit nearly impossible: Tool::execute() is synchronous, UiCallbacks are synchronous, no async runtime.",
+      "risk": "critical",
+      "examples": [
+        "Model emits 3 read_file calls → 3x disk latency instead of 1x",
+        "WebFetch + Grep + Glob could run concurrently but don't",
+        "MCP tool calls to different servers are serialized"
+      ]
+    },
+    {
+      "category": "coupling",
+      "count": 12,
+      "description": "Agent loop (RunTurn) is tightly coupled to Provider streaming callbacks, ToolRegistry, Config, and UiCallbacks. The function signature has 6 parameters. Testing requires mocking all of them. No interface segregation — a single UiCallbacks struct mixes text streaming, tool events, usage, images, status, RAG. Violates ISP. GUI and CLI both pass different callback implementations but share the same monolithic loop.",
+      "risk": "high",
+      "examples": [
+        "Cannot unit-test tool execution without a Provider",
+        "Cannot swap UiCallbacks for headless/JSON output without ifdefs",
+        "MCP tool wrappers go through same synchronous execute() path"
+      ]
+    },
+    {
+      "category": "tech_debt",
+      "count": 18,
+      "description": "The 'repair orphaned tool_use' logic (lines 108-158) is a band-aid for a protocol compliance issue that should be prevented upstream. It mutates message history, injects synthetic errors, and assumes it knows better than the API. This will cause subtle bugs when model behavior changes. The repair logic doesn't handle: multiple orphaned tool_uses in one assistant message, tool_use with same ID appearing twice, or tool_result arriving before tool_use.",
+      "risk": "high",
+      "examples": [
+        "Repair text '[pluto] repairing orphaned tool_use' leaks into model context",
+        "If repair fails, the conversation is in invalid state for next API call",
+        "No telemetry on how often repair triggers — is it a symptom of a deeper bug?"
+      ]
+    },
+    {
+      "category": "platform_risk",
+      "count": 8,
+      "description": "SIGINT handler uses SA_RESTART (main.cpp:63) but the global cancel flag is volatile sig_atomic_t. On Haiku, signal delivery during curl's progress callback is undefined behavior if the callback accesses non-async-signal-safe functions. The GUI uses a per-thread atomic<bool> but CLI uses global. No cancellation token propagation to MCP stdio subprocesses — killing the agent leaves orphaned MCP server processes.",
+      "risk": "high",
+      "examples": [
+        "Ctrl+C during bash tool execution: bash child survives, MCP servers survive",
+        "StdioTransport::stop() sends SIGTERM then SIGKILL but only on explicit stop() call",
+        "No cancellation context passed to System One HTTP calls (30s hardcoded timeout)"
+      ]
+    },
+    {
+      "category": "abstraction_leaks",
+      "count": 10,
+      "description": "Tool interface leaks JSON everywhere: input_schema_json(), execute(input_json), preview(input_json). Every tool must parse/serialize JSON. No type-safe argument binding, no schema validation before execute(). The model sends JSON, the tool receives JSON — but the registry could validate against the schema and reject invalid calls early. Instead, invalid JSON causes runtime errors inside execute().",
+      "risk": "medium",
+      "examples": [
+        "edit_file tool does JSON parsing inside execute() (EditFile.cpp)",
+        "No compile-time guarantee that input_schema matches execute() expectations",
+        "MCP tool wrapper does double JSON round-trip: model→JSON→MCP protocol→JSON→tool"
+      ]
+    },
+    {
+      "category": "testing_gaps",
+      "count": 14,
+      "description": "No integration tests for the agent loop. test_tools.cpp tests individual tools in isolation. test_agent_store.cpp tests persistence. No test for: multi-tool turns, cancellation mid-turn, auto-compact trigger, permission denial flow, hook execution, model switching mid-session, MCP tool failures. The 21 test binaries are unit-level; no end-to-end agent loop test exists.",
+      "risk": "medium",
+      "examples": [
+        "No test for 'model emits 5 tools, user denies 3rd'",
+        "No test for 'compaction preserves tool_use/tool_result pairing'",
+        "No test for 'SIGINT during tool execution cleans up child processes'"
+      ]
+    },
+    {
+      "category": "knowledge_silos",
+      "count": 7,
+      "description": "System One integration (systemone_* tools) is a parallel tool ecosystem with its own client, config, and MCP server. The main agent calls systemone_* tools like any other, but System One has its own decision models (kev, laya, jev), persistent memory, and token accounting. This creates a 'system within a system' that 90% of contributors won't understand. The systemone_server.cpp is 662 lines of hand-rolled JSON-RPC — a maintenance burden.",
+      "risk": "medium",
+      "examples": [
+        "systemone_classify vs systemone_triage — overlapping semantics, unclear when to use which",
+        "System One memory (remember/recall/consult) is separate from Pluto's session memory",
+        "Two different API key resolution paths: Pluto's vs System One's"
+      ]
+    },
+    {
+      "category": "ux_friction",
+      "count": 11,
+      "description": "Permission model is binary (allow/deny) with a weak 'always' that only applies to tool name. No: 'allow for this file', 'allow for this session', 'allow read-only', 'preview diff before allow'. The preview() truncation (200 chars) makes it impossible to review edit_file diffs. No dry-run mode for tools. Plan mode (config.active_mode) filters tools at registration time — but the model still sees all tools in the system prompt unless mode disables them.",
+      "risk": "medium",
+      "examples": [
+        "User sees 'bash: long command...' and must guess if it's safe",
+        "edit_file preview shows truncated old_string/new_string — can't verify diff",
+        "No 'show me what this tool will do' before approval"
+      ]
+    },
+    {
+      "category": "overengineering",
+      "count": 9,
+      "description": "BuiltinMcpManager launches 7+ stdio servers (Serena, Context7, DeepWiki, REA, Memory, Playwright, SQLite) each as a separate process with stdio transport. Each has its own JSON-RPC implementation. The tool prefixing (serena__, context7__) creates a flat namespace collision risk. No health checks, no restart policy, no resource limits on child processes. If one server leaks memory, it takes down the agent's tool capability silently.",
+      "risk": "low",
+      "examples": [
+        "7 subprocesses = 7x memory overhead, 7x fd usage, 7x failure domains",
+        "No circuit breaker — if context7 hangs, all context7__ tools hang",
+        "Tool count explodes: 50+ MCP tools + 20 builtin = huge schema sent to model"
+      ]
+    },
+    {
+      "category": "legacy_burden",
+      "count": 6,
+      "description": "The Config struct (config.h:37) has 40+ fields mixing provider settings, UI settings, hooks, skills, modes, System One, MCP — a god object. ProviderConfigFactory creates providers but the loop passes Config& everywhere. No separation of concerns: the agent loop knows about hooks, skills, modes, RAG, System One. This will prevent clean provider additions (e.g., Gemini, Bedrock) without touching the loop.",
+      "risk": "low",
+      "examples": [
+        "Config.max_iterations used nowhere in tool execution path",
+        "Config.hooks_* are shell commands — stringly-typed, no structured hook API",
+        "ModeEntry.disabled_tools is a string vector matched at registry build time, not runtime"
+      ]
+    }
+  ],
+  "top_5_concerns": [
+    "Sequential tool execution — no parallelism, latency scales linearly with tool count",
+    "Orphaned tool_use repair mutates history silently — violates conversation integrity",
+    "Per-tool permission prompts with no batch/turn-level approval — UX death by a thousand clicks",
+    "Global cancel flag + no child process cleanup on SIGINT — resource leaks, orphaned MCP servers",
+    "God Config object + monolithic RunTurn signature — coupling prevents evolution"
+  ],
+  "architecture_smells": [
+    "RunTurn does too much: history repair, streaming, tool execution, permission, hooks, compaction trigger — 500+ lines in one function",
+    "Tool interface is JSON-stringly-typed — no type safety, no schema validation, double serialization for MCP"
+  ],
+  "praise": [
+    "UiCallbacks abstraction cleanly separates loop logic from UI (CLI vs GUI vs headless)",
+    "Auto-compact preserves tool_use/tool_result pairing — careful boundary detection avoids API errors",
+    "Workspace trust model (WorkspaceAllows) provides sandboxing for bash/file tools",
+    "Token tracking with live context gauge in GUI status bar — rare in coding agents",
+    "MCP stdio transport implementation is solid: non-blocking read, proper cleanup, JSON-RPC 2.0 compliant"
+  ],
+  "veteran_quotes": [
+    "\"We shipped a coding agent in 2021. The single biggest regret: synchronous tool execution. Users perceive latency as intelligence. If the model calls 4 tools and you run them sequentially, you just 4x'd the user's wait time. Build a DAG executor or die.\" — 20-year engine dev, ex-Google/Anthropic",
+    "\"The orphaned tool_use repair is a code smell that screams 'protocol violation upstream'. Either fix the model's tool-calling discipline or make the repair explicit and auditable. Silent mutation of history is how you get hallucinated tool results that poison the next turn.\" — Tools programmer, 15 years IDE/CLI work",
+    "\"Config with 40 fields passed by reference to a 500-line function — that's not architecture, that's a hostage situation. Extract a TurnContext, an ExecutionPolicy, a ToolExecutor. The loop should know nothing about hooks, skills, or System One.\" — Architecture lead, shipped 3 AAA engines"
+  ]
+}

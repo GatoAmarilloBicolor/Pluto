@@ -78,6 +78,11 @@ int max_iterations = 25; // max agent loop iterations per turn
 	bool systemone_prefer_local = false;
 	bool systemone_fallback_to_local = true;
 
+	// Built-in MCP servers (opt-in, disabled by default for security).
+	// List of server names to enable: "serena", "context7", "deepwiki", 
+	// "rea", "memory", "playwright", "sqlite"
+	std::vector<std::string> mcp_builtin_enabled;
+
 	// MCP server configuration lives in its own files (.mcp.json etc);
 	// see src/mcp/Config.h.
 };

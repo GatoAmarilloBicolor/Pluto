@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstdarg>
-#include <string.h>
+#include <cstring>
 
 class BString {
 public:
@@ -34,9 +34,9 @@ public:
     
     BString& operator+=(const char* str) {
         if (str) {
-            size_t len = strlen(str);
+            size_t len = std::strlen(str);
             EnsureCapacity(fLength + len + 1);
-            strcpy(fString + fLength, str);
+            std::strcpy(fString + fLength, str);
             fLength += len;
         }
         return *this;
@@ -124,7 +124,7 @@ public:
     
     int32 FindFirst(const char* str) const {
         if (!str || !fString) return -1;
-        const char* found = strstr(fString, str);
+        const char* found = std::strstr(fString, str);
         return found ? static_cast<int32>(found - fString) : -1;
     }
     
@@ -133,7 +133,7 @@ public:
             size_t s = start;
             size_t c = count;
             if (s + c > fLength) c = fLength - s;
-            memmove(fString + s, fString + s + c, fLength - s - c + 1);
+            std::memmove(fString + s, fString + s + c, fLength - s - c + 1);
             fLength -= c;
         }
         return *this;
@@ -160,9 +160,9 @@ public:
             SetTo("", 0);
             return;
         }
-        if (len == SIZE_MAX) len = strlen(str);
+        if (len == SIZE_MAX) len = std::strlen(str);
         EnsureCapacity(len + 1);
-        memcpy(fString, str, len);
+        std::memcpy(fString, str, len);
         fString[len] = '\0';
         fLength = static_cast<int32>(len);
     }

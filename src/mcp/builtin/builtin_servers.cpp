@@ -16,8 +16,8 @@ std::vector<BuiltinMcpServer> list_builtin_mcp_servers() {
 		s.name = "serena";
 		s.command = "serena-mcp-server";  // or the path to the serena MCP binary
 		s.args = {};
-		s.auto_start = true;
-		s.require_approval = false;
+		s.auto_start = false;  // Disabled by default - user must opt-in via config
+		s.require_approval = true;
 		s.description = "Serena codebase exploration: symbol search, file read/edit, LSP operations.";
 		servers.push_back(std::move(s));
 	}
@@ -28,8 +28,8 @@ std::vector<BuiltinMcpServer> list_builtin_mcp_servers() {
 		s.name = "context7";
 		s.command = "context7-mcp-server";
 		s.args = {};
-		s.auto_start = true;
-		s.require_approval = false;
+		s.auto_start = false;
+		s.require_approval = true;
 		s.description = "Up-to-date library documentation and code examples for any programming library.";
 		servers.push_back(std::move(s));
 	}
@@ -40,8 +40,8 @@ std::vector<BuiltinMcpServer> list_builtin_mcp_servers() {
 		s.name = "deepwiki";
 		s.command = "deepwiki-mcp-server";
 		s.args = {};
-		s.auto_start = true;
-		s.require_approval = false;
+		s.auto_start = false;
+		s.require_approval = true;
 		s.description = "AI-powered documentation for GitHub repositories: wiki contents, structure, Q&A.";
 		servers.push_back(std::move(s));
 	}
@@ -52,8 +52,8 @@ std::vector<BuiltinMcpServer> list_builtin_mcp_servers() {
 		s.name = "rea";
 		s.command = "rea-mcp-server";
 		s.args = {};
-		s.auto_start = true;
-		s.require_approval = false;
+		s.auto_start = false;
+		s.require_approval = true;
 		s.description = "REA reasoning and decision model: classification, verification, triage, guardrails.";
 		servers.push_back(std::move(s));
 	}
@@ -64,8 +64,8 @@ std::vector<BuiltinMcpServer> list_builtin_mcp_servers() {
 		s.name = "memory";
 		s.command = "memory-mcp-server";
 		s.args = {};
-		s.auto_start = true;
-		s.require_approval = false;
+		s.auto_start = false;
+		s.require_approval = true;
 		s.description = "Persistent knowledge graph: create entities, relations, observations, search nodes.";
 		servers.push_back(std::move(s));
 	}
@@ -76,8 +76,8 @@ std::vector<BuiltinMcpServer> list_builtin_mcp_servers() {
 		s.name = "playwright";
 		s.command = "playwright-mcp-server";
 		s.args = {};
-		s.auto_start = true;
-		s.require_approval = false;
+		s.auto_start = false;
+		s.require_approval = true;
 		s.description = "Browser automation: navigate, click, fill forms, take screenshots, extract content.";
 		servers.push_back(std::move(s));
 	}
@@ -88,8 +88,8 @@ std::vector<BuiltinMcpServer> list_builtin_mcp_servers() {
 		s.name = "sqlite";
 		s.command = "sqlite-mcp-server";
 		s.args = {};
-		s.auto_start = true;
-		s.require_approval = false;
+		s.auto_start = false;
+		s.require_approval = true;
 		s.description = "SQLite database: create tables, insert, query, update, delete records.";
 		servers.push_back(std::move(s));
 	}

@@ -1,0 +1,1 @@
+/usr/bin/c++  -arch arm64 -bundle -Wl,-headerpad_max_install_names -o "Ask pluto" CMakeFiles/Ask_pluto.dir/src/haiku/TrackerAddOn.cpp.o

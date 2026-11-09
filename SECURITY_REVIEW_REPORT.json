@@ -1,0 +1,300 @@
+{
+  "panel": "100 Veteran Game Devs & Designers — Security & Trust Boundaries Review",
+  "title": "Pluto Security & Trust Boundaries Analysis",
+  "experts": 100,
+  "real_issues": [
+    {
+      "id": "SEC-001",
+      "severity": "critical",
+      "file": "src/mcp/systemone_server.cpp",
+      "lines": "33-67",
+      "title": "System One HTTP client lacks certificate pinning and uses hardcoded CA path",
+      "evidence": "post_json() creates new CURL handle per request, sets CURLOPT_CAINFO to /system/data/ssl/CARootCertificates.pem but no CURLOPT_PINNEDPUBLICKEY. No hostname verification beyond default. KEV_SERVER_URL from env KEV_MCP_URL defaults to http://localhost:8080/mcp (plaintext HTTP).",
+      "impact": "MITM on decision server traffic; attacker can inject malicious classifications/verifications that agent trusts implicitly. No pinning = any valid cert accepted. Default localhost HTTP = trivial local network sniffing/injection."
+    },
+    {
+      "id": "SEC-002",
+      "severity": "critical",
+      "file": "src/tools/WebSearch.cpp",
+      "lines": "25-77",
+      "title": "WebSearch HTTP helpers duplicate curl setup without centralized security config",
+      "evidence": "http_get() and http_post() each create fresh CURL handle, hardcode CURLOPT_CAINFO, CURLOPT_SSL_VERIFYPEER, CURLOPT_SSL_VERIFYHOST, CURLOPT_SSL_VERIFYSTATUS. No ApplyCurlSecurityWithPinning() call. Brave/Tavily/SearXNG API keys passed in URL/query params (logged in server access logs).",
+      "impact": "Inconsistent TLS config across codebase; pinning bypassed. API keys in URLs leak to proxy logs, browser history, Referer headers. No request signing or HMAC."
+    },
+    {
+      "id": "SEC-003",
+      "severity": "critical",
+      "file": "src/mcp/SseTransport.cpp",
+      "lines": "85-120",
+      "title": "SSE origin validation (resolve_url) only checks final hostname, not redirect chain",
+      "evidence": "resolve_url() follows redirects via CURLOPT_FOLLOWLOCATION=1L, then checks final URL hostname against allowlist. An attacker-controlled endpoint can redirect from allowed host (api.anthropic.com) to evil.com — final hostname check passes if evil.com is also allowlisted, or if allowlist check is only on initial URL.",
+      "impact": "SSRF via open redirect on trusted domain. Attacker registers open redirect on api.anthropic.com (or compromises subdomain) → redirects to internal metadata service (169.254.169.254) or localhost services."
+    },
+    {
+      "id": "SEC-004",
+      "severity": "high",
+      "file": "src/curl_security.h",
+      "lines": "60-117",
+      "title": "Certificate pinning placeholder pins (all zeros) — pinning effectively disabled",
+      "evidence": "ANTHROPIC_PINS and OPENAI_PINS arrays contain only 'sha256//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='. ApplyCurlSecurityWithPinning() receives these pins but they match no real certificate.",
+      "impact": "Pinning code paths exercised but provide zero protection. False sense of security. Any valid cert for anthropic.com/openai.com accepted."
+    },
+    {
+      "id": "SEC-005",
+      "severity": "high",
+      "file": "src/oauth.cpp",
+      "lines": "200-280",
+      "title": "OAuth token file stored at ~/config/settings/pluto/oauth-tokens with chmod 600 — no encryption at rest",
+      "evidence": "SaveOAuthTokens() writes JSON with access_token, refresh_token, expires_at to plaintext file. Only protection is filesystem permissions (0600). No DPAPI/keychain equivalent on Haiku. tokens loaded into memory as std::string (not SecureString).",
+      "impact": "Local attacker with filesystem read access (same user, backup theft, shared machine) steals long-lived refresh tokens. Tokens persist across reboots unencrypted."
+    },
+    {
+      "id": "SEC-006",
+      "severity": "high",
+      "file": "src/tools/Bash.cpp",
+      "lines": "54-95",
+      "title": "Bash tool sandbox only validates cwd, not command arguments — shell injection via shq()",
+      "evidence": "shq() wraps command in single quotes, escapes embedded quotes. But command string passed to 'sh -c' — if user controls any part of command (e.g., from LLM output), injection possible via $(), ``, ||, &&, ;, |, newlines inside quoted string. No allowlist of permitted commands.",
+      "impact": "Prompt injection → arbitrary command execution. LLM outputs 'bash' tool call with malicious command → runs with user privileges. No seccomp, no container, no syscall filtering."
+    },
+    {
+      "id": "SEC-007",
+      "severity": "high",
+      "file": "src/mcp/Config.cpp",
+      "lines": "38-62",
+      "title": "expand_env() supports ${VAR:-default} syntax — env var injection into MCP server config",
+      "evidence": "MCP server specs loaded from .mcp.json, mcp-local.json, ~/.config/settings/pluto/mcp.json. expand_env() expands ${VAR} and ${VAR:-default} in url, command, args, env, headers. Malicious config can exfiltrate env vars (API keys, tokens) via HTTP headers or command args to attacker-controlled server.",
+      "impact": "Supply chain attack: malicious .mcp.json in project repo → when any team member runs pluto, their env vars (ANTHROPIC_API_KEY, OAUTH tokens) sent to attacker. No config signing or trust-on-first-use."
+    },
+    {
+      "id": "SEC-008",
+      "severity": "medium",
+      "file": "src/mcp/HttpTransport.cpp",
+      "lines": "1-72",
+      "title": "HttpTransport lacks request/response size limits and timeout configuration",
+      "evidence": "HttpTransport::request() uses ApplyCurlSecurityWithPinning() but sets no CURLOPT_MAXFILESIZE, no CURLOPT_TIMEOUT_MS (only DEFAULT_TIMEOUT_MS=30000 in curl_security.h). No streaming response handling — full response buffered in memory.",
+      "impact": "DoS via large response (memory exhaustion) or slowloris (connection hold). MCP server can send 10GB response → OOM crash."
+    },
+    {
+      "id": "SEC-009",
+      "severity": "medium",
+      "file": "src/tools/WebFetch.cpp",
+      "lines": "18-32",
+      "title": "WebFetch 512KB download cap but no Content-Length validation before download",
+      "evidence": "collect_cb() stops writing after 512KB but curl still downloads entire response (CURLOPT_MAXFILESIZE not set). Server can send 10GB → client reads all into curl buffer then discards. No timeout on connect phase separate from transfer.",
+      "impact": "Bandwidth exhaustion, memory pressure in curl internal buffers. Slowloris-style attack holds connection open."
+    },
+    {
+      "id": "SEC-010",
+      "severity": "medium",
+      "file": "src/tools/ReadFile.cpp",
+      "lines": "69-80",
+      "title": "ReadFile 64MB limit checked after opening file — TOCTOU between stat and read",
+      "evidence": "f.seekg(0, end) + tellg() gets size, then seekg(0, beg). But file could be replaced/grown between stat and read. No O_NOFOLLOW, no file descriptor passing. Symlink race: attacker replaces file with symlink to /etc/shadow after size check.",
+      "impact": "Local privilege escalation via symlink race. Attacker wins race → reads arbitrary files as pluto user."
+    },
+    {
+      "id": "SEC-011",
+      "severity": "medium",
+      "file": "src/config.cpp",
+      "lines": "523-533",
+      "title": "API key resolution order: env var → per-provider key file → legacy file — env vars win, but no warning when multiple sources exist",
+      "evidence": "ResolveApiKey() checks getenv() first, then ~/config/settings/pluto/keys/<ENV_VAR>, then legacy ~/config/settings/pluto-api-key. If both env var and key file set, env var silently wins. No audit log of which source used.",
+      "impact": "Confused deputy: user thinks key file used but env var overrides. Env var leaked in shell history/ps output. No key rotation detection."
+    },
+    {
+      "id": "SEC-012",
+      "severity": "medium",
+      "file": "src/mcp/StdioTransport.cpp",
+      "lines": "37-63",
+      "title": "StdioTransport fork+execvp inherits all parent FDs — no close-on-exec or FD sanitization",
+      "evidence": "Child process after fork() inherits all open FDs (curl handles, sockets, config files). execvp() doesn't close them automatically. No FD_CLOEXEC set on sensitive FDs. Child MCP server can read parent's network connections, config files.",
+      "impact": "MCP server (potentially untrusted third-party binary) inherits sensitive FDs. Can exfiltrate data via inherited sockets, read API keys from config file FDs."
+    },
+    {
+      "id": "SEC-013",
+      "severity": "low",
+      "file": "src/filelock.h",
+      "lines": "24-53",
+      "title": "ScopedFileLock uses 0644 permissions on lock file — world-readable lock files",
+      "evidence": "open(lock_path, O_CREAT|O_RDWR, 0644) creates lock files readable by all users. Lock file contains no secrets but reveals which config files being accessed (oauth-tokens.lock, api-key.lock).",
+      "impact": "Information leakage: local users can monitor pluto activity patterns, detect when OAuth refresh occurs, infer project structure."
+    },
+    {
+      "id": "SEC-014",
+      "severity": "low",
+      "file": "src/curl_security.h",
+      "lines": "35-45",
+      "title": "SecureString zeroize() uses memset — compiler may optimize away (dead store elimination)",
+      "evidence": "SecureString::~SecureString() calls memset(data(), 0, size()). No volatile qualifier, no compiler barrier. Clang/GCC with -O2 may elide the memset as dead store since object is being destroyed.",
+      "impact": "Secrets (API keys, tokens) may remain in memory after SecureString destruction. Memory dump / core dump exposes secrets."
+    },
+    {
+      "id": "SEC-015",
+      "severity": "low",
+      "file": "src/workspace.cpp",
+      "lines": "103-135",
+      "title": "canonicalize() uses BPath.SetTo() which follows symlinks — path traversal via symlink race",
+      "evidence": "canonicalize() calls BPath.SetTo(raw.c_str(), nullptr, true) — third arg 'true' means follow symlinks. Then normalize_path() on result. But symlink target could change between SetTo and normalize_path. WorkspaceAllows() uses canonicalize().",
+      "impact": "TOCTOU symlink race bypasses workspace sandbox. Attacker creates symlink to allowed dir, passes check, then switches symlink to /etc before file operation."
+    }
+  ],
+  "hypothetical_findings": [
+    {
+      "id": "HYP-001",
+      "category": "coupling",
+      "title": "Tight coupling between curl_security.h and every network-using module — single point of failure",
+      "detail": "ApplyCurlSecurityWithPinning() called from HttpTransport, SseTransport, SseSubscriber, AnthropicProvider, WebFetch, WebSearch (partially), systemone_server. Any change to curl_security.h requires re-audit of 7+ call sites. No abstraction layer for 'secure HTTP client'."
+    },
+    {
+      "id": "HYP-002",
+      "category": "scaling",
+      "title": "No connection pooling — new CURL handle per request in WebSearch, WebFetch, systemone_server",
+      "detail": "http_get/http_post in WebSearch.cpp create/destroy CURL handle each call. systemone_server post_json() same. AnthropicProvider reuses handle for streaming but not for non-streaming. No HTTP/2 multiplexing, no keep-alive reuse across tools. High latency on repeated calls."
+    },
+    {
+      "id": "HYP-003",
+      "category": "tech_debt",
+      "title": "Duplicate HTTP client implementations: CurlUtil.h, WebSearch.cpp http_get/post, systemone_server post_json, HttpTransport",
+      "detail": "4+ independent curl wrapper implementations with inconsistent TLS config, error handling, timeouts. Bug fixes must be applied 4x. No shared retry/backoff logic. No centralized request/response logging for audit."
+    },
+    {
+      "id": "HYP-004",
+      "category": "platform_risk",
+      "title": "Haiku-only BFS attribute indexes (pluto:title, pluto:model, etc.) — no portable fallback",
+      "detail": "SessionStore::ensure_sessions_dir() calls fs_create_index() on boot volume. Non-Haiku builds stub out entirely (return empty). No SQLite/JSON fallback for session metadata queries. Porting to Linux/macOS requires complete rewrite of session storage."
+    },
+    {
+      "id": "HYP-005",
+      "category": "testing_gaps",
+      "title": "No integration tests for MCP server spawn/connect/notify lifecycle",
+      "detail": "test_mcp.cpp tests JSON-RPC parsing only. No test for: StdioTransport fork/exec cleanup on crash, SSE reconnect on network flake, HttpTransport timeout behavior, MCP tool call error propagation. Manual testing only."
+    },
+    {
+      "id": "HYP-006",
+      "category": "knowledge_silos",
+      "title": "System One decision model integration hardcoded to KEV_MCP_URL env var — no config file, no discovery",
+      "detail": "systemone_server.cpp:92-95 KEV_SERVER_URL = getenv('KEV_MCP_URL') ?: 'http://localhost:8080/mcp'. No .pluto-systemone config, no mcp.json entry, no health check. Operators must know magic env var. Documentation only in code comments."
+    },
+    {
+      "id": "HYP-007",
+      "category": "abstraction_leaks",
+      "title": "ProviderFactory auto-detects provider from model name string matching — fragile heuristic",
+      "detail": "ProviderFactory.cpp:26-34 checks model.find('claude') etc. to pick Anthropic vs OpenAICompat. Breaks for new model names (e.g., 'claude-4-sonnet' works, 'anthropic/claude-4' works, but 'my-claude-finetune' → wrong provider). No explicit provider field in Config for override."
+    },
+    {
+      "id": "HYP-008",
+      "category": "legacy_burden",
+      "title": "Legacy API key file ~/config/settings/pluto-api-key still supported alongside per-provider keys",
+      "detail": "ResolveApiKey() falls back to api_key_path() (legacy) after per-provider key file. Two config locations for same secret. Migration path unclear. Users may have keys in both places with different values — undefined which wins."
+    },
+    {
+      "id": "HYP-009",
+      "category": "overengineering",
+      "title": "Custom HTML stripper in WebFetch.cpp (200 lines) — fragile, incomplete, duplicates browser engine logic",
+      "detail": "strip_html() implements ad-hoc tag stripping, entity decoding, whitespace collapse. Misses: CDATA, comments, DOCTYPE, malformed tags, nested script/style, CSS/JS in attributes, SVG/MathML. Better: use libxml2 or Haiku's HTML parser if available."
+    },
+    {
+      "id": "HYP-010",
+      "category": "ux_friction",
+      "title": "OAuth token refresh failure falls back to API key silently with only stderr warning",
+      "detail": "ResolveCredentials() in config.cpp:882-893: if OAuthEnsureValidToken() returns empty, prints warning to stderr then falls back to API key. GUI users may not see stderr. No UI prompt to re-auth. Silent degradation from user-scoped OAuth to project-scoped API key."
+    },
+    {
+      "id": "HYP-011",
+      "category": "scaling",
+      "title": "MCP tool namespace collision: server_name__tool_name — no namespacing for 100+ tools",
+      "detail": "register_mcp_tools() prefixes with server_name + '__'. If two MCP servers expose 'read_file', both become serverA__read_file, serverB__read_file. LLM must know exact prefix. No tool aliases, no conflict resolution, no dynamic tool filtering by relevance."
+    },
+    {
+      "id": "HYP-012",
+      "category": "tech_debt",
+      "title": "Bash tool uses system 'timeout' binary if available, else no timeout enforcement — inconsistent behavior",
+      "detail": "Bash.cpp:88-110 checks access('/bin/timeout', X_OK). If missing, runs without timeout but adds note to output. Haiku may not have timeout(1). No portable timeout implementation (alarm/setitimer). Behavior differs across Haiku installations."
+    },
+    {
+      "id": "HYP-013",
+      "category": "coupling",
+      "title": "Workspace trust model baked into every file tool — no centralized authorization service",
+      "detail": "ReadFile, WriteFile, EditFile, Glob, Bash all call WorkspaceAllows() + LogAccess(). Logic duplicated. No pluggable policy engine. Adding 'read-only mode' or 'per-tool permissions' requires editing 5+ files. No audit trail beyond access.log."
+    },
+    {
+      "id": "HYP-014",
+      "category": "platform_risk",
+      "title": "IPC via Haiku BMessenger — no authentication, any local app can impersonate Pluto",
+      "detail": "PlutoMessenger.cpp uses BMessenger with signature prefix 'application/x-vnd.Hay-pluto'. Any app can register same signature. find_peers() trusts signature string. No challenge-response, no capability tokens. Local malware can enumerate Pluto instances, inject messages."
+    },
+    {
+      "id": "HYP-015",
+      "category": "testing_gaps",
+      "title": "No fuzz testing for JSON-RPC parsing in MCP client/server",
+      "detail": "McpClient::connect() and systemone_server main loop parse JSON-RPC from untrusted network/subprocess. Malformed 'id' field (float, string, huge int), nested objects, deeply nested arrays — no depth limits, no size limits on parsed Value. Parser in json.h untested against malicious input."
+    },
+    {
+      "id": "HYP-016",
+      "category": "knowledge_silos",
+      "title": "System One 9 tools exposed via MCP but no schema validation on arguments — LLM can pass invalid args",
+      "detail": "systemone_server.cpp handle_tool_call() passes args directly to call_kev_tool() → HTTP POST to KEV server. No validation of tool_name against known list, no schema check on arguments. KEV server errors returned as generic 'mcp error'. LLM wastes tokens on retries."
+    },
+    {
+      "id": "HYP-017",
+      "category": "abstraction_leaks",
+      "title": "AnthropicProvider estimates tokens via text.size()/4 — wildly inaccurate for non-English, code, tokens",
+      "detail": "Anthropic.cpp:599-601 estimate_tokens() returns text.size()/4+1. Real tokenizer (cl100k_base) differs significantly. Cost estimation (estimate_cost) uses this bogus count. Users see wrong costs, context window calculations wrong, auto-compact triggers at wrong threshold."
+    },
+    {
+      "id": "HYP-018",
+      "category": "legacy_burden",
+      "title": "Config file format is custom INI-like (key = value) — no schema, no validation, manual parsing",
+      "detail": "config.cpp LoadConfig() parses line-by-line with custom sanitize(). No version field. Adding new field requires code change in 3 places (load, save, struct). No migration path. Comments not preserved on save. Error messages generic."
+    },
+    {
+      "id": "HYP-019",
+      "category": "overengineering",
+      "title": "SessionStore uses BFS attributes (pluto:title, pluto:model, etc.) + JSONL file — dual storage, sync complexity",
+      "detail": "Session metadata stored twice: in BFS attributes (for Tracker Find) and in JSONL file (for content). save() writes both; load() reads JSONL then attributes. If attribute write fails after JSONL write → inconsistency. No transaction."
+    },
+    {
+      "id": "HYP-020",
+      "category": "ux_friction",
+      "title": "No 'dry-run' mode for tools — LLM cannot preview bash/edit_file effects without executing",
+      "detail": "Tool::preview() returns string description but execute() runs immediately. No sandboxed preview execution. User must trust LLM's preview string. For bash, preview shows command but not output. For edit_file, preview shows diff but doesn't verify old_string uniqueness in current file state."
+    }
+  ],
+  "top_5_concerns": [
+    "Certificate pinning completely disabled (placeholder pins) — all TLS connections vulnerable to MITM with valid cert",
+    "OAuth refresh tokens stored unencrypted on disk — local attacker steals long-lived credentials",
+    "Bash tool shell injection via shq() quoting — prompt injection = arbitrary code execution",
+    "MCP config env var expansion (${VAR}) exfiltrates secrets via malicious .mcp.json in project repo",
+    "System One decision server talks over plaintext HTTP (default localhost:8080) with no pinning — core safety layer compromised"
+  ],
+  "architecture_smells": [
+    "Four independent HTTP client implementations with inconsistent security config (CurlUtil, WebSearch, HttpTransport, systemone_server)",
+    "Custom INI-like config format with manual parsing — no schema, no validation, no migration",
+    "Dual session storage (BFS attributes + JSONL) with no transactional consistency",
+    "Provider auto-detection via string matching on model name — fragile heuristic, no explicit override",
+    "BMessenger IPC with signature-only authentication — any local process can impersonate Pluto",
+    "ScopedFileLock creates world-readable lock files (0644) — information leakage",
+    "SecureString memset zeroize optimizable away by compiler — secrets may persist in memory",
+    "No connection pooling or HTTP/2 support — high latency on repeated API calls",
+    "Bash tool depends on external 'timeout' binary — inconsistent behavior across Haiku installs",
+    "System One KEV server URL hardcoded to env var only — no config file, no discovery, no health check"
+  ],
+  "praise": [
+    "Workspace sandbox with canonicalize() + WorkspaceAllows() — consistent path validation across all file tools",
+    "Atomic file writes (temp + rename) for config, API keys, sessions — crash-safe persistence",
+    "ScopedFileLock with flock() prevents TOCTOU on concurrent config/token writes",
+    "SSE origin validation (resolve_url) — proactive SSRF protection on streaming endpoints",
+    "OAuth PKCE flow implemented correctly with code_verifier/challenge/state",
+    "SecureString class exists (even if memset optimizable) — shows security intent",
+    "Certificate pinning infrastructure in place (curl_security.h) — just needs real pins",
+    "Per-provider API key files (~/config/settings/pluto/keys/) — better than single legacy file",
+    "MCP server scoping (PROJECT/USER/LOCAL) with approval callback — least privilege for extensions",
+    "Session metadata as BFS attributes — native Haiku integration, searchable in Tracker Find"
+  ],
+  "veteran_quotes": [
+    "\"They built the castle walls (workspace sandbox, atomic writes, flock) but left the drawbridge down (pinning disabled, tokens unencrypted, shell injection). Classic 'security theater' — looks secure until you poke it.\"",
+    "\"System One is the brain's safety layer — classification, verification, guard rails. But it talks to KEV over plaintext HTTP with zero pinning. That's not a safety layer, that's a backdoor with a neon sign.\"",
+    "\"The MCP config ${VAR} expansion is a supply chain attack waiting to happen. One malicious .mcp.json in a shared repo and every developer's API keys walk out the front door. No signing, no trust-on-first-use, not even a warning.\""
+  ]
+}

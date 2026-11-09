@@ -20,6 +20,8 @@ public:
     virtual void Insert(const char* text) { (void)text; }
     virtual void Insert(int32 offset, const char* text) { (void)offset; (void)text; }
     virtual void Insert(int32 offset, const char* text, int32 length) { (void)offset; (void)text; (void)length; }
+    virtual void Insert(const char* text, int32 length, const text_run_array* runs) { (void)text; (void)length; (void)runs; }
+    virtual void Insert(const char* text, const text_run_array* runs) { (void)text; (void)runs; }
     virtual void Delete(int32 start, int32 end) { (void)start; (void)end; }
     virtual void SetText(const char* text) { (void)text; }
     virtual void SetText(const char* text, int32 length) { (void)text; (void)length; }
@@ -35,6 +37,7 @@ public:
     }
     virtual void MakeEditable(bool editable) { (void)editable; }
     virtual bool IsEditable() const { return false; }
+    virtual void MakeSelectable(bool selectable) { (void)selectable; }
     virtual void SetAlignment(alignment align) { (void)align; }
     virtual alignment Alignment() const { return B_ALIGN_LEFT; }
     
@@ -58,6 +61,7 @@ public:
     virtual BPoint PointAt(int32 offset) const { (void)offset; return BPoint(); }
     virtual void ScrollTo(float x, float y) { (void)x; (void)y; }
     virtual void SelectAll() {}
+    virtual void HideTyping(bool hide) { (void)hide; }
     virtual BScrollBar* ScrollBar(int32 which) const { (void)which; return nullptr; }
 };
 

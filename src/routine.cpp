@@ -207,7 +207,15 @@ std::string DetectChangedFiles() {
 		close(pipefd[0]);
 		dup2(pipefd[1], STDOUT_FILENO);
 		close(pipefd[1]);
-		execl("/bin/sh", "sh", "-c", "git status --porcelain 2>/dev/null", nullptr);
+		// Redirect stderr to /dev/null
+		int devnull = open("/dev/null", O_WRONLY);
+		if (devnull >= 0) {
+			dup2(devnull, STDERR_FILENO);
+			close(devnull);
+		}
+		// Execute git directly (no shell)
+		char* args[] = {(char*)"git", (char*)"status", (char*)"--porcelain", nullptr};
+		execvp("git", args);
 		_exit(127);
 	}
 	close(pipefd[1]);
@@ -602,16 +610,22 @@ int RunRoutineCli(int argc, char** argv) {
 		std::string tmp = tmpl;
 		::write(tmpfd, prompt.c_str(), prompt.size());
 		::close(tmpfd);
-		std::string run_cmd = "pluto agent run " + shq(tmp);
+		
+		// Build argv for pluto agent run (no shell)
+		std::vector<std::string> run_argv = {"pluto", "agent", "run", tmp};
 		if (!found->model.empty())
-			run_cmd += " --model " + shq(found->model);
+			run_argv.push_back("--model"), run_argv.push_back(found->model);
 
 		std::printf("Running routine '%s'…\n", name.c_str());
 		// Use fork/exec instead of system for security
 		pid_t pid = fork();
 		if (pid < 0) return -1;
 		if (pid == 0) {
-			execl("/bin/sh", "sh", "-c", run_cmd.c_str(), nullptr);
+			std::vector<char*> args;
+			args.reserve(run_argv.size() + 1);
+			for (const auto& s : run_argv) args.push_back(const_cast<char*>(s.c_str()));
+			args.push_back(nullptr);
+			execvp(args[0], args.data());
 			_exit(127);
 		}
 		int status = 0;

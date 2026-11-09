@@ -20,6 +20,7 @@ public:
     virtual bool IsEnabled() const { return true; }
     virtual void SetMessage(BMessage* message) { (void)message; }
     virtual BMessage* Message() const { return nullptr; }
+    virtual void SetToolTip(const char* tip) { (void)tip; }
 };
 
 #endif

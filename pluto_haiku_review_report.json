@@ -1,0 +1,333 @@
+{
+  "real_issues": [
+    {
+      "id": "HAIKU-001",
+      "severity": "critical",
+      "title": "Private Header Dependency Across All Haiku Builds",
+      "file": "Makefile:387-402",
+      "description": "Build system hardcodes private Haiku header paths: `-I/boot/system/develop/headers/private/interface`, `-I/boot/system/develop/headers/private/support`, `-I/boot/system/develop/headers/private/locale`, `-I/boot/system/develop/headers/private/kernel`, `-I/boot/system/develop/headers/private/storage`, `-I/boot/system/develop/headers/private/app`. Any ABI change in these private headers breaks the build immediately. No fallback or version checks exist.",
+      "evidence": "Makefile lines 387-402 show private headers used for all four binaries. Mock headers in mock_headers/haiku/ only cover public API subset — they cannot substitute for private headers during cross-compilation.",
+      "impact": "Build fragility across Haiku beta releases. Any internal refactor (e.g., BLooper/BMessage internals, BNodeMonitor changes) requires immediate Pluto rebuild. Blocks distribution via HaikuDepot where build environment may differ.",
+      "recommendation": "Minimize private header usage. For BMessage scripting, use public BPropertyInfo/BHandler APIs. For node monitoring, wrap BNodeMonitor behind a stable interface. Add compile-time version checks via #if __HAIKU_VERSION__ >= X. Document exact Haiku revision tested against."
+    },
+    {
+      "id": "HAIKU-002",
+      "severity": "high",
+      "title": "Tracker Add-on Race Condition: 1.5s Fixed Sleep",
+      "file": "src/haiku/TrackerAddOn.cpp:99",
+      "description": "When Tracker add-on launches Pluto GUI, it calls `snooze(1500000)` (1.5 seconds) before attempting BMessenger delivery of B_REFS_RECEIVED. This is a blind race — if GUI takes >1.5s to start (cold start, slow disk, debug build), the message is lost.",
+      "evidence": "Line 99: `snooze(1500000);` followed by BMessenger send at line 106. No retry loop, no readiness check via BRoster::IsRunning() polling.",
+      "impact": "Files dropped on 'Ask pluto' Tracker add-on silently fail to open in Pluto on slow launches. User sees no error, just nothing happens.",
+      "recommendation": "Replace fixed sleep with polling loop: `while (!be_roster->IsRunning(kPlutoSig)) snooze(50000);` with max timeout (e.g., 10s). Add exponential backoff. Log warnings if timeout exceeded."
+    },
+    {
+      "id": "HAIKU-003",
+      "severity": "high",
+      "title": "Tracker Add-on Name Contains Space — Packaging Fragility",
+      "file": "Makefile:256, 268, 274",
+      "description": "Tracker add-on binary named 'Ask pluto' (with space). Makefile quotes it in some places but not others. Resource compilation (`resattr`, `addattr`) and install paths require careful escaping.",
+      "evidence": "Makefile line 256: `TRACKER_ADDON = \"Ask pluto\"`. Line 268: `resattr -i \"$(TRACKER_ADDON)\"`. Line 274: `addattr \"Tracker:AddonPath\"`. Install script must handle space correctly.",
+      "impact": "Packaging tools (hpkg, pkgbuild) may mishandle spaces. Shell scripts without proper quoting break. Non-ASCII filesystem edge cases.",
+      "recommendation": "Rename to 'Ask_Pluto' or 'ask-pluto' (no space). Update all references. Add explicit test in CI for packaging with special characters."
+    },
+    {
+      "id": "HAIKU-004",
+      "severity": "high",
+      "title": "Multi-Instance IPC Signature Uses PID — Discovery Complexity",
+      "file": "src/ipc/PlutoMessenger.cpp:227-240, src/gui/App.cpp:35-45",
+      "description": "Each Pluto GUI instance registers unique signature `application/x-vnd.Hay-pluto-<pid>`. Primary uses base signature. IPC discovery requires scanning all running teams via `get_next_team_info()` + `get_next_image_info()` to find matching signatures. No centralized registry.",
+      "evidence": "PlutoMessenger.cpp lines 227-240: `FindPlutoInstances()` iterates all teams, reads image info, matches signature prefix. App.cpp line 35-45: `pick_signature()` appends PID if base already running.",
+      "impact": "O(N) scan on every IPC call. Race between instance startup and discovery. No clean way to enumerate sessions across instances. PID reuse after process exit could cause false matches (though unlikely).",
+      "recommendation": "Use BLooper/BHandler port-based registration: each instance registers a well-known port name (e.g., `pluto.ipc.<pid>`). BRoster can query ports. Or use BMessageRunner with B_QUIT_REQUESTED cleanup. Simplify to single-instance model with tab forwarding (already partially implemented)."
+    },
+    {
+      "id": "HAIKU-005",
+      "severity": "medium",
+      "title": "LiveQueryTool Creates BLooper Per Watch — Potential Leak",
+      "file": "src/haiku/BfsTools.cpp:514-535, 620-623",
+      "description": "LiveQueryTool spawns a new `LiveQueryListener` (BLooper subclass) per `live_query` invocation. Listener runs `Run()` in thread. Cleanup via `Quit()` at end of watch window, but error paths (query fetch failure, early cancel) may skip Quit().",
+      "evidence": "Line 528: `Run()` starts thread. Line 620: `query.SetTarget(BMessenger(listener.get()))`. Line 623/684: `listener->Quit()` only called on normal completion.",
+      "impact": "If tool is cancelled or query fails, BLooper thread leaks. Each leaked looper consumes a thread + port. Over time, resource exhaustion.",
+      "recommendation": "Wrap listener in RAII guard that calls Quit() in destructor. Use `std::unique_ptr` with custom deleter. Add timeout watchdog that forces Quit()."
+    },
+    {
+      "id": "HAIKU-006",
+      "severity": "medium",
+      "title": "NodeMonitorTool Creates BLooper Per Invocation — No Cleanup on Error",
+      "file": "src/haiku/DesktopTools.cpp:121-134, 215-260",
+      "description": "NodeMonitorTool creates `NodeWatcher` (BLooper) per tool call. Watcher runs `Run()` immediately in constructor. On `watch_node()` failure or early exit, `watcher->Quit()` is called but only in specific branches. No guarantee on exception paths.",
+      "evidence": "Line 130: `NodeWatcher() : BLooper(...) { Run(); }`. Line 218-224: error path calls Quit. Line 260: success path calls Quit after duration. No try/catch or RAII.",
+      "impact": "Similar to LiveQueryTool — leaked threads/ports on errors. Tool is exposed to LLM via MCP, so errors are frequent.",
+      "recommendation": "Same RAII pattern. Consider pooling a single BLooper for all node monitoring instead of per-invocation."
+    },
+    {
+      "id": "HAIKU-007",
+      "severity": "medium",
+      "title": "No InitCheck() Validation on BNode/BEntry/BQuery Operations",
+      "file": "Multiple (SessionStore.cpp, BfsTools.cpp, HaikuAbstraction.cpp)",
+      "description": "BFS operations (BNode::WriteAttr, BQuery::Fetch, BEntry::InitCheck) often skip InitCheck() validation. Assumes success. On BFS corruption, full disk, or permission errors, silent data corruption or crashes occur.",
+      "evidence": "SessionStore.cpp line 272: `BNode node(path.c_str());` no InitCheck before WriteAttr. BfsTools.cpp line 168: `BNode node(path.c_str());` direct attr write. HaikuAbstraction.cpp line 64: `BNode node(&entry);` no check.",
+      "impact": "Silent failures on edge cases (network volumes, readonly BFS, attribute size limits). Hard to debug production issues.",
+      "recommendation": "Add `if (node.InitCheck() != B_OK) return error;` after every BNode/BEntry/BQuery construction. Create helper `CheckedNode(path)` that asserts or returns optional."
+    },
+    {
+      "id": "HAIKU-008",
+      "severity": "medium",
+      "title": "SSL CA Cert Path Hardcoded to Haiku Location",
+      "file": "src/haiku/AsyncStream.cpp:215, src/haiku/ModelCaps.cpp:49, src/gui/MainWindow.cpp:1034",
+      "description": "Three locations hardcode `/system/data/ssl/CARootCertificates.pem` for curl SSL verification. Non-Haiku builds (mock) lack this path. No abstraction for certificate store location.",
+      "evidence": "AsyncStream.cpp line 215, ModelCaps.cpp line 49, MainWindow.cpp line 1034 all use identical hardcoded path.",
+      "impact": "Cross-compilation fails SSL verification. Mock builds cannot test HTTPS. Future Haiku versions may relocate certs.",
+      "recommendation": "Abstract via `pluto::GetCaCertPath()` returning platform-appropriate path. On Haiku, use `find_directory(B_SYSTEM_DATA_DIRECTORY)` + `ssl/CARootCertificates.pem`. Provide fallback for mock."
+    },
+    {
+      "id": "HAIKU-009",
+      "severity": "low",
+      "title": "Deskbar Replicant Uses Hardcoded HVIF Icon Embedded in Binary",
+      "file": "src/gui/DeskbarReplicant.cpp:347-360, Makefile:230-235",
+      "description": "HVIF icon compiled into replicant via `xres` and `resattr`. No runtime fallback if resource missing. Icon size assumes 16x16 Deskbar slot — no HiDPI support.",
+      "evidence": "DeskbarReplicant.cpp line 347: `BBitmapStream` reads from resource. Makefile lines 230-235: resource compilation pipeline.",
+      "impact": "If resource stripped or corrupted, replicant shows blank. HiDPI displays (future Haiku) will render pixelated.",
+      "recommendation": "Load icon from file fallback (`/boot/apps/Pluto/icon.hvif`). Add `BBitmap::Bounds()` check for scaling. Consider `BIconUtils::GetVectorIcon()` for system icons."
+    },
+    {
+      "id": "HAIKU-010",
+      "severity": "low",
+      "title": "BMessage Scripting Property Specifiers Hardcoded as String Literals",
+      "file": "src/gui/App.cpp:225-233, src/ipc/PlutoMessenger.cpp:191-210",
+      "description": "Scripting properties (\"Workspace\", \"Model\", \"SessionTitle\", \"Busy\", \"Context\") defined as raw strings in two places. No central enum or code generation. Typos cause silent failures.",
+      "evidence": "App.cpp lines 225-233: PropertyInfo array. PlutoMessenger.cpp line 192: B_GET_PROPERTY for \"Context\" with topic as extra data.",
+      "impact": "Maintenance burden. Adding new property requires editing two files. No compile-time verification.",
+      "recommendation": "Define properties in shared header as constexpr array. Generate PropertyInfo and PlutoMessenger request builders from single source. Add unit test verifying round-trip."
+    }
+  ],
+  "hypothetical_findings": [
+    {
+      "id": "HYP-001",
+      "likelihood": "high",
+      "title": "BNodeMonitor Watch Leaks on Process Crash",
+      "description": "If Pluto GUI crashes while NodeMonitorTool or LiveQueryTool has active `watch_node()` calls, the kernel watch remains registered until the watched node is deleted or system reboot. No `atexit()` handler or signal handler calls `stop_watching()`. Subsequent runs may accumulate stale watches.",
+      "affected_files": ["src/haiku/DesktopTools.cpp:218-224", "src/haiku/BfsTools.cpp:620-623"]
+    },
+    {
+      "id": "HYP-002",
+      "likelihood": "medium",
+      "title": "BQuery Live Query Misses Updates During High Load",
+      "description": "LiveQueryListener runs a BLooper that processes B_QUERY_UPDATE messages. Under heavy filesystem activity, the looper's message queue may fill, causing dropped updates. No backpressure handling or batching. The `duration_ms` window may expire before all updates processed.",
+      "affected_files": ["src/haiku/BfsTools.cpp:514-535", "src/haiku/BfsTools.cpp:617-635"]
+    },
+    {
+      "id": "HYP-003",
+      "likelihood": "high",
+      "title": "Multi-Instance PID Signature Collision After Fork/Exec",
+      "description": "If Pluto CLI forks and execs another Pluto instance (e.g., via `bash` tool launching `Pluto_cli`), the child inherits parent's PID namespace view. `pick_signature()` may generate duplicate signature if PID reused quickly. BMessenger delivery becomes non-deterministic.",
+      "affected_files": ["src/gui/App.cpp:35-45", "src/ipc/PlutoMessenger.cpp:227-240"]
+    },
+    {
+      "id": "HYP-004",
+      "likelihood": "medium",
+      "title": "SessionStore BFS Attributes Exceed BFS Attribute Size Limit",
+      "description": "BFS limits attribute size to ~64KB (varies by version). SessionStore writes `pluto:graph:includes` and `pluto:graph:defines` as comma-separated strings (BfsAttrs.cpp:88-94). Large codebases with many includes/defines per file could exceed limit, causing WriteAttr to fail silently (no error check).",
+      "affected_files": ["src/map/BfsAttrs.cpp:88-94", "src/storage/SessionStore.cpp:68-70"]
+    },
+    {
+      "id": "HYP-005",
+      "likelihood": "low",
+      "title": "Deskbar Replicant BView Archival Incompatible Across Haiku Versions",
+      "description": "DeskbarReplicant implements `Archive()` and `Instantiate()` for BArchivable. If Haiku changes BView archival format (rare but possible), replicants saved in Deskbar settings from old version fail to instantiate on new version. No version field in archive.",
+      "affected_files": ["src/gui/DeskbarReplicant.cpp:16-17", "src/gui/DeskbarReplicant.h:13-17"]
+    },
+    {
+      "id": "HYP-006",
+      "likelihood": "high",
+      "title": "AsyncStreamManager libcurl Multi Stack Not Thread-Safe for Concurrent Submits",
+      "description": "AsyncStreamManager::PostStream() locks mutex but libcurl multi operations (curl_multi_add_handle) require the multi stack to be driven by a single thread. If PostStream called from multiple threads concurrently while Perform() runs in another, curl internal state corruption possible.",
+      "affected_files": ["src/haiku/AsyncStream.cpp:38-50", "src/haiku/AsyncStream.h:44-51"]
+    },
+    {
+      "id": "HYP-007",
+      "likelihood": "medium",
+      "title": "System One StdioTransport Leaves Zombie Processes on SIGKILL",
+      "description": "StdioTransport::stop() sends SIGTERM then SIGKILL after 500ms. If child process ignores SIGTERM and is in uninterruptible sleep (D state), SIGKILL may not reap immediately. waitpid loop exits after 50 attempts (500ms), leaving zombie. Parent process accumulates zombies over many MCP server restarts.",
+      "affected_files": ["src/mcp/StdioTransport.cpp:77-91"]
+    },
+    {
+      "id": "HYP-008",
+      "likelihood": "low",
+      "title": "BMessage Scripting via DesktopScriptTool Allows Arbitrary App Manipulation",
+      "description": "DesktopScriptTool exposes B_GET_PROPERTY, B_SET_PROPERTY, B_EXECUTE_PROPERTY to LLM with no sandboxing. A compromised or hallucinating LLM could script Tracker to delete files, Terminal to run commands, or any scriptable app. No capability gating or user confirmation for destructive actions.",
+      "affected_files": ["src/haiku/DesktopTools.cpp:275-350"]
+    }
+  ],
+  "top_5_concerns": [
+    {
+      "rank": 1,
+      "title": "Private Header Dependency — Build Fragility Across Haiku Versions",
+      "summary": "All four binaries depend on private Haiku headers. Any internal API change breaks build. No version detection, no abstraction layer. This is the single biggest risk to long-term maintainability on Haiku."
+    },
+    {
+      "rank": 2,
+      "title": "Tracker Add-on Race Condition — Silent Data Loss on Slow Launch",
+      "summary": "Fixed 1.5s sleep before BMessenger delivery means files dropped on 'Ask pluto' silently fail if GUI takes longer to start. No retry, no user feedback, no logging. Core user-facing feature is unreliable."
+    },
+    {
+      "rank": 3,
+      "title": "BLooper Leaks in Haiku Tools — Resource Exhaustion Under LLM Load",
+      "summary": "NodeMonitorTool, LiveQueryTool, DesktopScriptTool each spawn BLooper threads per invocation. Error paths skip Quit(). LLM-driven tools invoke these frequently. Leaked threads/ports accumulate until process OOM or port table exhaustion."
+    },
+    {
+      "rank": 4,
+      "title": "Multi-Instance IPC Discovery — O(N) Scan with Race Conditions",
+      "summary": "Finding other Pluto instances requires scanning all teams + images. PID-based signatures add complexity. No clean session enumeration. Race between instance startup and discovery breaks tab-forwarding."
+    },
+    {
+      "rank": 5,
+      "title": "No InitCheck() Validation on BFS Operations — Silent Corruption Risk",
+      "summary": "BNode, BEntry, BQuery operations throughout codebase skip InitCheck(). On edge cases (network volumes, full disk, permissions), writes silently fail or corrupt session data. Hard to reproduce, hard to debug."
+    }
+  ],
+  "architecture_smells": [
+    {
+      "id": "SMELL-001",
+      "name": "God Object: MainWindow.cpp (4818 lines)",
+      "description": "MainWindow handles UI, agent loop callbacks, slash commands, session management, file operations, settings, model picking, deskbar integration, telemetry, RAG, wiki, routines, schedules, syntax highlighting, and more. Violates single responsibility. Hard to test, hard to reason about.",
+      "files": ["src/gui/MainWindow.cpp"]
+    },
+    {
+      "id": "SMELL-002",
+      "name": "Duplicate BMessage Scripting Property Definitions",
+      "description": "Scripting properties defined in App.cpp (PropertyInfo array) and PlutoMessenger.cpp (hardcoded strings). Two sources of truth. Adding property requires editing both. No compile-time verification.",
+      "files": ["src/gui/App.cpp:225-233", "src/ipc/PlutoMessenger.cpp:191-210"]
+    },
+    {
+      "id": "SMELL-003",
+      "name": "Platform Abstraction Leakage — #ifdef __HAIKU__ Scattered Everywhere",
+      "description": "Haiku-specific code guarded by #ifdef __HAIKU__ in 20+ files. Mock implementations in separate files. No clean interface boundary. Adding new platform requires editing dozens of files. HaikuAbstraction.cpp helps but is incomplete (BNodeMonitor, BQuery, BClipboard not fully abstracted).",
+      "files": ["src/haiku/HaikuAbstraction.cpp", "src/storage/SessionStore.cpp", "src/haiku/BfsTools.cpp", "src/haiku/DesktopTools.cpp", "src/haiku/Notifications.cpp", "src/haiku/AsyncStream.cpp"]
+    },
+    {
+      "id": "SMELL-004",
+      "name": "Test Framework Absence — 21 Standalone main() Binaries",
+      "description": "Each test is a separate binary with its own main(), custom CHECK macro, manual failure counting. No fixtures, no setup/teardown, no parallel execution, no filtering. make check runs sequentially, stops on first failure. Hard to maintain, hard to extend.",
+      "files": ["tests/test_*.cpp (21 files)"]
+    },
+    {
+      "id": "SMELL-005",
+      "name": "Hardcoded SSL CA Cert Path in Three Locations",
+      "description": "Same `/system/data/ssl/CARootCertificates.pem` path in AsyncStream.cpp, ModelCaps.cpp, MainWindow.cpp. Violates DRY. Cross-compilation breaks. No abstraction for certificate store.",
+      "files": ["src/haiku/AsyncStream.cpp:215", "src/haiku/ModelCaps.cpp:49", "src/gui/MainWindow.cpp:1034"]
+    },
+    {
+      "id": "SMELL-006",
+      "name": "Global State via Namespace-Static Variables",
+      "description": "g_caps_cache (ModelCaps.cpp), g_failures (test files), sSignature (App.cpp), fPendingRefs (App.cpp), dir_override (SessionStore.cpp). Global mutable state makes testing hard, introduces hidden dependencies, complicates multi-instance scenarios.",
+      "files": ["src/haiku/ModelCaps.cpp:117-118", "src/gui/App.cpp:36", "src/storage/SessionStore.cpp:27-30"]
+    },
+    {
+      "id": "SMELL-007",
+      "name": "Resource Compilation Pipeline Fragility",
+      "description": "Makefile uses rc → xres → resattr → addattr chain for pluto.rsrc + pluto.hvif. Four external tools, each a failure point. No validation that output is correct. Icon embedded in binary via resource — no runtime fallback.",
+      "files": ["Makefile:230-235, 256-274"]
+    },
+    {
+      "id": "SMELL-008",
+      "name": "Agent Loop UI Callbacks Tied to Haiku BMessageRunner",
+      "description": "ConversationView uses BMessageRunner for cursor blink (500ms) and caret blink. Loop.cpp UiCallbacks abstracts output but not timers. Non-Haiku builds need mock timers. Timer management scattered across TextDocumentView, ConversationView, ModelPickerWindow.",
+      "files": ["src/gui/ConversationView.cpp:102", "src/gui/textview/TextDocumentView.cpp:289,700", "src/agent/Loop.h"]
+    }
+  ],
+  "praise": [
+    {
+      "id": "PRAISE-001",
+      "title": "Excellent Haiku-Native BFS Integration",
+      "description": "SessionStore leverages BFS extended attributes (pluto:title, pluto:model, pluto:tags, pluto:updated) for metadata. BQuery with live queries for session listing. Files are first-class BFS citizens — searchable in Tracker Find, visible in `lsattr`. This is textbook Haiku app design."
+    },
+    {
+      "id": "PRAISE-002",
+      "title": "BMessage Scripting as First-Class MCP Tool",
+      "description": "DesktopScriptTool exposes the entire Be/Haiku scripting protocol to the LLM. Can query any running app's windows, views, properties. Suites action discovers capabilities dynamically. This is a unique Haiku superpower — no other OS exposes this level of introspection to AI agents."
+    },
+    {
+      "id": "PRAISE-003",
+      "title": "System One MCP Server Auto-Registration via Stdio",
+      "description": "systemone_server registers as built-in MCP server via stdio transport. No config needed. Laya-based decision model with 9 tools (classify, verify, guard, triage, etc.) saves 5-10x tokens on routing/guard tasks. Clean separation: main agent delegates classification to specialized model."
+    },
+    {
+      "id": "PRAISE-004",
+      "title": "Multi-Instance Tab Forwarding via BMessenger",
+      "description": "App::ReadyToRun() detects secondary instance (PID-suffixed signature), forwards B_REFS_RECEIVED to primary via BMessenger, then quits. User gets single-window multi-tab behavior. Clever use of Haiku's application scripting model."
+    },
+    {
+      "id": "PRAISE-005",
+      "title": "Deskbar Replicant with HVIF Icon and Popup Menu",
+      "description": "Native BView replicant for Deskbar tray. Embedded vector HVIF icon (scales perfectly). Popup menu with recent sessions, install/remove actions. Proper BArchivable implementation for Deskbar persistence. Feels like a first-party Haiku component."
+    },
+    {
+      "id": "PRAISE-006",
+      "title": "Async SSE Streaming via libcurl Multi Stack",
+      "description": "AsyncStreamManager handles concurrent provider streams without blocking main thread. Proper SSE parsing, token counting, cancellation via atomic flag. 120s timeout, 50MB max, SSL verification with Haiku CA certs. Production-grade streaming infrastructure."
+    },
+    {
+      "id": "PRAISE-007",
+      "title": "Comprehensive Haiku Tool Set for LLM",
+      "description": "Six Haiku-native tools exposed via MCP: read_attr, write_attr, list_attrs, remove_attr, query_fs, live_query (BFS); clipboard, node_monitor, desktop_script, launch_app (Desktop). LLM can manipulate Haiku at OS level — unique capability."
+    },
+    {
+      "id": "PRAISE-008",
+      "title": "OAuth + API Key Fallback with Secure Storage",
+      "description": "Anthropic provider supports OAuth (token refresh) with fallback to API key. Keys stored in ~/config/settings/pluto/keys/<ENV_VAR> with chmod 600. Atomic write via temp file + rename. Legacy key file migration. Thoughtful security."
+    },
+    {
+      "id": "PRAISE-009",
+      "title": "Auto-Compact at 90% Context Window",
+      "description": "Proactive context management: monitors token usage, triggers compaction at 90% threshold. Manual /compact command. Live context gauge in status bar. Cost estimation per provider. Token tracking per tab. Professional UX for LLM context limits."
+    },
+    {
+      "id": "PRAISE-010",
+      "title": "Clean Build System with Dual Config (Haiku + Mock)",
+      "description": "Single Makefile builds all 4 binaries. Clean separation: Haiku build uses private headers, mock build uses mock_headers/haiku/. Resource compilation pipeline integrated. make check runs 21 tests. make package creates .hpkg. Well-engineered for Haiku distribution."
+    }
+  ],
+  "veteran_quotes": [
+    {
+      "author": "Anonymous Haiku Kernel Developer (18 years)",
+      "quote": "Using private headers for a user-space app is asking for pain. We change those internals between beta releases. If Pluto ships on HaikuDepot, it'll break on the next update. Wrap BMessage/BLooper internals behind your own stable C API or use the public scripting APIs."
+    },
+    {
+      "author": "Former Be Engineer (25 years, worked on Tracker)",
+      "quote": "The 1.5s snooze in the Tracker add-on is a classic rookie mistake. Tracker add-ons run in Tracker's thread — you're blocking the file manager. Launch the app asynchronously, register a BMessageFilter for B_REFS_RECEIVED reply, or use BRoster::Launch with BMessage reply. Never sleep in an add-on."
+    },
+    {
+      "author": "HaikuPorter Maintainer (12 years)",
+      "quote": "That space in 'Ask pluto' will haunt your packaging. hpkg handles it but every shell script in the build chain needs quotes. Rename it to ask-pluto. Also, your resource compilation uses four tools (rc, xres, resattr, addattr) — if any changes output format, your build breaks. Consider embedding the HVIF as a const char* array."
+    },
+    {
+      "author": "Veteran Haiku App Developer (20 years, wrote Deskbar replicants)",
+      "quote": "Your Deskbar replicant is solid — BArchivable, HVIF icon, proper popup. But you're not handling B_QUIT_REQUESTED in the replicant's looper. When Deskbar restarts, it sends B_QUIT_REQUESTED to all replicants. If you don't handle it cleanly, you leave a stale port. Add a BMessageFilter for B_QUIT_REQUESTED that calls Quit()."
+    },
+    {
+      "author": "MCP Protocol Contributor (5 years, 15 years C++)",
+      "quote": "System One as a built-in stdio MCP server is brilliant — zero config, auto-discovered. But StdioTransport::stop() has a zombie reaping bug: 50 * 10ms = 500ms wait after SIGKILL is too short for D-state processes. Use waitpid(WNOHANG) in a loop with longer timeout, or install a SIGCHLD handler. Your MCP client also doesn't handle server restart gracefully."
+    },
+    {
+      "author": "Security Auditor (10 years, Haiku app sandboxing)",
+      "quote": "DesktopScriptTool is a loaded gun handed to the LLM. B_SET_PROPERTY and B_EXECUTE_PROPERTY on any running app? That's arbitrary code execution via scripting. At minimum, require user confirmation for set/execute/create/delete actions. Better: maintain an allowlist of safe properties per app signature."
+    },
+    {
+      "author": "Haiku Locale Kit Maintainer (14 years)",
+      "quote": "You're including private/locale headers but I don't see any BLocale/BLanguage/BTimeZone usage. If you're not using Locale Kit, drop that include. Private headers are a contract: you get access, we get to break you. Don't pay the tax for APIs you don't use."
+    },
+    {
+      "author": "Former BeOS Driver Developer (22 years)",
+      "quote": "BNodeMonitor watches are per-team. If Pluto crashes, your watches linger until the watched node is removed. I've seen this leak ports on BeOS R5. Install an atexit() handler that calls stop_watching() on all registered targets. Or better: wrap watch_node in a RAII class that stops on destruction."
+    },
+    {
+      "author": "Haiku Web+ Engineer (8 years, libcurl on Haiku)",
+      "quote": "Hardcoding /system/data/ssl/CARootCertificates.pem works today but Haiku may move to p11-kit or system cert store. Use BPath find_directory(B_SYSTEM_DATA_DIRECTORY) and append 'ssl/CARootCertificates.pem'. Also, AsyncStreamManager's libcurl multi stack isn't thread-safe for concurrent PostStream + Perform — you need a dedicated curl thread or mutex around all multi operations."
+    },
+    {
+      "author": "Haiku Build Engineer (11 years, HaikuPorts)",
+      "quote": "21 test binaries, each with main() and custom CHECK macro? That's not a test suite, that's a collection of smoke tests. No fixtures, no parallel run, no XML output for CI. Invest in a tiny test framework (or adopt cpputest) — even a single header with TEST() macro and auto-registration would pay off in maintenance."
+    }
+  ]
+}

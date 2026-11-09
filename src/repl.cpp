@@ -29,6 +29,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "curl_security.h"
+
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -289,6 +291,57 @@ static size_t collect_cb(char* ptr, size_t size, size_t nmemb, void* ud) {
 	static_cast<std::string*>(ud)->append(ptr, size * nmemb);
 	return size * nmemb;
 }
+// Helper: execute hook command safely (no shell) with env var set.
+static int run_hook_safe_repl(const char* cmd, const char* env_name, const std::string& env_value) {
+	// Split command into argv (simple shell-like parsing, no shell execution)
+	std::vector<std::string> argv;
+	std::string current;
+	bool in_single = false;
+	bool in_double = false;
+	bool escaped = false;
+
+	for (size_t i = 0; cmd[i]; ++i) {
+		char c = cmd[i];
+		if (escaped) {
+			current += c;
+			escaped = false;
+		} else if (c == '\\') {
+			escaped = true;
+		} else if (c == '\'' && !in_double) {
+			in_single = !in_single;
+		} else if (c == '"' && !in_single) {
+			in_double = !in_double;
+		} else if ((c == ' ' || c == '\t') && !in_single && !in_double) {
+			if (!current.empty()) {
+				argv.push_back(current);
+				current.clear();
+			}
+		} else {
+			current += c;
+		}
+	}
+	if (!current.empty()) argv.push_back(current);
+
+	if (argv.empty()) return -1;
+
+	pid_t pid = fork();
+	if (pid < 0) return -1;
+	if (pid == 0) {
+		// Child: set env var safely, then exec directly (no shell)
+		::setenv(env_name, env_value.c_str(), 1);
+		std::vector<char*> args;
+		args.reserve(argv.size() + 1);
+		for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
+		args.push_back(nullptr);
+		execvp(args[0], args.data());
+		::_exit(127); // exec failed
+	}
+	int status = 0;
+	::waitpid(pid, &status, 0);
+	return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+
 
 // Try Ollama /api/tags first; fall back to OpenAI /v1/models.
 std::vector<RemoteModel> fetch_remote_models(const std::string& base_url,
@@ -310,10 +363,9 @@ std::vector<RemoteModel> fetch_remote_models(const std::string& base_url,
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, "pluto/0.3.0 (Haiku)");
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
-	curl_easy_setopt(curl, CURLOPT_CAINFO, "/system/data/ssl/CARootCertificates.pem");
+
+	// Apply centralized TLS security with certificate pinning
+	ApplyCurlSecurityWithPinning(curl, ollama_url);
 
 	CURLcode rc = curl_easy_perform(curl);
 	long http_code = 0;
@@ -350,10 +402,10 @@ std::vector<RemoteModel> fetch_remote_models(const std::string& base_url,
 	body.clear();
 	std::string oai_url = url + "/v1/models";
 	curl_easy_setopt(curl, CURLOPT_URL, oai_url.c_str());
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
-	curl_easy_setopt(curl, CURLOPT_CAINFO, "/system/data/ssl/CARootCertificates.pem");
+
+	// Apply centralized TLS security with certificate pinning
+	ApplyCurlSecurityWithPinning(curl, oai_url);
+
 	rc = curl_easy_perform(curl);
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
 	curl_easy_cleanup(curl);
@@ -1598,21 +1650,9 @@ if (line == "/cost") {
 
 		// Hook: user_prompt_submit — fired before the turn.
 		// PLUTO_PROMPT env var contains the raw user text.
-		// Use shell env-prefix (PLUTO_PROMPT='...' cmd) instead of
-		// setenv/unsetenv which are not thread-safe with the SSE
-		// background subscriber.
 		for (const auto& hook : cfg.hooks_user_prompt) {
 			if (hook.empty()) continue;
-			pid_t pid = fork();
-			if (pid == 0) {
-				::setenv("PLUTO_PROMPT", line.c_str(), 1);
-				::execl("/bin/sh", "sh", "-c", hook.c_str(), nullptr);
-				::_exit(127);
-			}
-			if (pid > 0) {
-				int status = 0;
-				::waitpid(pid, &status, 0);
-			}
+			run_hook_safe_repl(hook.c_str(), "PLUTO_PROMPT", line);
 		}
 
 		// Trigger-based skill loading: check if user message matches

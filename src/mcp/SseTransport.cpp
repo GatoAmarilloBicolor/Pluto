@@ -9,6 +9,11 @@
 #include <curl/curl.h>
 #include <string>
 #include <utility>
+#include <vector>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
 namespace pluto {
 
@@ -76,11 +81,41 @@ std::string url_origin(const std::string& url) {
 	return (path != std::string::npos) ? url.substr(0, path) : url;
 }
 
+// Extract hostname from URL (without scheme, port, path)
+std::string url_host(const std::string& url) {
+	size_t proto = url.find("://");
+	if (proto == std::string::npos) return {};
+	size_t start = proto + 3;
+	size_t end = url.find_first_of(":/", start);
+	if (end == std::string::npos) end = url.size();
+	return url.substr(start, end - start);
+}
+
+// Resolve hostname to IP addresses
+static bool resolve_host(const std::string& host, std::vector<std::string>& ips) {
+	char buf[INET6_ADDRSTRLEN];
+	struct addrinfo hints = {}, *res = nullptr, *p;
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	if (getaddrinfo(host.c_str(), nullptr, &hints, &res) != 0) return false;
+	for (p = res; p; p = p->ai_next) {
+		void* addr = (p->ai_family == AF_INET) 
+			? (void*)&((struct sockaddr_in*)p->ai_addr)->sin_addr
+			: (void*)&((struct sockaddr_in6*)p->ai_addr)->sin6_addr;
+		if (inet_ntop(p->ai_family, addr, buf, sizeof(buf))) ips.push_back(buf);
+	}
+	freeaddrinfo(res);
+	return !ips.empty();
+}
+
+
+
 // If `url` is relative, resolve it against `base_url`.
 // If `url` is absolute, it must share the same origin as `base_url`
 // to prevent server-supplied endpoint redirects (SSRF).
+// Additionally, resolve and pin IP at connection time to prevent DNS rebinding.
 std::string resolve_url(const std::string& base_url, const std::string& url,
-                        bool& origin_ok) {
+                        bool& origin_ok, std::string* pinned_ip_out) {
 	origin_ok = true;
 
 	if (url.rfind("http://", 0) == 0 || url.rfind("https://", 0) == 0) {
@@ -90,6 +125,26 @@ std::string resolve_url(const std::string& base_url, const std::string& url,
 		if (base_origin.empty() || base_origin != ep_origin) {
 			origin_ok = false;
 			return {};
+		}
+		
+		// DNS rebinding protection: resolve hostname to IP and pin it
+		std::string host = url_host(url);
+		std::vector<std::string> ips;
+		if (!resolve_host(host, ips)) {
+			origin_ok = false;
+			return {};
+		}
+		
+		// Validate first IP is allowed (public, not private/internal)
+		for (const auto& ip : ips) {
+			if (pluto::IsPrivateIP(ip)) {
+				origin_ok = false;
+				return {};
+			}
+		}
+		
+		if (pinned_ip_out && !ips.empty()) {
+			*pinned_ip_out = ips[0];
 		}
 		return url;
 	}
@@ -112,6 +167,31 @@ SseTransport::SseTransport(std::string sse_url,
 bool SseTransport::start(std::string& err) {
 	CURL* curl = curl_easy_init();
 	if (!curl) { err = "curl_easy_init failed"; return false; }
+
+	// Pre-resolve and pin IP to prevent DNS rebinding
+	std::string pinned_ip;
+	{
+		std::string host = url_host(fSseUrl);
+		std::vector<std::string> ips;
+		if (!resolve_host(host, ips) || ips.empty()) {
+			curl_easy_cleanup(curl);
+			err = "Failed to resolve host: " + host;
+			return false;
+		}
+		for (const auto& ip : ips) {
+			if (pluto::IsPrivateIP(ip)) {
+				curl_easy_cleanup(curl);
+				err = "Resolved IP not allowed: " + ip;
+				return false;
+			}
+		}
+		pinned_ip = ips[0];
+		// Pin IP for this connection
+		std::string resolve_entry = host + ":443:" + pinned_ip;
+		struct curl_slist* resolve_list = nullptr;
+		resolve_list = curl_slist_append(resolve_list, resolve_entry.c_str());
+		curl_easy_setopt(curl, CURLOPT_RESOLVE, resolve_list);
+	}
 
 	HandshakeState st;
 
@@ -149,7 +229,7 @@ bool SseTransport::start(std::string& err) {
 	}
 
 	bool origin_ok = false;
-	fMessageUrl = resolve_url(fSseUrl, st.endpoint, origin_ok);
+	fMessageUrl = resolve_url(fSseUrl, st.endpoint, origin_ok, &pinned_ip);
 	if (!origin_ok) {
 		err = "SSE endpoint origin mismatch: server returned '"
 		    + st.endpoint + "' which differs from '" + fSseUrl + "'";
@@ -163,6 +243,27 @@ std::string SseTransport::post(const std::string& body, std::string& err) {
 	CURL* curl = curl_easy_init();
 	if (!curl) { err = "curl_easy_init failed"; return {}; }
 
+	// Pre-resolve and pin IP for message URL to prevent DNS rebinding
+	std::string message_host = url_host(fMessageUrl);
+	std::vector<std::string> message_ips;
+	if (!resolve_host(message_host, message_ips) || message_ips.empty()) {
+		curl_easy_cleanup(curl);
+		err = "Failed to resolve message host: " + message_host;
+		return {};
+	}
+	for (const auto& ip : message_ips) {
+		if (!pluto::IsPrivateIP(ip)) {
+			curl_easy_cleanup(curl);
+			err = "Message host IP not allowed: " + ip;
+			return {};
+		}
+	}
+	
+	std::string resolve_entry = message_host + ":443:" + message_ips[0];
+	struct curl_slist* resolve_list = nullptr;
+	resolve_list = curl_slist_append(resolve_list, resolve_entry.c_str());
+	curl_easy_setopt(curl, CURLOPT_RESOLVE, resolve_list);
+
 	std::string out;
 	struct curl_slist* headers = nullptr;
 	headers = curl_slist_append(headers, "content-type: application/json");
@@ -172,7 +273,7 @@ std::string SseTransport::post(const std::string& body, std::string& err) {
 		headers = curl_slist_append(headers, line.c_str());
 	}
 
-curl_easy_setopt(curl, CURLOPT_URL, fMessageUrl.c_str());
+	curl_easy_setopt(curl, CURLOPT_URL, fMessageUrl.c_str());
 	curl_easy_setopt(curl, CURLOPT_POST, 1L);
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)body.size());

@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <unistd.h>
 
+#include "../curl_security.h"
 #include "MainWindow.h"
 
 #include "../ipc/PlutoMessenger.h"
@@ -316,6 +317,10 @@ void App::_LaunchMain() {
 				curl_easy_setopt(probe, CURLOPT_NOBODY, 1L);
 				curl_easy_setopt(probe, CURLOPT_TIMEOUT, 1L);
 				curl_easy_setopt(probe, CURLOPT_CONNECTTIMEOUT, 1L);
+				
+				// Apply centralized TLS security with certificate pinning
+				pluto::ApplyCurlSecurityWithPinning(probe, "http://localhost:11434/api/tags");
+				
 				CURLcode rc = curl_easy_perform(probe);
 				long code = 0;
 				curl_easy_getinfo(probe, CURLINFO_RESPONSE_CODE, &code);

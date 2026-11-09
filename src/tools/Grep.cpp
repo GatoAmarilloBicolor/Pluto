@@ -7,12 +7,15 @@
 #include <cstdio>
 #include <string>
 
+#include <unistd.h>
+#include <sys/wait.h>
+
 namespace pluto {
 
 namespace {
 
-// Shell-quote a value for single-argument safety.
-std::string shq(const std::string& s) {
+// Shell quote a string for safe command building
+static std::string shq(const std::string& s) {
 	std::string out = "'";
 	for (char c : s) {
 		if (c == '\'') out += "'\\''";
@@ -20,6 +23,79 @@ std::string shq(const std::string& s) {
 	}
 	out += "'";
 	return out;
+}
+
+// Split command string into argv array (simple shell-like parsing, no shell execution)
+static std::vector<std::string> split_command(const std::string& cmd) {
+	std::vector<std::string> args;
+	std::string current;
+	bool in_single = false;
+	bool in_double = false;
+	bool escaped = false;
+
+	for (size_t i = 0; i < cmd.size(); ++i) {
+		char c = cmd[i];
+		if (escaped) {
+			current += c;
+			escaped = false;
+		} else if (c == '\\') {
+			escaped = true;
+		} else if (c == '\'' && !in_double) {
+			in_single = !in_single;
+		} else if (c == '"' && !in_single) {
+			in_double = !in_double;
+		} else if ((c == ' ' || c == '\t') && !in_single && !in_double) {
+			if (!current.empty()) {
+				args.push_back(current);
+				current.clear();
+			}
+		} else {
+			current += c;
+		}
+	}
+	if (!current.empty()) args.push_back(current);
+	return args;
+}
+
+// Execute command via fork/execvp with argv array (no shell).
+// Returns exit code, or -1 on error.
+static int execvp_capture(const std::vector<std::string>& argv, std::string& output) {
+	if (argv.empty()) return -1;
+
+	int pipefd[2];
+	if (pipe(pipefd) != 0) return -1;
+
+	pid_t pid = fork();
+	if (pid < 0) {
+		close(pipefd[0]);
+		close(pipefd[1]);
+		return -1;
+	}
+
+	if (pid == 0) {
+		close(pipefd[0]);
+		dup2(pipefd[1], STDOUT_FILENO);
+		dup2(pipefd[1], STDERR_FILENO);
+		close(pipefd[1]);
+		std::vector<char*> args;
+		args.reserve(argv.size() + 1);
+		for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
+		args.push_back(nullptr);
+		execvp(args[0], args.data());
+		_exit(127);
+	}
+
+	close(pipefd[1]);
+	char buf[4096];
+	ssize_t n;
+	while ((n = read(pipefd[0], buf, sizeof(buf))) > 0) {
+		output.append(buf, n);
+	}
+	close(pipefd[0]);
+
+	int status = 0;
+	waitpid(pid, &status, 0);
+	return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
 class GrepTool : public Tool {
@@ -87,14 +163,10 @@ public:
 		}
 		cmd += " 2>&1";
 
-		FILE* p = popen(cmd.c_str(), "r");
-		if (!p) { r.is_error = true; r.output = "popen failed"; return r; }
-		std::array<char, 4096> buf;
-		size_t n;
-		while ((n = std::fread(buf.data(), 1, buf.size(), p)) > 0) {
-			r.output.append(buf.data(), n);
-		}
-		int rc = pclose(p);
+		auto argv = split_command(cmd);
+		if (argv.empty()) { r.is_error = true; r.output = "empty command"; return r; }
+
+		int rc = execvp_capture(argv, r.output);
 		if (rc != 0 && r.output.empty()) {
 			r.output = "(no matches)";
 		}

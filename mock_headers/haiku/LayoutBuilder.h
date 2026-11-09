@@ -15,12 +15,23 @@ namespace BLayoutBuilder {
         }
         GroupBuilder& Add(BView* view) { (void)view; return *this; }
         GroupBuilder& Add(BView* view, float weight) { (void)view; (void)weight; return *this; }
+        GroupBuilder& Add(BView* view, int col, int row) { (void)view; (void)col; (void)row; return *this; }
+        GroupBuilder& Add(BView* view, int col, int row, int colspan) { (void)view; (void)col; (void)row; (void)colspan; return *this; }
+        GroupBuilder& Add(BView* view, int col, int row, int colspan, int rowspan) { (void)view; (void)col; (void)row; (void)colspan; (void)rowspan; return *this; }
         GroupBuilder& Add(BLayoutItem* item) { (void)item; return *this; }
         GroupBuilder& Add(BLayoutItem* item, float weight) { (void)item; (void)weight; return *this; }
+        GroupBuilder& Add(BLayoutItem* item, int col, int row) { (void)item; (void)col; (void)row; return *this; }
+        GroupBuilder& Add(BLayoutItem* item, int col, int row, int colspan) { (void)item; (void)col; (void)row; (void)colspan; return *this; }
+        GroupBuilder& Add(BLayoutItem* item, int col, int row, int colspan, int rowspan) { (void)item; (void)col; (void)row; (void)colspan; (void)rowspan; return *this; }
         GroupBuilder& AddGlue() { return *this; }
         GroupBuilder& SetInsets(float insets) { (void)insets; return *this; }
+        GroupBuilder& SetInsets(float left, float top, float right, float bottom) { (void)left; (void)top; (void)right; (void)bottom; return *this; }
+        GroupBuilder& AddSplit(BView* view) { (void)view; return *this; }
         GroupBuilder& AddGroup(int orient, float spacing = 0) { (void)orient; (void)spacing; return *this; }
         GroupBuilder& End() { return *this; }
+        
+        // Grid layout support
+        GroupBuilder& AddGrid(float hSpacing = 0, float vSpacing = 0) { (void)hSpacing; (void)vSpacing; return *this; }
     };
     
     // Template function for Group<>() syntax

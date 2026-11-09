@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/Volumes/Externo/src/Pluto/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

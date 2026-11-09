@@ -7,6 +7,7 @@
 #include <Size.h>
 #include <Message.h>
 #include <Font.h>
+#include <string>
 
 class BColumn;
 class BRow;
@@ -75,11 +76,29 @@ public:
 	virtual void SetClippedString(const char* string);
 	virtual bool HasClippedString() const;
 	virtual const char* ClippedString() const;
+	virtual const char* FieldType() const { return "BField"; }
 
 protected:
 	float fWidth;
 	bool fClipped;
 	char* fClippedString;
+};
+
+class BStringField : public BField {
+public:
+	BStringField(const char* str = "");
+	virtual ~BStringField() = default;
+	const char* FieldType() const override { return "BStringField"; }
+	const char* String() const;
+private:
+	std::string fString;
+};
+
+class BBitmapField : public BField {
+public:
+	BBitmapField() = default;
+	virtual ~BBitmapField() = default;
+	const char* FieldType() const override { return "BBitmapField"; }
 };
 
 class BColumn {

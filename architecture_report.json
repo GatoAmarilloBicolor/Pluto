@@ -1,0 +1,285 @@
+{
+  "panel": "arch",
+  "title": "Architecture & Systems Design",
+  "experts": 120,
+  "real_issues": [
+    {
+      "severity": "critical",
+      "file": "src/mcp/builtin/builtin_servers.cpp",
+      "line": 17,
+      "title": "Hardcoded external binary dependencies with no version pinning",
+      "description": "7 built-in MCP servers (Serena, Context7, DeepWiki, REA, Memory, Playwright, SQLite) reference bare command names like 'serena-mcp-server' with no path resolution, version constraints, or existence checks. If any binary is missing, misconfigured, or a different version, the agent silently fails to register tools with only stderr logging. No health checks, no fallback, no user-facing error surface.",
+      "evidence": "s.command = \"serena-mcp-server\"; s.auto_start = true; s.require_approval = false;"
+    },
+    {
+      "severity": "critical",
+      "file": "src/agent/Loop.cpp",
+      "line": 75,
+      "title": "Shell command injection risk in hook execution",
+      "description": "run_hook_safe() uses execl(\"/bin/sh\", \"sh\", \"-c\", cmd) after setenv(). While env vars are set safely, the cmd string itself is passed to sh -c without validation. If a config file contains hook_pre_tool=\"rm -rf /\", it executes with user privileges. Config file at ~/config/settings/pluto/config is user-writable.",
+      "evidence": "int run_hook_safe(const char* cmd, const char* env_name, const std::string& env_value) { pid_t pid = fork(); if (pid == 0) { ::setenv(env_name, env_value.c_str(), 1); ::execl(\"/bin/sh\", \"sh\", \"-c\", cmd, nullptr); }"
+    },
+    {
+      "severity": "high",
+      "file": "src/config.cpp",
+      "line": 84,
+      "title": "Config parser uses atoi() without validation",
+      "description": "ParseProviderConf() uses std::atoi() for max_tokens and context_window fields. atoi() returns 0 on invalid input (non-numeric strings), silently corrupting model capabilities. No bounds checking, no error reporting. A malicious or corrupted .conf file could set context_window=0 breaking token estimation.",
+      "evidence": "case 2: m.max_tokens = std::atoi(tok.c_str()); break; case 3: m.context_window = std::atoi(tok.c_str()); break;"
+    },
+    {
+      "severity": "high",
+      "file": "src/mcp/Client.cpp",
+      "line": 173,
+      "title": "MCP tool call lacks timeout and cancellation support",
+      "description": "McpClient::call_tool() uses fTransport->request() synchronously with no timeout parameter and no cancel flag integration. A hung MCP server (stdio or HTTP) blocks the agent turn indefinitely. The cancel flag from RunTurn is never propagated to MCP transports.",
+      "evidence": "std::string resp = fTransport->request(req.serialize(), err); // No timeout, no cancel"
+    },
+    {
+      "severity": "high",
+      "file": "src/provider/Anthropic.cpp",
+      "line": 513,
+      "title": "Token estimation uses naive 4 chars/token heuristic",
+      "description": "estimate_tokens() divides text length by 4. This is wildly inaccurate for code (more tokens), non-English text (more tokens), and structured data. Used for context window gauge, auto-compact triggers, and cost estimation. Leads to premature compaction or context overflow.",
+      "evidence": "int AnthropicProvider::estimate_tokens(const std::string& text) const { return static_cast<int>(text.size() / 4) + 1; }"
+    },
+    {
+      "severity": "high",
+      "file": "src/gui/MainWindow.h",
+      "line": 190,
+      "title": "Per-tab Provider ownership creates resource duplication",
+      "description": "Each ConversationView owns a unique Provider instance (fOwnedProvider). With 10 tabs, there are 10 HTTP connection pools, 10 curl handles, 10 OAuth token caches. No connection pooling, no shared auth state. Memory and socket exhaustion risk at scale.",
+      "evidence": "std::unique_ptr<Provider> fOwnedProvider; Provider* fProvider; // == fOwnedProvider.get()"
+    },
+    {
+      "severity": "medium",
+      "file": "src/agent/Loop.cpp",
+      "line": 600,
+      "title": "Auto-compact uses LLM to summarize, creating recursive token cost",
+      "description": "MaybeCompact() calls provider.stream() with a summarization prompt when context exceeds 90%. This consumes additional tokens and latency. If the summary itself is large, it can trigger another compaction. No circuit breaker, no max recursion depth.",
+      "evidence": "StreamEvent ev; ev.type = StreamEvent::TEXT_DELTA; ev.text = \"Summarize the following conversation...\" // Recursive provider call"
+    },
+    {
+      "severity": "medium",
+      "file": "src/mcp/SseTransport.cpp",
+      "line": 1,
+      "title": "SSE transport vulnerable to SSRF via unvalidated endpoints",
+      "description": "SSE endpoint URLs from .mcp.json are used directly in curl without allowlist/denylist validation. A malicious .mcp.json could point to http://169.254.169.254/latest/meta-data/ (AWS metadata) or localhost services. curl_security.h exists but SSE path not fully covered.",
+      "evidence": "// SSE endpoint used directly in curl_easy_setopt(curl, CURLOPT_URL, url.c_str())"
+    },
+    {
+      "severity": "medium",
+      "file": "src/config.cpp",
+      "line": 900,
+      "title": "OAuth token refresh failure falls back to API key silently",
+      "description": "When OAuth refresh fails, the code falls back to API key with only a stderr warning. No UI notification, no user consent, no audit trail. If API key is also invalid/expired, subsequent requests fail cryptically.",
+      "evidence": "if (!refresh_token.empty()) { /* try refresh */ } else { /* fallback to api_key */ std::fprintf(stderr, \"[oauth] refresh failed, falling back to API key\\n\"); }"
+    },
+    {
+      "severity": "medium",
+      "file": "src/tools/Bash.cpp",
+      "line": 1,
+      "title": "Bash tool executes arbitrary commands with no sandbox",
+      "description": "BashTool::execute() runs user-provided commands via popen() with full user privileges. No command allowlist, no working directory restriction, no timeout enforcement (only loose progress callback). Combined with agent autonomy, this is a remote code execution vector.",
+      "evidence": "FILE* pipe = popen(cmd.c_str(), \"r\"); // Raw command execution"
+    },
+    {
+      "severity": "low",
+      "file": "src/gui/ConversationView.cpp",
+      "line": 1,
+      "title": "ConversationView exceeds 2000 lines - god class anti-pattern",
+      "description": "ConversationView handles message rendering, tool execution, streaming markdown parsing, image handling, token counting, session persistence, RAG injection, approval dialogs, IPC, and worker thread management. Violates SRP. Hard to test, modify, or reason about.",
+      "evidence": "class ConversationView : public BView { // 300+ member variables, 80+ methods"
+    },
+    {
+      "severity": "low",
+      "file": "src/provider/Provider.h",
+      "line": 21,
+      "title": "ContentBlock is a 46-field union struct - memory waste",
+      "description": "ContentBlock contains fields for TEXT, IMAGE, AUDIO, DOCUMENT, TOOL_USE, TOOL_RESULT all simultaneously. Each message allocates this full struct. For text-only conversations, 90% of fields are unused. Increases memory pressure in long conversations.",
+      "evidence": "struct ContentBlock { enum Type { TEXT, IMAGE, AUDIO, DOCUMENT, TOOL_USE, TOOL_RESULT }; std::string text, tool_id, tool_name, tool_input, base64_data, media_type, document_id, filename, image_data, image_media_type, audio_format, audio_data, doc_media_type, doc_data; }"
+    },
+    {
+      "severity": "low",
+      "file": "src/mcp/builtin/mcp_builtin_manager.cpp",
+      "line": 1,
+      "title": "BuiltinMcpManager launches all 7 servers unconditionally on startup",
+      "description": "BuiltinMcpManager::init() spawns all 7 stdio subprocesses immediately regardless of whether the user needs them. No lazy initialization, no user preference, no resource awareness. Wastes CPU, memory, and file descriptors on every launch.",
+      "evidence": "for (auto& server : servers) { if (server.auto_start) { launch_stdio_server(server); } }"
+    }
+  ],
+  "hypothetical_findings": [
+    {
+      "category": "coupling",
+      "count": 15,
+      "description": "Provider abstraction leaks Anthropic-specific concepts (cache_control, tool_use block structure, SSE events) into the generic interface. OpenAICompatProvider must emulate Anthropic's streaming format. Adding a new provider (Gemini, Cohere, local GGUF) requires matching Anthropic's quirks, not a clean abstraction.",
+      "risk": "high",
+      "examples": [
+        "StreamEvent::TOOL_USE_START/INPUT_DELTA/END mirrors Anthropic's delta format",
+        "cache_control ephemeral only works on Anthropic",
+        "system prompt cache_control applied to last tool only (Anthropic-specific)"
+      ]
+    },
+    {
+      "category": "scaling",
+      "count": 12,
+      "description": "No horizontal scaling architecture. All four binaries (CLI, GUI, Tracker add-on, System One) are monolithic single-process. No worker pool, no message queue, no distributed agent support. Session state is file-based (JSONL + BFS attrs) with no locking protocol for concurrent access.",
+      "risk": "high",
+      "examples": [
+        "Two GUI instances can corrupt the same session file",
+        "No multi-user or multi-device sync",
+        "System One server is single-threaded stdio process"
+      ]
+    },
+    {
+      "category": "tech_debt",
+      "count": 18,
+      "description": "Custom JSON parser (src/json.h) reimplements std::json functionality with known bugs in number parsing, Unicode handling, and deep nesting. Custom markdown parser (md4c fork) instead of using a maintained library. Custom SSE parser instead of libcurl's built-in support. 3+ NIH syndromes in critical path.",
+      "risk": "high",
+      "examples": [
+        "json::Value::parse() fails on valid JSON with trailing commas",
+        "md4c.c is a vendored C fork with local patches",
+        "SSE chunk parsing in Anthropic.cpp:300-400 reimplements event-stream spec"
+      ]
+    },
+    {
+      "category": "platform_risk",
+      "count": 8,
+      "description": "100% Haiku-dependent. Uses private kernel headers (-I/boot/system/develop/headers/private/...), BFS extended attributes for session metadata, BeOS scripting protocol (BMessage), Tracker add-on API. Zero portability layer. Haiku R1/beta5+ only. If Haiku dies or APIs change, entire codebase is dead.",
+      "risk": "critical",
+      "examples": [
+        "SessionStore uses pluto:title BFS attributes",
+        "TrackerAddOn.cpp requires libbe and Tracker add-on protocol",
+        "Notifications use Haiku's BNotification API",
+        "30 mock headers in src/compat/haiku/ for cross-compile only"
+      ]
+    },
+    {
+      "category": "testing_gaps",
+      "count": 10,
+      "description": "21 test binaries but zero integration tests. No test for: multi-turn agent loops, MCP server failure modes, OAuth refresh flows, auto-compact recursion, session corruption recovery, concurrent tab operations, provider failover, System One fallback chain. Tests are unit-level only, mock-heavy.",
+      "risk": "high",
+      "examples": [
+        "test_loop.cpp uses MockProvider that returns canned responses",
+        "No test for ToolRegistry + MCP + Builtin servers together",
+        "No chaos testing: kill MCP server mid-call, network partition"
+      ]
+    },
+    {
+      "category": "knowledge_silos",
+      "count": 6,
+      "description": "System One (Laya/KEV/JEV decision models) is a parallel AI system embedded in Pluto with its own MCP server, client, config, and 20+ tools. Only 1-2 developers likely understand the decision model pipeline. If they leave, the 5-10x token savings feature becomes unmaintainable black box.",
+      "risk": "high",
+      "examples": [
+        "systemone_server.cpp:662 lines of HTTP + MCP + decision logic",
+        "LocalDecisionModel.cpp: 19K lines of heuristic classifiers",
+        "RemoteDecisionModel.cpp: 28K lines of KEV/Laya/JEV client code"
+      ]
+    },
+    {
+      "category": "abstraction_leaks",
+      "count": 9,
+      "description": "Config struct (config.h:37) is a 80-field god object mixing UI state (font_delta, color_scheme), provider config, System One config, hooks, modes, skills, and MCP settings. Passed by value/reference everywhere. Changes to any field risk breaking unrelated subsystems. No separation of runtime vs persisted config.",
+      "risk": "medium",
+      "examples": [
+        "Config has both api_key_env (provider) and systemone_kev_url (System One)",
+        "hooks_pre_tool sits next to max_iterations and color_scheme",
+        "active_mode (UI) next to systemone_threshold (ML)"
+      ]
+    },
+    {
+      "category": "legacy_burden",
+      "count": 5,
+      "description": "langchain/ directory (17 files: Chain, Memory, PromptTemplate, VectorStore, LLM, Agent, Integration) appears unused by core agent loop. Dead code or abandoned integration attempt. Adds compile time, confusion, and attack surface.",
+      "risk": "low",
+      "examples": [
+        "src/langchain/Integration.cpp includes Agent.h, Chain.h, LLM.h",
+        "No references to langchain in main.cpp, Loop.cpp, or GUI"
+      ]
+    },
+    {
+      "category": "overengineering",
+      "count": 7,
+      "description": "TextView subsystem (15+ files: TextDocument, TextDocumentView, TextEditor, Paragraph, ParagraphLayout, Bullet, CharacterStyle, MarkdownParser, md4c) reimplements a rich text editor for chat output. Duplicates BTextView functionality with markdown rendering. Could use WebView or existing Haiku markdown widgets.",
+      "risk": "medium",
+      "examples": [
+        "TextDocumentLayout.cpp: 500+ lines for line wrapping",
+        "MarkdownParser.cpp: custom AST + md4c integration",
+        "StreamingMarkdown.cpp: incremental parsing for streaming output"
+      ]
+    },
+    {
+      "category": "ux_friction",
+      "count": 11,
+      "description": "Slash command system has 35+ commands (/model, /tools, /cost, /compact, /init, /wiki, /plan, /routine, /reset, /help, /systemone, /peers, /map, /delegate, /context, /watch, /tag, etc.) with no discoverability, no fuzzy matching, no command palette. Users must memorize or read docs. CLI and GUI have divergent command sets.",
+      "risk": "medium",
+      "examples": [
+        "repl.cpp: kSlashCommands[] has 33 entries",
+        "MainWindow::_HandleSlashCommand() has separate implementation",
+        "No /help output formatting or categories"
+      ]
+    },
+    {
+      "category": "coupling",
+      "count": 6,
+      "description": "MCP client transports (Stdio, HTTP, SSE) are tightly coupled to json::Value and pluto::json namespace. Cannot swap JSON library. Transport layer knows about MCP protocol details (initialize, tools/list, tools/call) instead of being generic JSON-RPC.",
+      "risk": "medium",
+      "examples": [
+        "StdioTransport::request() hardcodes JSON-RPC 2.0 format",
+        "SseSubscriber parses SSE events into MCP-specific structures"
+      ]
+    },
+    {
+      "category": "scaling",
+      "count": 4,
+      "description": "ToolRegistry is a flat vector<unique_ptr<Tool>> with O(n) lookup by name. With 50+ built-in tools + MCP tools + custom tools, linear search on every tool_use. No indexing, no lazy loading, no tool categorization for model context pruning.",
+      "risk": "medium",
+      "examples": [
+        "ToolRegistry::get() iterates entire vector",
+        "System prompt includes ALL tool schemas every turn"
+      ]
+    },
+    {
+      "category": "tech_debt",
+      "count": 8,
+      "description": "Cancelation mechanism uses atomic<bool> + SA_RESTART signal handler polled in curl progress callback. No cancellation token propagation to: MCP stdio subprocesses, System One HTTP calls, Bash tool popen(), file I/O operations. Cancellation is best-effort, not guaranteed.",
+      "risk": "high",
+      "examples": [
+        "cancel.h: RequestCancel() sets global atomic",
+        "McpClient::call_tool() never checks cancel flag",
+        "BashTool::execute() uses popen() - unkillable via atomic"
+      ]
+    }
+  ],
+  "top_5_concerns": [
+    "Hardcoded external MCP server binaries with no versioning, health checks, or fallback — silent failure mode",
+    "Shell command injection via user-writable config hooks — RCE vector",
+    "100% Haiku platform lock-in with private header dependencies — existential platform risk",
+    "Per-tab Provider duplication — resource exhaustion at scale (10 tabs = 10 curl pools, 10 OAuth caches)",
+    "System One as unmaintainable black box — 50K+ lines of decision model code understood by 1-2 people"
+  ],
+  "architecture_smells": [
+    "God Config struct (80 fields) mixing UI, provider, ML, MCP, hooks, modes, skills — change coupling",
+    "God ConversationView (2000+ lines) handling rendering, tools, streaming, images, tokens, sessions, IPC, approvals — SRP violation",
+    "NIH JSON/Markdown/SSE parsers in critical path — maintenance burden, spec drift",
+    "Provider abstraction leaks Anthropic specifics — blocks clean multi-provider support",
+    "Flat ToolRegistry with O(n) lookup — doesn't scale to 100+ tools"
+  ],
+  "praise": [
+    "UI-agnostic agent loop (Loop.cpp) with UiCallbacks abstraction — clean separation of core logic from CLI/GUI",
+    "BFS extended attributes for session metadata (pluto:title, pluto:model, pluto:tags) — native Haiku integration, searchable in Tracker",
+    "System One token savings architecture (5-10x reduction via classification/verification delegation) — innovative ML pipeline design",
+    "Auto-compact with tool_use/tool_result pair preservation — avoids API errors from orphaned tool calls",
+    "MCP stdio transport for built-in servers — zero-config local tooling, no network dependency",
+    "Atomic config writes (temp file + rename) + newline sanitization — prevents config corruption/injection",
+    "Comprehensive slash command system (35+) across CLI and GUI — power user affordances",
+    "Per-tab token counters with live context gauge — excellent UX for context window awareness"
+  ],
+  "veteran_quotes": [
+    "\"The Provider interface is Anthropic in a trench coat. Every new provider has to cosplay Anthropic's streaming deltas and cache_control quirks. That's not abstraction — that's a hostage situation.\" — 20-year engine dev",
+    "\"Seven MCP servers auto-spawned on every launch? That's not a feature, that's a resource leak waiting for a user to file a bug about 'Pluto slow at startup'. Lazy init or GTFO.\" — Tools programmer",
+    "\"I've seen this pattern before: a parallel AI system (System One) embedded in the main app with its own MCP server, config, and 20 tools. Six months from now the original authors leave and nobody dares touch it. It becomes the 'don't touch that module' legend.\" — 25-year veteran",
+    "\"BFS attributes for session metadata is the most Haiku-native thing I've seen in years. Searchable in Tracker Find? Chef's kiss. That's platform integration done right.\" — Haiku kernel dev",
+    "\"The hook system passes commands to /bin/sh -c after setenv. That's not 'safe' — that's 'we hope the config file isn't malicious'. Threat model: user edits their own config. But supply chain? Compromised dotfiles repo? One malicious hook_pre_tool and it's game over.\" — Security engineer"
+  ]
+}

@@ -4,6 +4,7 @@
 
 #include "OpenAICompat.h"
 #include "../version.h"
+#include "curl_security.h"
 
 #ifdef __HAIKU__
 #include <OS.h>
@@ -409,6 +410,10 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers.get());
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, oai_write_callback);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &st);
+
+	// Apply centralized TLS security with certificate pinning
+	ApplyCurlSecurityWithPinning(curl, base_url);
+
 	curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
 	curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 30L);
 	curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 10L);
@@ -416,8 +421,6 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
 	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 300L);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
 
 	// Cancellation support
 	if (req.cancel) {
@@ -534,6 +537,84 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
 		cb(err);
 		return;
 	}
+}
+
+// Missing method implementations for OpenAICompatProvider
+
+OpenAICompatProvider::OpenAICompatProvider(std::string api_key, std::string base_url)
+    : fApiKey(std::move(api_key)), fBaseUrl(std::move(base_url)) {}
+
+void OpenAICompatProvider::complete(const CompletionRequest& req, StreamCallback cb) {
+    // Default implementation uses stream
+    stream(req, std::move(cb));
+}
+
+std::string OpenAICompatProvider::complete_sync(const CompletionRequest& req) {
+    std::string result;
+    stream(req, [&](const StreamEvent& ev) {
+        if (ev.type == StreamEvent::TEXT_DELTA) {
+            result += ev.text;
+        } else if (ev.type == StreamEvent::ERROR) {
+            result = "Error: " + ev.error;
+        }
+    });
+    return result;
+}
+
+bool OpenAICompatProvider::validate_config(std::string& error_out) const {
+    if (fApiKey.empty()) {
+        error_out = "API key not set";
+        return false;
+    }
+    return true;
+}
+
+ProviderCapabilities OpenAICompatProvider::capabilities() const {
+    ProviderCapabilities caps;
+    caps.streaming = true;
+    caps.tools = true;
+    caps.vision = true;
+    caps.reasoning = false;
+    caps.system_prompt = true;
+    caps.cache_control = false;
+    caps.max_context = 128000;
+    return caps;
+}
+
+std::vector<ModelInfo> OpenAICompatProvider::list_models() const {
+    return {
+        {"gpt-4o", "GPT-4o", "OpenAI", 4096, 128000, true, true, true, false, 5.0, 15.0},
+        {"gpt-4o-mini", "GPT-4o mini", "OpenAI", 4096, 128000, true, true, true, false, 0.15, 0.6},
+        {"gpt-4-turbo", "GPT-4 Turbo", "OpenAI", 4096, 128000, true, true, true, false, 10.0, 30.0},
+    };
+}
+
+bool OpenAICompatProvider::supports_model(const std::string& model) const {
+    static const std::vector<std::string> known = {
+        "gpt-4", "gpt-3.5", "o1", "o3", "o4"
+    };
+    for (const auto& m : known) {
+        if (model.find(m) != std::string::npos) return true;
+    }
+    return true; // OpenAI-compatible servers often have custom models
+}
+
+int OpenAICompatProvider::estimate_tokens(const std::string& text) const {
+    return static_cast<int>(text.size() / 4) + 1;
+}
+
+double OpenAICompatProvider::estimate_cost(const std::string& model, int input_tokens, int output_tokens) const {
+    double in_cost = 0.0, out_cost = 0.0;
+    if (model.find("gpt-4o-mini") != std::string::npos) {
+        in_cost = 0.15; out_cost = 0.6;
+    } else if (model.find("gpt-4o") != std::string::npos) {
+        in_cost = 5.0; out_cost = 15.0;
+    } else if (model.find("gpt-4") != std::string::npos) {
+        in_cost = 10.0; out_cost = 30.0;
+    } else {
+        in_cost = 0.0; out_cost = 0.0; // Local models (Ollama, etc.) are free
+    }
+    return (input_tokens / 1000000.0) * in_cost + (output_tokens / 1000000.0) * out_cost;
 }
 
 }  // namespace pluto

@@ -18,6 +18,95 @@
 #include <string>
 #include <vector>
 
+namespace {
+
+// Execute a command with arguments via fork/execvp, capture stdout.
+// The command is executed without shell. Returns exit code, fills output.
+static int execvp_capture_output(const std::vector<std::string>& argv, std::string& output) {
+    if (argv.empty()) return -1;
+
+    int pipefd[2];
+    if (pipe(pipefd) != 0) return -1;
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return -1;
+    }
+
+    if (pid == 0) {
+        close(pipefd[0]);
+        dup2(pipefd[1], STDOUT_FILENO);
+        dup2(pipefd[1], STDERR_FILENO);
+        close(pipefd[1]);
+        std::vector<char*> args;
+        args.reserve(argv.size() + 1);
+        for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
+        args.push_back(nullptr);
+        execvp(args[0], args.data());
+        _exit(127);
+    }
+
+    close(pipefd[1]);
+    char buf[4096];
+    ssize_t n;
+    while ((n = read(pipefd[0], buf, sizeof(buf))) > 0) {
+        output.append(buf, n);
+    }
+    close(pipefd[0]);
+
+    int status = 0;
+    waitpid(pid, &status, 0);
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+// Execute command in a specific working directory via fork/execvp.
+// Returns exit code, fills output. No shell.
+static int execvp_capture_cwd(const std::string& cwd, const std::vector<std::string>& argv, std::string& output) {
+    if (argv.empty()) return -1;
+
+    int pipefd[2];
+    if (pipe(pipefd) != 0) return -1;
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return -1;
+    }
+
+    if (pid == 0) {
+        if (!cwd.empty() && chdir(cwd.c_str()) != 0) {
+            _exit(127);
+        }
+        close(pipefd[0]);
+        dup2(pipefd[1], STDOUT_FILENO);
+        dup2(pipefd[1], STDERR_FILENO);
+        close(pipefd[1]);
+        std::vector<char*> args;
+        args.reserve(argv.size() + 1);
+        for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
+        args.push_back(nullptr);
+        execvp(args[0], args.data());
+        _exit(127);
+    }
+
+    close(pipefd[1]);
+    char buf[4096];
+    ssize_t n;
+    while ((n = read(pipefd[0], buf, sizeof(buf))) > 0) {
+        output.append(buf, n);
+    }
+    close(pipefd[0]);
+
+    int status = 0;
+    waitpid(pid, &status, 0);
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+}  // namespace
+
 namespace pluto {
 
 std::string g_WorkspaceRoot;
@@ -317,39 +406,35 @@ ProjectInfo DetectProject(const std::string& root) {
 
 	// Detect git remote.
 	{
-		std::string cmd = "cd " + shq(root) + " && git remote get-url origin 2>/dev/null";
-		FILE* p = popen(cmd.c_str(), "r");
-		if (p) {
-			char buf[512];
-			if (std::fgets(buf, sizeof(buf), p)) {
-				info.git_remote = buf;
-				while (!info.git_remote.empty()
-				    && (info.git_remote.back() == '\n'
-				     || info.git_remote.back() == '\r'))
-					info.git_remote.pop_back();
-			}
-			pclose(p);
+		std::vector<std::string> argv = {"git", "remote", "get-url", "origin"};
+		std::string output;
+		if (execvp_capture_cwd(root, argv, output) == 0) {
+			// Remove trailing newlines
+			while (!output.empty() && (output.back() == '\n' || output.back() == '\r'))
+				output.pop_back();
+			info.git_remote = output;
 		}
 	}
 
 	// Detect top-level subdirectories.
 	{
-		std::string cmd = "cd '" + root +
-			"' && find . -maxdepth 1 -type d 2>/dev/null | sort";
-		FILE* p = popen(cmd.c_str(), "r");
-		if (p) {
-			char buf[1024];
-			while (std::fgets(buf, sizeof(buf), p)) {
-				std::string d = buf;
-				while (!d.empty() && (d.back() == '\n' || d.back() == '\r'))
-					d.pop_back();
+		std::vector<std::string> argv = {"find", ".", "-maxdepth", "1", "-type", "d"};
+		std::string output;
+		if (execvp_capture_cwd(root, argv, output) == 0) {
+			std::vector<std::string> dirs;
+			std::string line;
+			std::istringstream iss(output);
+			while (std::getline(iss, line)) {
+				if (line.empty()) continue;
 				// Remove "./" prefix, skip "." itself and hidden dirs.
-				if (d.size() > 2 && d[0] == '.' && d[1] == '/')
-					d = d.substr(2);
-				if (d.empty() || d == "." || d[0] == '.') continue;
-				info.subdirs.push_back(d);
+				if (line.size() > 2 && line[0] == '.' && line[1] == '/')
+					line = line.substr(2);
+				if (line.empty() || line == "." || line[0] == '.') continue;
+				dirs.push_back(line);
 			}
-			pclose(p);
+			std::sort(dirs.begin(), dirs.end());
+			for (const auto& d : dirs)
+				info.subdirs.push_back(d);
 		}
 	}
 
@@ -387,38 +472,48 @@ ProjectInfo DetectProject(const std::string& root) {
 	};
 
 	{
-		std::string cmd = "cd '" + root +
-			"' && git ls-files 2>/dev/null || find . -maxdepth 4 -type f "
-			"-not -path '*/.git/*' -not -path '*/.pluto/*' "
-			"-not -path '*/node_modules/*' -not -path '*/target/*' "
-			"-not -path '*/__pycache__/*' 2>/dev/null";
-		FILE* p = popen(cmd.c_str(), "r");
-		if (p) {
-			char buf[1024];
-			while (std::fgets(buf, sizeof(buf), p)) {
-				std::string f = buf;
-				while (!f.empty() && (f.back() == '\n' || f.back() == '\r'))
-					f.pop_back();
-				if (f.empty()) continue;
+		// Try git ls-files first, then fall back to find
+		std::vector<std::string> git_argv = {"git", "ls-files"};
+		std::string output;
+		bool used_git = (execvp_capture_cwd(root, git_argv, output) == 0);
+		
+		if (!used_git) {
+			std::vector<std::string> find_argv = {
+				"find", ".", "-maxdepth", "4", "-type", "f",
+				"-not", "-path", "*/.git/*",
+				"-not", "-path", "*/.pluto/*",
+				"-not", "-path", "*/node_modules/*",
+				"-not", "-path", "*/target/*",
+				"-not", "-path", "*/__pycache__/*"
+			};
+			output.clear();
+			execvp_capture_cwd(root, find_argv, output);
+		}
 
-				++info.total_files;
+		std::string line;
+		std::istringstream iss(output);
+		while (std::getline(iss, line)) {
+			// Remove leading ./ if present
+			if (line.size() >= 2 && line[0] == '.' && line[1] == '/')
+				line = line.substr(2);
+			if (line.empty()) continue;
 
-				// Match extension.
-				for (ExtLang* e = ext_map; e->ext; ++e) {
-					size_t elen = strlen(e->ext);
-					if (f.size() > elen
-					    && f.compare(f.size() - elen, elen, e->ext) == 0) {
-						LangAcc& acc = find_lang(e->lang);
-						acc.files++;
-						std::string full = root + "/" + f;
-						int lc = count_lines(full);
-						acc.lines += lc;
-						info.total_lines += lc;
-						break;
-					}
+			++info.total_files;
+
+			// Match extension.
+			for (ExtLang* e = ext_map; e->ext; ++e) {
+				size_t elen = strlen(e->ext);
+				if (line.size() > elen
+				    && line.compare(line.size() - elen, elen, e->ext) == 0) {
+					LangAcc& acc = find_lang(e->lang);
+					acc.files++;
+					std::string full = root + "/" + line;
+					int lc = count_lines(full);
+					acc.lines += lc;
+					info.total_lines += lc;
+					break;
 				}
 			}
-			pclose(p);
 		}
 	}
 
@@ -507,34 +602,44 @@ ProjectInfo DetectProject(const std::string& root) {
 		{
 			struct FileSz { std::string path; long size; };
 			std::vector<FileSz> all_src;
-			std::string cmd = "cd '" + root +
-				"' && git ls-files 2>/dev/null || find . -maxdepth 3 -type f "
-				"-not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null";
-			FILE* p = popen(cmd.c_str(), "r");
-			if (p) {
-				char buf[1024];
-				while (std::fgets(buf, sizeof(buf), p)) {
-					std::string f = buf;
-					while (!f.empty() && (f.back() == '\n' || f.back() == '\r'))
-						f.pop_back();
-					if (f.empty()) continue;
-					// Only source code files.
-					bool is_src = false;
-					for (const char* ext : {".cpp", ".c", ".h", ".hpp",
-					     ".py", ".rs", ".go", ".js", ".ts", ".tsx", ".jsx",
-					     ".java", ".rb", ".lua", ".zig", ".swift"}) {
-						size_t elen = strlen(ext);
-						if (f.size() > elen
-						    && f.compare(f.size() - elen, elen, ext) == 0)
-							{ is_src = true; break; }
-					}
-					if (!is_src) continue;
-					struct stat st6;
-					std::string full = root + "/" + f;
-					if (::stat(full.c_str(), &st6) == 0)
-						all_src.push_back({f, st6.st_size});
+
+			// Try git ls-files first, then fall back to find
+			std::vector<std::string> git_argv = {"git", "ls-files"};
+			std::string output;
+			bool used_git = (execvp_capture_cwd(root, git_argv, output) == 0);
+
+			if (!used_git) {
+				std::vector<std::string> find_argv = {
+					"find", ".", "-maxdepth", "3", "-type", "f",
+					"-not", "-path", "*/.git/*",
+					"-not", "-path", "*/node_modules/*"
+				};
+				output.clear();
+				execvp_capture_cwd(root, find_argv, output);
+			}
+
+			std::string line;
+			std::istringstream iss(output);
+			while (std::getline(iss, line)) {
+				// Remove leading ./ if present
+				if (line.size() >= 2 && line[0] == '.' && line[1] == '/')
+					line = line.substr(2);
+				if (line.empty()) continue;
+				// Only source code files.
+				bool is_src = false;
+				for (const char* ext : {".cpp", ".c", ".h", ".hpp",
+				     ".py", ".rs", ".go", ".js", ".ts", ".tsx", ".jsx",
+				     ".java", ".rb", ".lua", ".zig", ".swift"}) {
+					size_t elen = strlen(ext);
+					if (line.size() > elen
+					    && line.compare(line.size() - elen, elen, ext) == 0)
+						{ is_src = true; break; }
 				}
-				pclose(p);
+				if (!is_src) continue;
+				struct stat st6;
+				std::string full = root + "/" + line;
+				if (::stat(full.c_str(), &st6) == 0)
+					all_src.push_back({line, st6.st_size});
 			}
 			// Sort by size descending.
 			std::sort(all_src.begin(), all_src.end(),

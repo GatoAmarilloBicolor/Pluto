@@ -6,6 +6,9 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <unistd.h>
+#include <initializer_list>
+#include <algorithm>
+#include <vector>
 
 // Only define Haiku-specific types that don't exist on POSIX systems
 #ifndef status_t
@@ -51,6 +54,24 @@ typedef int32 image_id;
 #ifndef team_id
 typedef int32 team_id;
 #endif
+
+#ifndef uint16
+typedef unsigned short uint16;
+#endif
+
+#ifndef uint16_t
+typedef unsigned short uint16_t;
+#endif
+
+// Include Font.h for BFont definition needed by text_run (after typedefs)
+#include "Font.h"
+
+// Layout spacing constants
+const float B_USE_SMALL_SPACING = 4.0f;
+const float B_USE_DEFAULT_SPACING = 8.0f;
+const float B_USE_HALF_ITEM_SPACING = 6.0f;
+const float B_USE_ITEM_SPACING = 8.0f;
+const float B_USE_BIG_SPACING = 16.0f;
 
 const status_t B_OK = 0;
 const status_t B_ERROR = -1;
@@ -164,36 +185,39 @@ typedef enum {
 	B_WHICH_1 = 1,
 	B_WHICH_2 = 2,
 	B_WHICH_3 = 3,
+	B_DOCUMENT_BACKGROUND_COLOR = 4,
+	B_DOCUMENT_TEXT_COLOR = 5,
+	B_CONTROL_BACKGROUND_COLOR = 6,
+	B_CONTROL_TEXT_COLOR = 7,
+	B_CONTROL_HIGHLIGHT_COLOR = 8,
+	B_NAVIGATION_BASE_COLOR = 9,
+	B_NAVIGATION_PULSE_COLOR = 10,
+	B_KEYBOARD_NAVIGATION_COLOR = 11,
+	B_DESKTOP_COLOR = 12,
+	B_PANEL_BACKGROUND_COLOR = 13,
+	B_PANEL_TEXT_COLOR = 14,
+	B_MENU_BACKGROUND_COLOR = 15,
+	B_MENU_SELECTED_BACKGROUND_COLOR = 16,
+	B_MENU_SELECTED_BORDER_COLOR = 17,
+	B_MENU_ITEM_TEXT_COLOR = 18,
+	B_MENU_ITEM_SELECTED_TEXT_COLOR = 19,
+	B_TOOL_TIP_BACKGROUND_COLOR = 20,
+	B_TOOL_TIP_TEXT_COLOR = 21,
+	B_LIST_BACKGROUND_COLOR = 22,
+	B_LIST_SELECTED_BACKGROUND_COLOR = 23,
+	B_LIST_ITEM_TEXT_COLOR = 24,
+	B_LIST_SELECTED_ITEM_TEXT_COLOR = 25,
+	B_SUCCESS_COLOR = 26,
+	B_FAILURE_COLOR = 27,
+	B_WARNING_COLOR = 28,
+	B_LINK_COLOR = 29,
+	B_WINDOW_TAB_COLOR = 30,
+	B_WINDOW_TAB_SELECTED_COLOR = 31,
 } color_which;
 
 // Allow implicit conversion from rgb_color to color_which for ui_color()
 inline color_which operator+(color_which lhs, const rgb_color& rhs) { (void)rhs; return lhs; }
 inline color_which operator+(const rgb_color& lhs, color_which rhs) { (void)lhs; return rhs; }
-
-// Color constants for ui_color()
-const color_which B_DOCUMENT_BACKGROUND_COLOR = B_WHICH_1;
-const color_which B_PANEL_BACKGROUND_COLOR = B_WHICH_2;
-const color_which B_CONTROL_BACKGROUND_COLOR = B_WHICH_3;
-const color_which B_LIST_BACKGROUND_COLOR = B_WHICH_0;
-const color_which B_LIST_SELECTED_BACKGROUND_COLOR = B_WHICH_1;
-const color_which B_DOCUMENT_TEXT_COLOR = B_WHICH_2;
-const color_which B_LIST_SELECTED_ITEM_TEXT_COLOR = B_WHICH_3;
-const color_which B_PANEL_TEXT_COLOR = B_WHICH_0;
-const color_which B_KEYBOARD_NAVIGATION_COLOR = B_WHICH_1;
-const color_which B_LINK_TEXT_COLOR = B_WHICH_2;
-const color_which B_LIST_ITEM_TEXT_COLOR = B_WHICH_0;
-const color_which B_CONTROL_TEXT_COLOR = B_WHICH_0;
-const color_which B_CONTROL_BORDER_COLOR = B_WHICH_1;
-const color_which B_CONTROL_HIGHLIGHT_COLOR = B_WHICH_2;
-const color_which B_NAVIGATION_BASE_COLOR = B_WHICH_3;
-const color_which B_NAVIGATION_PULSE_COLOR = B_WHICH_0;
-const color_which B_SHINE_COLOR = B_WHICH_1;
-const color_which B_SHADOW_COLOR = B_WHICH_2;
-const color_which B_MENU_BACKGROUND_COLOR = B_WHICH_3;
-const color_which B_MENU_SELECTED_BACKGROUND_COLOR = B_WHICH_0;
-const color_which B_MENU_ITEM_TEXT_COLOR = B_WHICH_1;
-const color_which B_MENU_SELECTED_ITEM_TEXT_COLOR = B_WHICH_2;
-const color_which MENU_SELECTED_BORDER_COLOR = B_WHICH_3;
 
 typedef uint32_t color_space;
 
@@ -259,6 +283,19 @@ const int32 B_RETURN = 0x0D;
 const int32 B_SPACE = 0x20;
 const int32 B_BACKSPACE = 0x08;
 
+// truncate_mode enum for BView::TruncateString
+enum truncate_mode {
+    B_TRUNCATE_BEGIN = 0,
+    B_TRUNCATE_MIDDLE = 1,
+    B_TRUNCATE_END = 2,
+    B_TRUNCATE_SMART = 3
+};
+
+// Control states
+const int32 B_CONTROL_ON = 1;
+const int32 B_CONTROL_OFF = 0;
+const int32 B_CONTROL_PARTIALLY_ON = 2;
+
 // Keyboard modifiers
 const uint32 B_SHIFT_KEY = 0x01;
 const uint32 B_COMMAND_KEY = 0x02;
@@ -278,13 +315,50 @@ const int32 B_REAL_TIME_DISPLAY_PRIORITY = 50;
 const int32 B_URGENT_PRIORITY = 60;
 const int32 B_REAL_TIME_PRIORITY = 70;
 
+// Alignment
+struct BAlignment {
+    enum horizontal_alignment { B_ALIGN_HORIZONTAL_UNSET, B_ALIGN_LEFT, B_ALIGN_RIGHT, B_ALIGN_CENTER, B_ALIGN_HORIZONTAL_CENTER = B_ALIGN_CENTER, B_ALIGN_USE_FULL_WIDTH };
+    enum vertical_alignment { B_ALIGN_VERTICAL_UNSET, B_ALIGN_TOP, B_ALIGN_MIDDLE, B_ALIGN_BOTTOM, B_ALIGN_VERTICAL_CENTER = B_ALIGN_MIDDLE, B_ALIGN_NO_VERTICAL };
+    horizontal_alignment horizontal;
+    vertical_alignment vertical;
+    BAlignment() : horizontal(B_ALIGN_HORIZONTAL_UNSET), vertical(B_ALIGN_VERTICAL_UNSET) {}
+    BAlignment(horizontal_alignment h, vertical_alignment v) : horizontal(h), vertical(v) {}
+};
+
+// text_run_array for styled text (used by BTextView)
+struct text_run {
+    int32 offset = 0;
+    class BFont* font = nullptr;
+    rgb_color color = {0,0,0,0};
+    text_run() = default;
+    text_run(int32 o, class BFont* f, rgb_color c) : offset(o), font(f), color(c) {}
+    text_run(int32 o, class BFont& f, rgb_color c) : offset(o), font(&f), color(c) {}
+    text_run& operator=(const text_run& other) = default;
+    text_run& operator=(std::initializer_list<void*> list) {
+        auto it = list.begin();
+        if (it != list.end()) offset = (int32)(intptr_t)*it++;
+        if (it != list.end()) font = (class BFont*)*it++;
+        if (it != list.end()) color = *(rgb_color*)*it;
+        return *this;
+    }
+};
+
+struct text_run_array {
+    int32 count;
+    std::vector<text_run> runs;
+    text_run_array() : count(0) {}
+    text_run_array(int32 c) : count(c), runs(c) {}
+    text_run_array(std::initializer_list<text_run> list) : count((int32)list.size()), runs(list) {}
+    text_run& operator[](size_t i) { return runs[i]; }
+    const text_run& operator[](size_t i) const { return runs[i]; }
+};
+
 // Mouse button constants
 const uint32 B_PRIMARY_MOUSE_BUTTON = 0x01;
 const uint32 B_SECONDARY_MOUSE_BUTTON = 0x02;
 const uint32 B_TERTIARY_MOUSE_BUTTON = 0x04;
 
-// Layout spacing constants
-const float B_USE_SMALL_SPACING = -1.0f;
+// Layout spacing constants (B_USE_SMALL_SPACING defined at line 56)
 const float B_USE_WINDOW_SPACING = -2.0f;
 
 // GroupLayout orientation (also available globally for compatibility)
@@ -295,14 +369,6 @@ typedef int orientation;
 
 // Window flags (additional)
 const uint32 B_ASYNCHRONOUS_CONTROLS = 0x00001000;
-
-// String truncation
-enum {
-    B_TRUNCATE_BEGIN = 0,
-    B_TRUNCATE_MIDDLE = 1,
-    B_TRUNCATE_END = 2,
-    B_TRUNCATE_SMART = 3
-};
 
 // UTF-8 ellipsis character
 #define B_UTF8_ELLIPSIS "\xE2\x80\xA6"

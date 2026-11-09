@@ -17,6 +17,7 @@
 
 class BClipboard;
 class BMessageRunner;
+class BScrollBar;
 
 
 class TextDocumentView : public BView, public BInvoker {
@@ -75,6 +76,8 @@ public:
 
 			void				Copy(BClipboard* clipboard);
 			void				Paste(BClipboard* clipboard);
+
+			virtual BScrollBar*	ScrollBar(int32 which) const { (void)which; return nullptr; }
 
 private:
 			float				_TextLayoutWidth(float viewWidth) const;

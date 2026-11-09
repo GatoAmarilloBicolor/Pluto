@@ -21,9 +21,10 @@ public:
 	BuiltinMcpManager();
 	~BuiltinMcpManager();
 
-	// Initialize all auto-start built-in servers.
+	// Initialize built-in servers. Only servers whose names are in
+	// `enabled_server_names` will be launched. If empty, no servers start.
 	// Returns the number of servers successfully connected.
-	int init(ToolRegistry& registry);
+	int init(ToolRegistry& registry, const std::vector<std::string>& enabled_server_names);
 
 	// Get a connected client by server name (or nullptr if not connected).
 	std::shared_ptr<McpClient> client(const std::string& name) const;

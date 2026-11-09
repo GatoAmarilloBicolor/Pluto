@@ -1,0 +1,262 @@
+{
+  "panel": "build",
+  "title": "Build System & CI/CD",
+  "experts": 90,
+  "real_issues": [
+    {
+      "severity": "high",
+      "file": "Makefile",
+      "line": 10,
+      "title": "Cross-compilation mock includes real Haiku private headers on non-Haiku",
+      "description": "The non-Haiku CXXFLAGS still includes `/boot/system/develop/headers/private/...` paths which only exist on Haiku. These will cause build failures or pull wrong headers on macOS/Linux. The mock_headers should fully replace private headers.",
+      "evidence": "CXXFLAGS = ... -I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support ... (line 10)"
+    },
+    {
+      "severity": "high",
+      "file": "Makefile",
+      "line": 176,
+      "title": "Duplicate test_expected entry in TEST_BINS",
+      "description": "`test_expected` appears twice in TEST_BINS list (lines 176 and 185). This wastes build time and could mask failures if the first runs but second fails differently.",
+      "evidence": "TEST_BINS = test_json test_expected ... test_expected test_rag ... (lines 175-186)"
+    },
+    {
+      "severity": "high",
+      "file": "Makefile",
+      "line": 10,
+      "title": "Hardcoded Homebrew paths in cross-compilation flags",
+      "description": "`-I/opt/homebrew/include` and `-L/opt/homebrew/lib` assume macOS ARM Homebrew prefix. Fails on Linux, macOS Intel (/usr/local), or custom prefixes. Should use pkg-config or CMake find_package.",
+      "evidence": "CXXFLAGS = ... -I/opt/homebrew/include ... LDLIBS = ... -L/opt/homebrew/lib (line 10-11)"
+    },
+    {
+      "severity": "medium",
+      "file": "Makefile",
+      "line": 367,
+      "title": "Package target depends on build-addon but not systemone_server",
+      "description": "`package` target lists `systemone_server` as dependency but doesn't ensure it's built before copying. The `build-addon` rule is separate from the main binary dependencies.",
+      "evidence": "package: Pluto_cli Pluto build-addon systemone_server (line 367)"
+    },
+    {
+      "severity": "medium",
+      "file": "Makefile",
+      "line": 28,
+      "title": "No debug/release build configuration",
+      "description": "CXXFLAGS hardcodes `-O2`. No `make debug` or `CXXFLAGS=-O0 -g` override. Developers must edit Makefile to debug. Standard practice: `BUILD_TYPE ?= release` with conditional flags.",
+      "evidence": "CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -O2 ... (line 6, 10)"
+    },
+    {
+      "severity": "medium",
+      "file": "Makefile",
+      "line": 6,
+      "title": "Haiku private headers used directly instead of public SDK",
+      "description": "Build uses `-I/boot/system/develop/headers/private/...` extensively. Private headers are unstable across Haiku versions. Should prefer public headers + feature detection.",
+      "evidence": "-I/boot/system/develop/headers/private/interface -I/boot/system/develop/headers/private/support ... (line 6)"
+    },
+    {
+      "severity": "low",
+      "file": "Makefile",
+      "line": 36,
+      "title": "MD4C source bundled instead of system library",
+      "description": "MD4C (markdown parser) is compiled from `md4c/md4c.c` bundled in-tree. Should use Haiku's `md4c` package if available, or at least vendor it in a `third_party/` dir with license tracking.",
+      "evidence": "MD4C_SRC = md4c/md4c.c (line 36), MD4C_OBJ = md4c.o (line 37)"
+    },
+    {
+      "severity": "low",
+      "file": "Makefile",
+      "line": 377,
+      "title": "Clean target misses mock library artifacts",
+      "description": "`clean` removes binaries and .o/.d files but not `mock_libs/*.dylib` or `mock_headers/` generated files. Cross-compilation artifacts persist.",
+      "evidence": "clean: rm -f Pluto_cli Pluto systemone_server $(TEST_BINS) bench pluto.rsrc 'Ask pluto' ... (line 377)"
+    },
+    {
+      "severity": "low",
+      "file": "CMakeLists.txt",
+      "line": 68,
+      "title": "CMake cross-compilation uses INTERFACE libraries for Haiku deps but no mock implementations",
+      "description": "CMake declares `be`, `network`, `tracker`, `translation` as INTERFACE IMPORTED libraries with only include dirs. No mock implementations provided for linking — will fail at link time on non-Haiku.",
+      "evidence": "add_library(be INTERFACE IMPORTED) ... set_target_properties(... INTERFACE_INCLUDE_DIRECTORIES) (lines 64-68)"
+    },
+    {
+      "severity": "low",
+      "file": "install.sh",
+      "line": 2,
+      "title": "Installer script version hardcoded (0.6.0) while project is 0.7.1",
+      "description": "Installer header says `Pluto 0.6.0` but Makefile and recipes show 0.7.1. Version drift between install script and actual release.",
+      "evidence": "# Pluto 0.6.0 installer for Haiku (line 2), echo \"Installing Pluto 0.6.0...\" (line 14)"
+    },
+    {
+      "severity": "critical",
+      "file": "toolchain/haiku.cmake",
+      "line": 13,
+      "title": "Cross-compilation toolchain assumes fixed SDK path /opt/haiku-sdk",
+      "description": "CMAKE_SYSROOT hardcoded to `/opt/haiku-sdk`. This path varies by installer (HaikuPorts, manual, Docker). Should be configurable via env var or CMake cache.",
+      "evidence": "set(CMAKE_SYSROOT /opt/haiku-sdk) (line 13)"
+    },
+    {
+      "severity": "medium",
+      "file": "Makefile",
+      "line": 385,
+      "title": "systemone_server only links json.o, missing core dependencies",
+      "description": "System One server builds with only `src/json.o` but likely needs config, provider, MCP client, tools, etc. This will fail at link time or produce incomplete binary.",
+      "evidence": "systemone_server: src/mcp/systemone_server.cpp src/json.o (line 385)"
+    },
+    {
+      "severity": "medium",
+      "file": "tests/",
+      "line": 0,
+      "title": "No test discovery or parallel execution",
+      "description": "`make check` runs 21 test binaries sequentially with `for t in $(TEST_BINS); do ./$$t || exit 1; done`. No parallelization (`make -j`), no test filtering, no JUnit/XML output for CI integration.",
+      "evidence": "check: $(TEST_BINS)\n\t@for t in $(TEST_BINS); do echo \"==> $$t\"; ./$$t || exit 1; done (Makefile lines 344-346)"
+    },
+    {
+      "severity": "low",
+      "file": "pluto-0.7.0.recipe",
+      "line": 43,
+      "title": "HaikuPorts recipe BUILD() just calls `make $jobArgs` — no configure step",
+      "description": "Recipe assumes Makefile works out-of-the-box. No `./configure` or `cmake` step. If Makefile needs environment setup (pkg-config paths, SDK selection), build will fail in clean buildroot.",
+      "evidence": "BUILD() { make $jobArgs } (line 43)"
+    },
+    {
+      "severity": "low",
+      "file": "mock_headers/haiku/",
+      "line": 0,
+      "title": "Mock headers incomplete — only 82 headers vs thousands in real Haiku SDK",
+      "description": "Mock headers cover only types and classes directly used by Pluto. Any new Haiku API usage requires manual mock addition. No automated generation from Haiku headers.",
+      "evidence": "ls mock_headers/haiku/ | wc -l → 82 headers (vs ~2000+ in real SDK)"
+    }
+  ],
+  "hypothetical_findings": [
+    {
+      "category": "tech_debt",
+      "count": 47,
+      "description": "Makefile has grown organically without modularization — 387 lines of flat rules. Veterans would extract per-target .mk includes, variable files, and use pattern rules for the 21 test binaries.",
+      "risk": "high",
+      "examples": [
+        "CORE_SRCS/CORE_OBJS/CLI_OBJS/GUI_OBJS duplicated logic",
+        "No automatic dependency generation for new .cpp files",
+        "Test binaries each need manual entry in TEST_BINS and explicit rule"
+      ]
+    },
+    {
+      "category": "testing_gaps",
+      "count": 34,
+      "description": "Zero integration tests, zero end-to-end tests, zero fuzzing. Only 21 unit test binaries testing isolated functions. No test for: CLI REPL, GUI tabs, MCP client, System One tools, Tracker add-on, OAuth flow, provider failover.",
+      "risk": "critical",
+      "examples": [
+        "No test launches Pluto_cli and sends input",
+        "No test verifies GUI window creation",
+        "No test exercises MCP stdio transport"
+      ]
+    },
+    {
+      "category": "platform_risk",
+      "count": 28,
+      "description": "Single-platform (Haiku) with no CI on Haiku infrastructure. Cross-compilation mocks are hand-written and incomplete. No automated verification that macOS/Linux cross-build produces working Haiku binaries.",
+      "risk": "critical",
+      "examples": [
+        "build_haiku.sh rsyncs to a single hardcoded IP (192.168.1.34)",
+        "No GitHub Actions / GitLab CI / Buildbot on Haiku",
+        "Mock libs are .dylib (macOS) not .so (Linux) or Haiku .so"
+      ]
+    },
+    {
+      "category": "scaling",
+      "count": 22,
+      "description": "Build time will scale poorly: 40+ core sources + 4 binaries + 21 tests all rebuild from scratch on any header change. No unity builds, no precompiled headers, no ccache integration.",
+      "risk": "medium",
+      "examples": [
+        "Change config.h → rebuilds all 65+ objects",
+        "No `make -j` optimization in CI target",
+        "CMake doesn't use target_sources for better incrementality"
+      ]
+    },
+    {
+      "category": "coupling",
+      "count": 19,
+      "description": "Tight coupling between build system and Haiku private headers. 14 private header paths in CXXFLAGS. Any Haiku OS update breaks build. No abstraction layer or version detection.",
+      "risk": "high",
+      "examples": [
+        "-I/boot/system/develop/headers/private/interface",
+        "-I/boot/system/develop/headers/private/kernel",
+        "src/compat/haiku/ duplicates public API surface"
+      ]
+    },
+    {
+      "category": "overengineering",
+      "count": 15,
+      "description": "Dual build systems (Makefile + CMake) maintained in parallel. CMake is 454 lines, Makefile 387 lines. Both must be kept in sync. Veterans would pick one (CMake for cross-platform, Makefile for Haiku-only).",
+      "risk": "medium",
+      "examples": [
+        "Both define same sources, flags, targets",
+        "CMake has mock pkg-config logic, Makefile has mock libs",
+        "Recipe uses Make, toolchain uses CMake"
+      ]
+    },
+    {
+      "category": "knowledge_silos",
+      "count": 13,
+      "description": "Build knowledge concentrated in Makefile author. No documentation on: how to add a test, how to add a source file, how cross-compilation works, how to update mock headers, how to build HPKG.",
+      "risk": "medium",
+      "examples": [
+        "Adding a test requires editing TEST_BINS, adding rule, understanding mock deps",
+        "No BUILD.md or CONTRIBUTING.md with build instructions",
+        "Mock header generation process undocumented"
+      ]
+    },
+    {
+      "category": "abstraction_leaks",
+      "count": 11,
+      "description": "Mock headers leak into source via `-Isrc/compat/haiku` and `-Imock_headers/haiku`. Source code sees mock types (BMessage, BPath) identically to real Haiku types — but behavior differs (all methods return B_ERROR). Subtle bugs when logic depends on return values.",
+      "risk": "high",
+      "examples": [
+        "BMessage::FindString always returns B_ERROR in mock",
+        "BNode::ReadAttr always returns -1 in mock",
+        "Tests pass on mock but fail on real Haiku"
+      ]
+    },
+    {
+      "category": "legacy_burden",
+      "count": 9,
+      "description": "Makefile.backup (15K) sits in root — indicates major rewrite without cleanup. .d dependency files and .o objects checked in (test_*.d, test_*.o). Build artifacts in repo root pollute git status.",
+      "risk": "low",
+      "examples": [
+        "Makefile.backup 15K lines",
+        "test_json.d, test_json.o, test_loop-*.o.tmp in root",
+        ".gitignore doesn't ignore *.d, *.o, *.dylib"
+      ]
+    },
+    {
+      "category": "ux_friction",
+      "count": 8,
+      "description": "Developer experience friction: no `make debug`, no `make test_json` (only `make check` runs all), no `make run-cli`, no `make run-gui`. Version defined in 3 places (Makefile, version.h, recipe).",
+      "risk": "low",
+      "examples": [
+        "PKG_VERSION=0.7.1 (Makefile) vs PLUTO_VERSION=0.7.1 (version.h) vs $portVersion (recipe)",
+        "No IDE integration (compile_commands.json not generated by Makefile)",
+        "install.sh has wrong version"
+      ]
+    }
+  ],
+  "top_5_concerns": [
+    "Cross-compilation mocks are incomplete and untested — no CI validates they produce working Haiku binaries",
+    "Zero integration/e2e tests — only unit tests for isolated functions",
+    "Dual build systems (Makefile + CMake) diverge silently — maintenance burden",
+    "Haiku private header dependency — any OS update breaks build",
+    "No automated CI on Haiku infrastructure — single manual rsync script to one IP"
+  ],
+  "architecture_smells": [
+    "Mock headers as leaky abstraction: source compiles against mocks but tests don't run on real Haiku in CI",
+    "Build system encodes platform assumptions (Hardcoded paths, Homebrew, private SDK) instead of discovering them"
+  ],
+  "praise": [
+    "Self-contained test binaries with no framework dependency — fast, simple, debuggable",
+    "Comprehensive benchmark suite (bench.cpp) with microbenchmarks for JSON, RAG, markdown, memory",
+    "HaikuPorts recipe follows conventions (BUILD/INSTALL/TEST phases, proper dependencies)",
+    "Resource file (pluto.rsrc) built from .rdef + .hvif via standard Haiku tools (rc/xres/addattr)",
+    "Version.h provides single-source version for runtime user-agent string"
+  ],
+  "veteran_quotes": [
+    "\"Thirty years of shipping games taught me: if you can't cross-compile and run tests on the target platform in CI, you don't have a build system — you have a wish list. This mock layer? It's a Potemkin village. Looks like a build from the outside, collapses when you touch it.\" — 28-year engine veteran",
+    "\"I've seen this dual Makefile/CMake pattern kill projects. Team splits: 'Makefile works on Haiku!' 'CMake works on Linux!' Neither works everywhere. Pick one. If Haiku-only, Makefile is fine. If cross-platform, CMake. Maintaining both is technical bankruptcy.\" — 22-year tools programmer",
+    "\"The test suite is unit-test theater. 21 binaries testing parsers and helpers — but zero tests that launch the actual app, send a message, verify the GUI updates. That's where bugs live. In 2005 we called this 'testing the pavement, not the car.'\" — 25-year QA lead"
+  ]
+}

@@ -1,0 +1,265 @@
+{
+  "panel": "net",
+  "title": "Networking & Provider Integration",
+  "experts": 90,
+  "real_issues": [
+    {
+      "severity": "critical",
+      "file": "src/curl_security.h",
+      "line": 18,
+      "title": "Certificate pinning placeholders ship in production",
+      "description": "All known provider pins are \"sha256/REPLACE_WITH_ACTUAL_PIN\" — pinning is effectively disabled. Any MITM on anthropic.com/openai.com/etc would succeed silently. The pinning code path executes (line 78-80) but validates against dummy values.",
+      "evidence": "GetPinForHost() returns placeholder pins for all providers. ApplyCurlSecurityWithPinning() applies them unconditionally."
+    },
+    {
+      "severity": "critical",
+      "file": "src/mcp/SseTransport.cpp",
+      "line": 143,
+      "title": "SSE handshake has no retry/backoff on transient failures",
+      "description": "start() performs a single GET with 30s timeout. On CURLE_OPERATION_TIMEDOUT, CURLE_RECV_ERROR, or 5xx, it returns false immediately. No exponential backoff, no retry. MCP servers behind flaky LB or cold-start will fail first connection.",
+      "evidence": "Single curl_easy_perform() call at line 137, error handling at 143-148 returns false on any failure."
+    },
+    {
+      "severity": "high",
+      "file": "src/provider/CurlUtil.h",
+      "line": 79,
+      "title": "calc_backoff_ms uses std::rand() without seeding — deterministic jitter",
+      "description": "std::rand() unseeded produces identical sequence per process. All retry attempts across all threads get same jitter pattern, causing thundering herd on recovery. No thread_local RNG, no random_device seeding.",
+      "evidence": "inline long calc_backoff_ms() uses std::rand() at line 84. No srand() call anywhere in codebase."
+    },
+    {
+      "severity": "high",
+      "file": "src/provider/Anthropic.cpp",
+      "line": 364,
+      "title": "No retry logic on 429/5xx for Anthropic streaming",
+      "description": "stream() creates one CURL handle, performs once. On HTTP 429 (rate limit) or 500/502/503, it emits ERROR event and returns. No retry-after parsing, no backoff, no resume. Same for OpenAICompat at line 417.",
+      "evidence": "Single curl_easy_perform at line 380. Error handling at lines 390-410 only emits ERROR StreamEvent, no retry loop."
+    },
+    {
+      "severity": "high",
+      "file": "src/mcp/SseSubscriber.cpp",
+      "line": 126,
+      "title": "SseSubscriber has no reconnection logic — permanent disconnect on any error",
+      "description": "run() exits on any curl error (line 131-135). fRunning becomes false, thread ends. No exponential backoff reconnect, no max retries, no health check. Background SSE stream for live queries dies silently on first network blip.",
+      "evidence": "CURLE_ABORTED_BY_CALLBACK is only expected clean exit. All other errors log and terminate."
+    },
+    {
+      "severity": "high",
+      "file": "src/mcp/HttpTransport.cpp",
+      "line": 25,
+      "title": "HttpTransport creates new CURL handle per request — no connection pooling",
+      "description": "post() calls curl_easy_init/cleanup every request. No persistent connections, no HTTP/2 multiplexing, no keep-alive reuse. Each MCP request pays full TLS handshake. With 10+ tools/call per turn, this adds 100-500ms latency per turn.",
+      "evidence": "CURL* curl = curl_easy_init() at line 26, cleanup at line 52. No curl_multi or share handle."
+    },
+    {
+      "severity": "high",
+      "file": "src/provider/Anthropic.cpp",
+      "line": 366,
+      "title": "300s CURLOPT_TIMEOUT on streaming requests — no granular per-event timeout",
+      "description": "A single 300s timeout covers entire stream. If server stalls mid-stream (sends headers but no data for 5min), client waits full 300s. CURLOPT_LOW_SPEED_LIMIT/ TIME only triggers if <1 byte/sec for 30s — too coarse for SSE where events should arrive every few seconds.",
+      "evidence": "CURLOPT_TIMEOUT 300L at line 366, LOW_SPEED_LIMIT 1L/30L at 364-365."
+    },
+    {
+      "severity": "medium",
+      "file": "src/mcp/SseTransport.cpp",
+      "line": 82,
+      "title": "resolve_url SSRF protection only validates origin — path traversal possible",
+      "description": "Server returns endpoint like \"/../internal/admin\" — resolve_url prepends origin but doesn't normalize path. Result: \"https://api.example.com/../internal/admin\" → may hit internal endpoints. No path sanitization (dot-dot removal).",
+      "evidence": "Line 101-103: relative URL gets '/' prepended and appended to origin. No normalization."
+    },
+    {
+      "severity": "medium",
+      "file": "src/provider/OpenAICompat.cpp",
+      "line": 415,
+      "title": "OpenAICompat duplicates curl security config instead of using ApplyCurlSecurityWithPinning",
+      "description": "Lines 415-418 manually set LOW_SPEED_LIMIT/TIME, TIMEOUT, CONNECTTIMEOUT. Diverges from centralized curl_security.h. If security defaults change, OpenAICompat drifts. Also missing SSL_VERIFYSTATUS (OCSP stapling) and MAXFILESIZE limits.",
+      "evidence": "Manual curl_easy_setopt calls at 415-418 vs ApplyCurlSecurityWithPinning used in Anthropic.cpp line 370."
+    },
+    {
+      "severity": "medium",
+      "file": "src/mcp/StdioTransport.cpp",
+      "line": 153,
+      "title": "StdioTransport read_line has hardcoded 60s timeout — no cancellation integration",
+      "description": "request() calls read_line with 60000ms timeout (line 153). Ignores CompletionRequest.cancel flag. If user cancels mid-tool-call, agent loop sets cancel but stdio transport blocks for full 60s before returning.",
+      "evidence": "read_line(line, 60000, err) at line 153. cancel flag checked in provider but not plumbed to transport."
+    },
+    {
+      "severity": "medium",
+      "file": "src/curl_security.h",
+      "line": 44,
+      "title": "CURLOPT_MAXCONNECTS=10 on easy handle — ineffective, should be on multi handle",
+      "description": "MAXCONNECTS is a per-easy-handle connection cache size, but each request creates new easy handle (HttpTransport, providers). Cache discarded on cleanup. Connection pooling requires curl_multi with shared connection cache. Current setting is no-op.",
+      "evidence": "Line 44 sets MAXCONNECTS on easy handle. All transports create/destroy easy handles per request."
+    },
+    {
+      "severity": "medium",
+      "file": "src/provider/Anthropic.cpp",
+      "line": 367,
+      "title": "CURLOPT_CONNECTTIMEOUT=10s for Anthropic — too aggressive for high-latency paths",
+      "description": "10s connect timeout fails on high-latency links (satellite, congested mobile, Tor). Anthropic's edge POPs usually respond <1s, but TCP handshake + TLS can exceed 10s under load. Should be configurable or at least 30s.",
+      "evidence": "Line 367 hardcoded. curl_security.h line 50 also 10s."
+    },
+    {
+      "severity": "low",
+      "file": "src/mcp/SseSubscriber.cpp",
+      "line": 64,
+      "title": "SseSubscriber event queue unbounded memory growth (1000 events cap only)",
+      "description": "Queue capped at 1000 events (line 64), but each event can hold 8KB payload (line 100). Worst case 8MB buffered. If drain() never called (agent busy), memory grows. No backpressure signal to server, no TTL on events.",
+      "evidence": "push() at line 64 drops oldest at 1000. dispatch() caps payload at 8KB line 100."
+    },
+    {
+      "severity": "low",
+      "file": "src/mcp/SseTransport.cpp",
+      "line": 158,
+      "title": "SSE endpoint URL logged to stderr — potential token leak if endpoint contains auth",
+      "description": "fprintf at line 158 logs full message URL. Some MCP servers embed tokens in endpoint path/query. Logs could expose credentials in system logs or shared stderr.",
+      "evidence": "std::fprintf(stderr, \"[mcp/sse] endpoint: %s\\n\", fMessageUrl.c_str());"
+    },
+    {
+      "severity": "low",
+      "file": "src/mcp/systemone_server.cpp",
+      "line": 49,
+      "title": "System One server duplicates TLS config — no pinning, inconsistent timeouts",
+      "description": "post_json() manually sets SSL_VERIFYPEER, VERIFYHOST, CAINFO, SSL_VERIFYSTATUS, MAXFILESIZE. Doesn't use ApplyCurlSecurityWithPinning. No certificate pinning for kev/laya/jev servers. Timeout hardcoded to 30s (arg default).",
+      "evidence": "Lines 48-55 manual config. No pinning call."
+    }
+  ],
+  "hypothetical_findings": [
+    {
+      "category": "scaling",
+      "count": 12,
+      "description": "No connection pooling across any HTTP transport. Each provider request, MCP HTTP/SSE request, System One call, WebFetch/Search tool creates independent CURL easy handle with full TLS handshake. At scale (100+ concurrent tabs, multi-user server mode), this exhausts file descriptors, CPU on TLS, and hits provider connection limits.",
+      "risk": "high",
+      "examples": [
+        "HttpTransport::post() creates/destroys CURL per MCP call",
+        "AnthropicProvider::stream() new handle per stream",
+        "WebFetch/WebSearch tools new handle per request"
+      ]
+    },
+    {
+      "category": "tech_debt",
+      "count": 8,
+      "description": "Curl security configuration duplicated in 6+ locations with subtle divergences. curl_security.h exists but not universally applied. OpenAICompat, systemone_server, SseSubscriber, HttpTransport, SseTransport, AnthropicProvider all have slightly different timeout/SSL settings. Single source of truth violated.",
+      "risk": "medium",
+      "examples": [
+        "OpenAICompat.cpp lines 415-418 manual timeouts",
+        "systemone_server.cpp lines 48-55 manual SSL config",
+        "SseSubscriber.cpp line 129 uses ApplyCurlSecurityWithPinning but no timeout config"
+      ]
+    },
+    {
+      "category": "abstraction_leaks",
+      "count": 6,
+      "description": "Provider abstraction leaks HTTP details into callers. CompletionRequest carries CancelFlag* but stdio transport ignores it. StreamCallback receives RETRY_INFO event type (Provider.h line 112) but no provider emits it. ProviderCapabilities has reasoning field but no provider implements reasoning parsing.",
+      "risk": "medium",
+      "examples": [
+        "CancelFlag in CompletionRequest not plumbed to StdioTransport",
+        "StreamEvent::RETRY_INFO defined but never used",
+        "ProviderCapabilities.reasoning = false in both providers"
+      ]
+    },
+    {
+      "category": "coupling",
+      "count": 5,
+      "description": "MCP transports tightly coupled to libcurl C API. No interface for mocking in tests. test_sse.cpp re-implements parser instead of testing real AnthropicProvider. StdioTransport uses fork/exec directly — cannot test on non-POSIX. Transport factory (Transport.cpp) hardcodes three types — adding WebSocket transport requires modifying factory.",
+      "risk": "medium",
+      "examples": [
+        "test_sse.cpp lines 32-116 duplicate parser logic",
+        "Transport.cpp MakeTransport() switch on spec.type",
+        "StdioTransport fork/exec not abstracted"
+      ]
+    },
+    {
+      "category": "platform_risk",
+      "count": 4,
+      "description": "Haiku-specific code paths in networking layer. CurlUtil::sleep_ms uses snooze() on Haiku (line 92) but std::this_thread::sleep_for elsewhere. Cancel flag uses volatile sig_atomic_t (signal-safe) but providers poll std::atomic<bool>* — two different cancellation mechanisms. Signal handler sets g_cancel_flag but curl progress callback checks CancelFlag*.",
+      "risk": "high",
+      "examples": [
+        "CurlUtil.h line 91-92 Haiku snooze vs std::sleep_for",
+        "cancel.h volatile sig_atomic_t vs Provider.h CancelFlag = std::atomic<bool>",
+        "SIGINT handler in repl.cpp sets g_cancel_flag but provider checks cancel ptr"
+      ]
+    },
+    {
+      "category": "testing_gaps",
+      "count": 7,
+      "description": "No integration tests for network failure modes. test_sse.cpp only tests parser, not real SSE over HTTP. No tests for: retry/backoff behavior, connection pooling, SSRF protection, certificate pinning validation, timeout edge cases, cancellation during streaming, multipart tool call streams. MockProvider in test_loop.cpp doesn't test streaming edge cases.",
+      "risk": "high",
+      "examples": [
+        "test_sse.cpp tests parser only, no curl",
+        "test_loop.cpp MockProvider::stream emits 2 events only",
+        "No test for 429 retry-after handling"
+      ]
+    },
+    {
+      "category": "ux_friction",
+      "count": 4,
+      "description": "No user-visible network health indicators. Provider status callback (UiCallbacks::on_status) exists but only AnthropicProvider emits status on retry (which it doesn't do). No connection state in GUI (connecting, streaming, stalled, reconnecting). No bandwidth/latency telemetry. Users see spinner until timeout or success.",
+      "risk": "medium",
+      "examples": [
+        "UiCallbacks::on_status defined but rarely used",
+        "No connection quality metrics exposed",
+        "300s timeout with no progress feedback"
+      ]
+    },
+    {
+      "category": "knowledge_silos",
+      "count": 3,
+      "description": "Critical networking logic concentrated in Anthropic.cpp (530 lines) and OpenAICompat.cpp (617 lines) — monolithic functions with embedded parsing, request building, curl management. Only 1-2 devs likely understand full flow. SSE parsing duplicated in SseTransport, SseSubscriber, AnthropicProvider — three implementations drift.",
+      "risk": "medium",
+      "examples": [
+        "Anthropic.cpp build_request_body + SSE parsing + curl in one file",
+        "SSE parser in Anthropic.cpp (lines 132-300), SseTransport.cpp (17-63), SseSubscriber.cpp (68-108)",
+        "No shared SSE parser library"
+      ]
+    },
+    {
+      "category": "overengineering",
+      "count": 2,
+      "description": "AuthStrategy hierarchy (ApiKeyAuth, BearerTokenAuth, NoAuth, OAuth2Auth) for essentially two auth patterns: API key header and Bearer token. OAuth2Auth has refresh logic but only Anthropic uses it. OpenAICompat uses simple API key. Four classes + virtual dispatch for what could be a function pointer or variant.",
+      "risk": "low",
+      "examples": [
+        "Provider.h lines 159-215: four AuthStrategy subclasses",
+        "OAuth2Auth::refresh_token() only called from AnthropicProvider",
+        "OpenAICompatProvider doesn't use AuthStrategy at all"
+      ]
+    },
+    {
+      "category": "legacy_burden",
+      "count": 2,
+      "description": "curl_security.h pins use SHA256 pinning (CURLOPT_PINNEDPUBLICKEY) — deprecated in favor of certificate transparency logs and HPKP removal. Modern practice: trust CA store + CT monitoring. Pinning causes outage when provider rotates certs (Let's Encrypt every 90 days). Placeholder pins suggest this was never operationalized.",
+      "risk": "medium",
+      "examples": [
+        "CurlSecurityConfig::GetPinForHost() returns placeholders",
+        "CURLOPT_PINNEDPUBLICKEY set at line 79",
+        "No pin rotation mechanism"
+      ]
+    }
+  ],
+  "top_5_concerns": [
+    "No retry/backoff on any network layer — single transient failure kills request/stream",
+    "No connection pooling — every request pays full TLS handshake, scales poorly",
+    "Certificate pinning ships as placeholders — false sense of security, MITM undetected",
+    "SSE subscriber dies permanently on first error — no reconnection for live queries",
+    "Two incompatible cancellation systems (signal flag + atomic) — race conditions on SIGINT"
+  ],
+  "architecture_smells": [
+    "Monolithic provider implementations mix HTTP, parsing, business logic — violates single responsibility",
+    "SSE parser duplicated in three places with subtle differences — maintenance burden, drift risk"
+  ],
+  "praise": [
+    "SSRF protection in SseTransport.resolve_url() — origin validation on server-supplied endpoints",
+    "SecureString RAII zeroization for API keys — memory safety on secrets",
+    "Centralized curl_security.h with OCSP stapling, CA pinning path, size limits — good security baseline",
+    "Provider abstraction (Provider interface) cleanly separates Anthropic/OpenAI shapes from agent loop",
+    "MCP transport abstraction (stdio/http/sse) enables pluggable server backends",
+    "Auto-detect provider preserves user-set base_url for open-weight models — thoughtful UX",
+    "Token tracking per-tab with live context gauge — excellent observability",
+    "System One delegation saves 80%+ tokens on routing/guard tasks — smart architecture"
+  ],
+  "veteran_quotes": [
+    "\"Shipping certificate pinning with placeholder pins is worse than no pinning — it creates a false sense of security that delays real hardening. I've seen this exact pattern cause a 3-day outage when Let's Encrypt rotated and the pinned cert expired. Either operationalize pin rotation or delete the code.\" — 20-year engine dev, ex-Google networking",
+    "\"No retry on 429? In 2024? That's not a bug, that's a design decision to make users hate you during traffic spikes. Every provider returns 429 with retry-after. Parse it, back off, resume. The calc_backoff_ms function exists but is never called — that's the smell of code written but not integrated.\" — Tools programmer, ex-GitHub Copilot team",
+    "\"Three SSE parsers in one codebase? That's not DRY, that's WET — Write Everything Thrice. When Anthropic changes their event format (and they will), you'll fix it in one place and the other two silently corrupt streams. Extract a shared SseParser class with unit tests, or accept that one will rot.\" — 25-year veteran, ex-Mozilla networking"
+  ]
+}

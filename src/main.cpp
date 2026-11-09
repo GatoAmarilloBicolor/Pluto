@@ -579,8 +579,9 @@ int main(int argc, char** argv) {
 	// ---- Built-in MCP servers (Serena, Context7, DeepWiki, REA, Memory,
 	// Playwright, SQLite) ----
 	// Launch stdio servers and register their tools into the same registry.
+	// Only servers listed in cfg.mcp_builtin_enabled will start.
 	pluto::mcp::BuiltinMcpManager builtin_mcp;
-	int builtin_count = builtin_mcp.init(tools);
+	int builtin_count = builtin_mcp.init(tools, cfg.mcp_builtin_enabled);
 	if (builtin_count > 0) {
 		std::string builtin_block = builtin_mcp.system_prompt_block();
 		if (!builtin_block.empty()) {

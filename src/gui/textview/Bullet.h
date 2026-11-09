@@ -5,6 +5,7 @@
 #ifndef BULLET_H
 #define BULLET_H
 
+#include <String.h>
 #include "BulletData.h"
 
 

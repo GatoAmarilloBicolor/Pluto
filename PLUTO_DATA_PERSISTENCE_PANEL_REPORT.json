@@ -1,0 +1,333 @@
+{
+  "real_issues": [
+    {
+      "id": "D1",
+      "title": "JSONL session corruption: no integrity checks, no streaming parser, manual string escaping",
+      "severity": "high",
+      "file": "src/storage/SessionStore.cpp",
+      "lines": "1-150",
+      "detail": "SessionStore writes JSONL line-by-line using custom json::Value::serialize() with manual escape handling in serialize_string(). No CRC, no line-length bounds, no schema version in each line. A single malformed escape (e.g., unpaired surrogate, invalid UTF-8) corrupts the entire session file. Recovery requires manual editing. The 256 nesting depth limit in json.h is enforced at parse time but not at serialize time — deeply nested tool results could exceed it on re-parse.",
+      "impact": "Data loss on crash during write, silent corruption on read, no automated recovery."
+    },
+    {
+      "id": "D2",
+      "title": "BFS attribute sync is best-effort only; no verification, no retry, no transaction",
+      "severity": "high",
+      "file": "src/storage/SessionStore.cpp",
+      "lines": "80-120, 200-250",
+      "detail": "StampBfsAttributes() (src/map/BfsAttrs.cpp) writes extended attributes after the JSONL file is written. If the process crashes between file write and attr write, the file exists but Tracker Find queries miss it. Conversely, if attr write succeeds but file write fails (disk full), orphan attrs remain. No fsync/msync, no write-ahead log, no reconciliation pass on startup.",
+      "impact": "Tracker Find index desync; sessions invisible or ghost entries."
+    },
+    {
+      "id": "D3",
+      "title": "File locking uses flock(2) with 2s timeout + retry; no deadlock detection, no cross-process coordination for BFS attrs",
+      "severity": "medium",
+      "file": "src/filelock.h",
+      "lines": "1-60",
+      "detail": "ScopedFileLock retries flock() up to 2s with 10ms sleeps. On Haiku, flock is advisory and process-wide — if the same process holds the lock and calls save() recursively (e.g., via tool callback), it deadlocks. No lock upgrade path (shared→exclusive). BFS attr writes in BfsAttrs.cpp are NOT protected by the same lock — concurrent SessionStore::save() and StampBfsAttributes() can interleave.",
+      "impact": "Potential deadlock under reentrancy; BFS attr/file content race."
+    },
+    {
+      "id": "D4",
+      "title": "Config migration (file→directory) runs once at startup; no rollback, no dry-run, no version pinning",
+      "severity": "medium",
+      "file": "src/config.cpp",
+      "lines": "400-500",
+      "detail": "maybe_migrate_settings() detects legacy ~/config/settings/pluto (file) and renames it to ~/config/settings/pluto.old, then creates the directory. If the rename succeeds but mkdir fails (permissions, disk full), the config is lost. No backup of the .old file after migration. No schema version stored in the migrated config — future migrations cannot distinguish 'already migrated' from 'fresh install'.",
+      "impact": "Config loss on partial migration failure; no forward-compatible migration path."
+    },
+    {
+      "id": "D5",
+      "title": "Custom JSON parser: 256 nesting depth limit, no streaming, no sodium/secure memory for tokens",
+      "severity": "medium",
+      "file": "src/json.h",
+      "lines": "1-200",
+      "detail": "Parser uses recursive descent with hardcoded 256 depth. Deep tool call chains (MCP servers returning nested results) can hit this. No streaming/incremental parse — entire JSONL line loaded into memory. API keys and OAuth tokens parsed as plain strings in json::Value (variant<string,double,bool,...>) — no zeroization, no secure_string. Tokens persist in memory until process exit.",
+      "impact": "DoS via deep nesting; token exposure in core dumps / swap."
+    },
+    {
+      "id": "D6",
+      "title": "OAuth token file stored at ~/config/settings/pluto/oauth-tokens with chmod 600 only; no encryption at rest",
+      "severity": "high",
+      "file": "src/oauth.cpp",
+      "lines": "500-530",
+      "detail": "SaveOAuthTokens() writes raw JSON with access_token, refresh_token, expires_at. File permissions are 0600 but Haiku's BFS does not enforce POSIX ACLs strictly — any process running as the same user can read it. No DPAPI/keyring equivalent on Haiku. Refresh token is long-lived (30 days).",
+      "impact": "Token theft via local access; no mitigation for compromised user account."
+    },
+    {
+      "id": "D7",
+      "title": "MCP config merge (local > project > user) has no schema validation; shadowed entries dropped silently to stderr",
+      "severity": "medium",
+      "file": "src/mcp/Config.cpp",
+      "lines": "200-280",
+      "detail": "LoadMcpSpecs() merges three JSON files. Duplicate server names across scopes: lower-priority entry is dropped with fprintf(stderr, \"[mcp] shadowed...\"). No structured warning, no UI notification, no audit log. No JSON Schema validation — malformed env vars, missing required fields (command for stdio, url for http) accepted silently until runtime.",
+      "impact": "Silent misconfiguration; debugging shadowed servers is painful."
+    },
+    {
+      "id": "D8",
+      "title": "RAG/Wiki indexes loaded entirely into memory; no mmap, no incremental update, no persistence of IDF",
+      "severity": "medium",
+      "file": "src/rag.cpp, src/wiki.cpp",
+      "lines": "80-122, 81-123",
+      "detail": "RagInit() and WikiInit() read entire JSONL/markdown directory, tokenize all documents, build IDF in memory. ~390 BeAPI entries × ~500 tokens each = ~200K tokens in unordered_map. No memory-mapped index, no on-disk IDF cache. Every restart rebuilds from scratch. WikiSearch() and RagSearch() hold mutex for entire scoring loop — blocks writers.",
+      "impact": "Startup latency (1-2s); memory pressure on low-RAM Haiku devices; writer starvation."
+    },
+    {
+      "id": "D9",
+      "title": "Schedule/routine configs are plain key=value files; no schema, no validation, no atomic write",
+      "severity": "low",
+      "file": "src/schedule.cpp, src/routine.cpp",
+      "lines": "109-127, 120-180",
+      "detail": "LoadSchedule() and ParseRoutine() parse line-by-line with atoi/strtod — no error reporting for malformed values. SaveSchedule() and routine writes use ofstream directly (no temp+rename). Cron-style schedule strings in routines are free-form — no RFC5545 parser, just string match for 'daily', 'weekly', '@reboot'.",
+      "impact": "Silent config corruption; schedule drift; no portable schedule format."
+    },
+    {
+      "id": "D10",
+      "title": "Frontmatter parser accepts duplicate keys (last wins); no YAML spec compliance, no multiline strings",
+      "severity": "low",
+      "file": "src/frontmatter.cpp",
+      "lines": "1-100",
+      "detail": "ParseFrontmatter() splits on first ':' per line. Duplicate keys overwrite silently. No support for YAML multiline (|, >), no anchor/alias, no type inference (everything string). Tags parsed via SplitCsv() — comma-separated only, no escaping for commas in tag values.",
+      "impact": "Data loss on duplicate keys; tags with commas broken; not a real YAML parser."
+    },
+    {
+      "id": "D11",
+      "title": "SystemOneConfig stores API keys in plaintext config file; no keyring integration, no rotation",
+      "severity": "medium",
+      "file": "src/systemone/SystemOneConfig.cpp",
+      "lines": "115-146",
+      "detail": "SaveSystemOneConfig() writes api_key, kev_url, laya_url, jev_url as plaintext. ResolveSystemOneApiKey() checks env var → config file → per-provider key file (~/config/settings/pluto/keys/SYSTEMONE_API_KEY). The key file is also plaintext. No encryption, no expiration, no rotation policy.",
+      "impact": "Credential sprawl; keys in backups, git, core dumps."
+    },
+    {
+      "id": "D12",
+      "title": "No corruption detection/recovery for any JSONL store (sessions, RAG index, beapi-custom)",
+      "severity": "critical",
+      "file": "Multiple",
+      "lines": "N/A",
+      "detail": "SessionStore::load() calls json::Value::parse() per line — on parse error, it prints to stderr and continues (skips line). No checksum per line, no index of valid line offsets, no 'repair' mode. RAG custom load (RagLoadCustom()) appends to in-memory index — if custom file has malformed lines, they're silently skipped. No tool to verify/repair any JSONL store.",
+      "impact": "Silent data loss; no disaster recovery."
+    }
+  ],
+  "hypothetical_findings": [
+    {
+      "id": "H1",
+      "category": "scaling",
+      "title": "JSONL + BFS attrs will not scale beyond ~10K sessions",
+      "detail": "SessionStore::list() reads entire directory, stats each file, reads BFS attrs for every entry. On BFS, attr reads are syscalls. 10K sessions = 10K stat + 80K attr reads = seconds of latency. No pagination, no cursor, no background indexer. GUI SessionBrowser loads all into BListView at once (line 123: auto all = SessionStore::list()).",
+      "evidence": "SessionBrowser::_RefreshList() calls list() on every filter keystroke."
+    },
+    {
+      "id": "H2",
+      "category": "platform_risk",
+      "title": "BFS extended attributes are Haiku-specific; zero portability, no fallback metadata store",
+      "detail": "All metadata (title, model, tags, tokens, turns, timestamps) lives in BFS attrs. If Pluto ever runs on Linux (WSL2, Docker) or macOS, attrs vanish. No SQLite/JSON sidecar fallback. The entire Tracker Find integration — a headline feature — is Haiku-only.",
+      "evidence": "#ifdef __HAIKU__ guards in SessionStore.cpp, BfsAttrs.cpp; stubs return false on other platforms."
+    },
+    {
+      "id": "H3",
+      "category": "tech_debt",
+      "title": "Custom JSON parser duplicates stdlib effort; 256 depth limit is arbitrary",
+      "detail": "json.cpp is ~500 lines for a subset of RFC8259. nlohmann/json or simdjson would handle Unicode, streaming, depth limits, schema validation. The 'no external deps' constraint is understandable for Haiku packaging but creates maintenance burden. Surrogate pair handling (lines 125-132 in test_json.cpp) is correct but fragile — one Unicode update breaks it.",
+      "evidence": "test_json.cpp tests surrogate pairs, BMP, bad surrogates — all custom code."
+    },
+    {
+      "id": "H4",
+      "category": "coupling",
+      "title": "SessionStore, RAG, Wiki, MCP Config all reimplement atomic write (temp+rename) independently",
+      "detail": "SessionStore.cpp:120-140, mcp/Config.cpp:76-95, oauth.cpp:480-510, wiki.cpp:430-460 all have nearly identical 'write to .tmp.pid, rename' pattern. No shared utility. Bug fixes (e.g., fsync before rename) must be applied 5+ times.",
+      "evidence": "grep 'tmp.*getpid' across codebase shows 5+ variants."
+    },
+    {
+      "id": "H5",
+      "category": "testing_gaps",
+      "title": "No property-based tests, no chaos testing (power loss, disk full, concurrent writers)",
+      "detail": "21 test suites are unit/integration only. test_session.cpp uses set_dir_override for tmpdir isolation — good. But no tests for: concurrent save/load, flock contention, BFS attr sync failure, config migration rollback, JSONL corruption recovery, OAuth token refresh race, schedule/routine atomicity.",
+      "evidence": "test_session.cpp only tests happy path + basic isolation."
+    },
+    {
+      "id": "H6",
+      "category": "knowledge_silos",
+      "title": "BFS attribute schema (pluto:*, wiki:*, beapi:*) is undocumented tribal knowledge",
+      "detail": "Attribute names (pluto:title, pluto:model, pluto:tags, pluto:tokens_in, pluto:tokens_out, pluto:created, pluto:updated, pluto:turns) appear only in SessionStore.cpp and BfsAttrs.cpp. No central schema definition, no versioning, no migration path for attr schema changes. Tracker queries written by users (query_fs 'pluto:tags == \"bug\"') will break silently if attr names change.",
+      "evidence": "grep 'pluto:' in codebase — only in storage/ and map/."
+    },
+    {
+      "id": "H7",
+      "category": "legacy_burden",
+      "title": "Config migration handles file→directory but not directory→file or schema upgrades",
+      "detail": "maybe_migrate_settings() only handles the legacy single-file config. No framework for future migrations (e.g., adding provider-specific subdirectories, splitting config into multiple files). Config struct has no 'version' field. LoadConfig() returns defaults on any parse error — masks migration failures.",
+      "evidence": "config.cpp:400-500 handles only one migration."
+    },
+    {
+      "id": "H8",
+      "category": "ux_friction",
+      "title": "No CLI/GUI for session repair, config doctor, index rebuild, credential audit",
+      "detail": "User-facing tools: 'pluto session', 'pluto config', 'pluto beapi', 'pluto wiki', 'pluto routine', 'pluto schedule'. Missing: 'pluto doctor' (verify all stores), 'pluto session repair <id>', 'pluto config migrate --dry-run', 'pluto keys audit'. On corruption, users must hand-edit JSONL or delete sessions.",
+      "evidence": "No repair/verify commands in any CLI module."
+    },
+    {
+      "id": "H9",
+      "category": "abstraction_leaks",
+      "title": "HomeDir() and SettingsDir() duplicated across 10+ files; no central paths module",
+      "detail": "home_dir() / settings_dir() / RoutinesDir() / SchedulesDir() / WikiDefaultDir() / RagDefaultPath() / OAuthTokensPath() / SchedulesDir() / scripts_dir() / launch_dir() — all reimplement HOME + '/config/settings/pluto/...'. No single source of truth. Changing base directory (e.g., for portable install) requires editing 15+ files.",
+      "evidence": "grep 'config/settings/pluto' — 47 matches across 18 files."
+    },
+    {
+      "id": "H10",
+      "category": "overengineering",
+      "title": "System One config has 14 tunable parameters; decision model auto-selection logic not implemented",
+      "detail": "SystemOneConfig struct has 14 fields (model, api_key, 3 URLs, threshold, timeout, prefer_local, fallback_to_local, compaction_threshold, target_tokens, auto_compact, max_context, max_summary, max_key_points). DecisionModelType::AUTO exists but LoadSystemOneConfig() just defaults to AUTO — no logic to probe kev/laya/jev health and select. Over-configurable for a feature not fully wired.",
+      "evidence": "SystemOneConfig.h lines 20-40; LoadSystemOneConfig() line 55-113."
+    }
+  ],
+  "top_5_concerns": [
+    {
+      "rank": 1,
+      "id": "D12",
+      "summary": "No corruption detection/recovery for any JSONL store — silent data loss is the default failure mode"
+    },
+    {
+      "rank": 2,
+      "id": "D1",
+      "summary": "JSONL session corruption: no integrity checks, manual escaping, no schema version per line"
+    },
+    {
+      "rank": 3,
+      "id": "D2",
+      "summary": "BFS attribute sync is best-effort — Tracker Find index desync on crash"
+    },
+    {
+      "rank": 4,
+      "id": "D6",
+      "summary": "OAuth tokens stored unencrypted at rest — only chmod 600 protection on multi-user Haiku"
+    },
+    {
+      "rank": 5,
+      "id": "D3",
+      "summary": "File locking has deadlock risk (reentrancy) and doesn't cover BFS attr writes"
+    }
+  ],
+  "architecture_smells": [
+    {
+      "id": "A1",
+      "name": "God Object: SessionStore",
+      "detail": "SessionStore handles JSONL serialization, BFS attr sync, slug generation, file locking, listing, search, tagging, deletion. 500+ lines. Violates SRP — should be: SessionFile (IO), SessionIndex (BFS attrs), SessionMetadata (struct), SessionRepository (CRUD)."
+    },
+    {
+      "id": "A2",
+      "name": "Global Mutable State: g_rag_mutex, g_wiki_mutex, g_entries",
+      "detail": "RAG and Wiki use global vectors + mutex. No dependency injection — impossible to have multiple indexes (e.g., project + user). Unit tests must lock mutex or reset globals. Singletons by another name."
+    },
+    {
+      "id": "A3",
+      "name": "Primitive Obsession: Paths as Strings",
+      "detail": "Every module constructs paths via string concatenation (home_dir() + '/config/settings/pluto/...'). No Path type, no validation, no platform abstraction. Bugs: double slashes, missing mkdir, wrong separator on theoretical non-Haiku."
+    },
+    {
+      "id": "A4",
+      "name": "Inconsistent Error Handling: string& error vs exceptions vs bool",
+      "detail": "SessionStore::save/load/remove take string& error. MCP Config::SaveMcpSpec takes string& err. OAuth returns bool. JSON parser throws. Frontmatter returns struct with empty fields. Config returns defaults. No unified Result<T, E> or error code enum."
+    },
+    {
+      "id": "A5",
+      "name": "Duplicate Atomic Write Pattern",
+      "detail": "5+ implementations of 'write .tmp.pid, rename'. No shared AtomicWrite(path, content, error) utility. Each has subtle differences: some fsync, some don't; some remove tmp on failure, some don't."
+    },
+    {
+      "id": "A6",
+      "name": "Config as Flat Key=Value with Implicit Types",
+      "detail": "schedule.conf, routine.md frontmatter, systemone.conf, config (main), mcp JSON — all different formats. atoi/strtod for parsing. No schema, no validation, no migration between formats."
+    },
+    {
+      "id": "A7",
+      "name": "BFS Attrs as Primary Metadata Store",
+      "detail": "Design couples core domain data (session title, tags, token counts) to Haiku filesystem feature. No abstraction layer. If BFS attrs become unreliable (disk repair, backup/restore to non-BFS), metadata is lost. No JSON sidecar fallback."
+    }
+  ],
+  "praise": [
+    {
+      "id": "P1",
+      "title": "Haiku-native design: BFS attrs + Tracker Find integration is genuinely innovative",
+      "detail": "Using extended attributes for session metadata (title, model, tags, tokens, turns, timestamps) makes sessions first-class citizens in the Haiku desktop. Users can query_fs 'pluto:tags == \"bug\" AND pluto:tokens_out > 10000' in Tracker. This is platform leverage done right."
+    },
+    {
+      "id": "P2",
+      "title": "Zero-dependency JSON parser works correctly for the subset used",
+      "detail": "Custom parser handles Unicode (BMP + surrogate pairs), escapes, nesting limits, whitespace. Test coverage in test_json.cpp is thorough (17 test cases including edge cases). No CVEs from third-party JSON libs."
+    },
+    {
+      "id": "P3",
+      "title": "Test isolation via set_dir_override is excellent",
+      "detail": "test_session.cpp uses SessionStore::set_dir_override(tmpdir) — each test gets a clean sandbox. No test pollution, no fixture cleanup boilerplate. 21 standalone test binaries run in parallel safely."
+    },
+    {
+      "id": "P4",
+      "title": "Atomic write (temp+rename) used consistently for critical configs",
+      "detail": "MCP config, OAuth tokens, Wiki entries, SystemOne config all use the temp-file-rename pattern. Prevents torn writes on crash. Good discipline despite duplication (A5)."
+    },
+    {
+      "id": "P5",
+      "title": "Config migration (file→directory) handles the common upgrade path",
+      "detail": "maybe_migrate_settings() detects the legacy single-file config, backs it up as .old, creates the directory structure. One-time migration handled gracefully for existing users."
+    },
+    {
+      "id": "P6",
+      "title": "API key resolution order is well-designed: env > per-provider file > legacy",
+      "detail": "ResolveApiKey() and ResolveSystemOneApiKey() follow a clear precedence. Per-provider key files (~/config/settings/pluto/keys/ANTHROPIC_API_KEY) allow multiple keys without env var pollution. chmod 600 enforced."
+    },
+    {
+      "id": "P7",
+      "title": "RAG/Wiki TF-IDF implementation is solid for local-first search",
+      "detail": "Tokenization, IDF computation, field-weighted scoring (topic 4x, tags 3x, body 1x) all correct. No external search dependency. BeAPI class extraction (B[A-Z][a-z]+) is pragmatic."
+    },
+    {
+      "id": "P8",
+      "title": "File locking with timeout + retry prevents indefinite blocking",
+      "detail": "ScopedFileLock retries flock() for 2s with 10ms backoff. Returns false on timeout instead of hanging. RAII wrapper ensures unlock on scope exit (including exceptions)."
+    }
+  ],
+  "veteran_quotes": [
+    {
+      "author": "Veteran #1 (Engine Lead, 22 yrs, shipped 3 game engines)",
+      "quote": "The BFS attribute integration is the kind of platform-deep thinking we did on console — make the OS do the indexing. But you've made the metadata *only* live there. One 'btrfs send' to a Linux box and your session history is just opaque JSONL. Add a JSON sidecar or SQLite shadow."
+    },
+    {
+      "author": "Veteran #2 (Tools Programmer, 18 yrs, built asset pipelines)",
+      "quote": "Five implementations of atomic write. That's not DRY, that's 'each module owns its persistence'. Extract AtomicWrite(path, bytes, error) -> bool. One place to add fsync, one place to fix the rename-on-NFS bug, one place to test. You'll thank me when the filesystem corruption report comes in."
+    },
+    {
+      "author": "Veteran #3 (Network/Backend, 25 yrs, MMO infrastructure)",
+      "quote": "OAuth tokens in plaintext at ~/config/settings/pluto/oauth-tokens? On a multi-user dev box? That's a 'how did this pass security review' finding. Haiku has no keychain, so encrypt with a per-user key derived from login password (PBKDF2) or at least libsodium secretbox. The refresh token is a bearer token for 30 days — treat it like a password."
+    },
+    {
+      "author": "Veteran #4 (Engine Architect, 20 yrs, middleware)",
+      "quote": "Global g_rag_mutex + g_wiki_mutex + g_entries vectors. You've reinvented the singleton anti-pattern. When (not if) someone wants project-scoped RAG *and* global RAG simultaneously, you'll be threading mutexes through call stacks. DI the index: RagIndex* idx = RagCreate(path); RagSearch(idx, query); RagDestroy(idx)."
+    },
+    {
+      "author": "Veteran #5 (Gameplay/Scripting, 15 yrs, mod tools)",
+      "quote": "Frontmatter parser accepts 'tags: a, b, c' but not 'tags: [a, b, c]' or multiline. Users *will* copy YAML from the web and it'll silently break. Either use a real YAML parser (yaml-cpp, 1 header) or document the subset *exactly* and validate. 'tags: bug, feature' → ['bug', 'feature'] but 'tags: bug,feature' → ['bug,feature']. That's a support ticket waiting to happen."
+    },
+    {
+      "author": "Veteran #6 (Build/Release, 17 yrs, CI/CD)",
+      "quote": "Config migration runs once at startup with no rollback. If mkdir fails after rename, the user's config is gone. That's a 'ship stop' bug. Do: 1) copy to .new, 2) verify .new readable, 3) rename old→.bak, 4) rename .new→dir, 5) on any failure, restore from .bak. And write a migration_version file so you can run multiple migrations idempotently."
+    },
+    {
+      "author": "Veteran #7 (Graphics/Engine, 28 yrs, consoles)",
+      "quote": "SessionStore::list() doing stat+attr-read per file in a loop — that's O(N) syscalls. On BFS it's fast *now*. At 50K sessions (2 years of daily use), the GUI freezes on open. You need a background indexer (BNodeMonitor on the sessions dir) that maintains an in-memory or SQLite index. The Tracker add-on already uses node_monitor — reuse that pattern."
+    },
+    {
+      "author": "Veteran #8 (QA/Automation, 19 yrs, test infrastructure)",
+      "quote": "21 test binaries is great. Zero chaos tests is not. Where's the test that pulls the power cord during SessionStore::save()? Where's the test that fills the disk mid-write? Where's the test that runs 10 concurrent writers? You have the tmpdir isolation — use it. Add a 'make check-chaos' target that runs fault injection."
+    }
+  ],
+  "metadata": {
+    "panel": "Pluto Data & Persistence Review",
+    "reviewers": 8,
+    "experience_years": "15-30",
+    "focus_areas": ["Session storage", "JSONL format", "BFS attributes", "Config migration", "Schema evolution", "Corruption recovery"],
+    "files_reviewed": 25,
+    "loc_reviewed": "~8000",
+    "date": "2025-01-15"
+  }
+}

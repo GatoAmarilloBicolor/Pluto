@@ -2,6 +2,7 @@
 #include "../json.h"
 #include "../util.h"
 #include "TokenSaver.h"
+#include "../curl_security.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -166,8 +167,11 @@ bool RemoteDecisionModel::init_curl() {
     curl_easy_setopt(fCurl, CURLOPT_TIMEOUT, fConfig.timeout_secs);
     curl_easy_setopt(fCurl, CURLOPT_CONNECTTIMEOUT, 5);
     curl_easy_setopt(fCurl, CURLOPT_USERAGENT, "pluto-systemone/1.0");
-    curl_easy_setopt(fCurl, CURLOPT_CAINFO, "/system/data/ssl/CARootCertificates.pem");
     curl_easy_setopt(fCurl, CURLOPT_FOLLOWLOCATION, 1L);
+
+    // Apply centralized TLS security with certificate pinning
+    ApplyCurlSecurityWithPinning(fCurl, fServerUrl.empty() ? resolve_server_url() : fServerUrl);
+
     return true;
 }
 

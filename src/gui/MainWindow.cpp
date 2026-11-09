@@ -10,7 +10,6 @@
 #include <Font.h>
 #include <TextControl.h>
 #include <GroupLayout.h>
-#include <GroupView.h>
 #include <Bitmap.h>
 #include <BitmapStream.h>
 #include <DataIO.h>
@@ -23,8 +22,6 @@
 #include <SpaceLayoutItem.h>
 #include <TabView.h>
 #include <TranslatorRoster.h>
-#include <LayoutBuilder.h>
-#include <ListItem.h>
 #include <ListView.h>
 #include <Menu.h>
 #include <MenuBar.h>
@@ -32,8 +29,12 @@
 #include <Message.h>
 #include <Messenger.h>
 #include <Notification.h>
-#include <PopUpMenu.h>
+#include <Menu.h>
 #include <Roster.h>
+#include <Node.h>
+#include <OS.h>
+
+#include <unistd.h>
 
 #include <curl/curl.h>
 #include <fcntl.h>
@@ -45,6 +46,9 @@
 #include <StringView.h>
 #include <TextView.h>
 #include <View.h>
+#include <LayoutBuilder.h>
+
+#include "../curl_security.h"
 
 #include <algorithm>
 #include <cctype>
@@ -1030,13 +1034,10 @@ private:
 			curl_easy_setopt(c, CURLOPT_WRITEDATA, &body);
 			curl_easy_setopt(c, CURLOPT_TIMEOUT, 10L);
 			curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, 5L);
-			// Enable SSL verification for HTTPS URLs
-			if (url.rfind("https://", 0) == 0) {
-				curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
-				curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
-				curl_easy_setopt(c, CURLOPT_CAINFO,
-					"/system/data/ssl/CARootCertificates.pem");
-			}
+
+			// Apply centralized TLS security with certificate pinning
+			ApplyCurlSecurityWithPinning(c, url);
+
 			CURLcode rc = curl_easy_perform(c);
 			long http = 0;
 			curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &http);
@@ -4665,21 +4666,41 @@ static std::string _ProbeMediaInfo(const std::string& path,
 		}
 	} else if (kind == "pdf") {
 		// Count pages via pdfinfo if available, otherwise note.
-		FILE* p = popen(("pdfinfo '" + path + "' 2>/dev/null").c_str(), "r");
-		if (p) {
-			char buf[256];
-			while (fgets(buf, sizeof(buf), p)) {
-				if (strncmp(buf, "Pages:", 6) == 0) {
-					info += buf;  // "Pages:  N\n"
-				} else if (strncmp(buf, "Title:", 6) == 0) {
-					info += buf;
-				} else if (strncmp(buf, "Author:", 7) == 0) {
-					info += buf;
-				} else if (strncmp(buf, "Creator:", 8) == 0) {
-					info += buf;
-				}
+		std::vector<std::string> argv = {"pdfinfo", path};
+		int pipefd[2];
+		if (pipe(pipefd) == 0) {
+			pid_t pid = fork();
+			if (pid == 0) {
+				close(pipefd[0]);
+				dup2(pipefd[1], STDOUT_FILENO);
+				dup2(pipefd[1], STDERR_FILENO);
+				close(pipefd[1]);
+				std::vector<char*> args;
+				for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
+				args.push_back(nullptr);
+				execvp(args[0], args.data());
+				_exit(127);
 			}
-			pclose(p);
+			close(pipefd[1]);
+			if (pid > 0) {
+				char buf[256];
+				ssize_t n;
+				while ((n = read(pipefd[0], buf, sizeof(buf) - 1)) > 0) {
+					buf[n] = '\0';
+					if (strncmp(buf, "Pages:", 6) == 0) {
+						info += buf;
+					} else if (strncmp(buf, "Title:", 6) == 0) {
+						info += buf;
+					} else if (strncmp(buf, "Author:", 7) == 0) {
+						info += buf;
+					} else if (strncmp(buf, "Creator:", 8) == 0) {
+						info += buf;
+					}
+				}
+				close(pipefd[0]);
+				int status = 0;
+				waitpid(pid, &status, 0);
+			}
 		}
 	}
 

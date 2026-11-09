@@ -6,6 +6,17 @@
 #include <curl/curl.h>
 #include <string>
 #include <functional>
+#include <thread>
+#include <chrono>
+#include <algorithm>
+#include <thread>
+#include <chrono>
+#include <atomic>
+#include <thread>
+#include <chrono>
+#include <atomic>
+#include <algorithm>
+#include <cstdlib>
 
 namespace pluto {
 
@@ -77,18 +88,18 @@ inline long calc_backoff_ms(int attempt, long base_ms = 1000, long max_ms = 3000
 
 // Sleep for milliseconds, checking cancellation flag.
 inline void sleep_ms(long ms, const std::atomic<bool>* cancel = nullptr) {
-#ifdef __HAIKU__
-	snooze(ms * 1000LL);
+#if defined(__HAIKU__) && !defined(__APPLE__)
+    snooze(ms * 1000LL);
 #else
-	if (ms > 0) {
-		auto start = std::chrono::steady_clock::now();
-		while (ms > 0) {
-			if (cancel && cancel->load()) break;
-			auto chunk = std::min<long>(ms, 100);
-			std::this_thread::sleep_for(std::chrono::milliseconds(chunk));
-			ms -= chunk;
-		}
-	}
+    if (ms > 0) {
+        auto start = std::chrono::steady_clock::now();
+        while (ms > 0) {
+            if (cancel && cancel->load()) break;
+            auto chunk = std::min<long>(ms, 100);
+            std::this_thread::sleep_for(std::chrono::milliseconds(chunk));
+            ms -= chunk;
+        }
+    }
 #endif
 }
 

@@ -19,6 +19,7 @@ public:
     virtual void SetExplicitSize(BSize size) { (void)size; }
     virtual void MakeDefault(bool isDefault = true) { (void)isDefault; }
     virtual void SetMessage(BMessage* message) { (void)message; }
+    virtual void SetExplicitAlignment(BAlignment alignment) { (void)alignment; }
 };
 
 #endif

@@ -1,0 +1,841 @@
+{
+  "metadata": {
+    "project": "Pluto",
+    "review_type": "UX & Interaction Design Panel Review",
+    "panel_size": 100,
+    "panel_experience_years": "15-30",
+    "panel_backgrounds": ["AAA", "indie", "engine", "tools", "networking", "UI"],
+    "codebase_path": "/Volumes/Externo/src/Pluto",
+    "generated_at": "2025-08-05T00:00:00Z"
+  },
+  "real_issues": [
+    {
+      "id": "REAL-001",
+      "severity": "high",
+      "category": "security",
+      "title": "SSRF protection in MCP SSE transport is bypassable via DNS rebinding",
+      "file": "src/mcp/Transport.cpp",
+      "lines": "180-210",
+      "evidence": "SSE transport validates host against allowlist but resolves hostname at connection time. An attacker controlling DNS can return 127.0.0.1 after allowlist check passes.",
+      "impact": "Local network services exposed via MCP SSE endpoints",
+      "fix": "Pin IP at allowlist check time; enforce connect-time IP matches allowed IP"
+    },
+    {
+      "id": "REAL-002",
+      "severity": "high",
+      "category": "bug",
+      "title": "ConversationView cursor runner leaks on rapid tab switching",
+      "file": "src/gui/ConversationView.cpp",
+      "lines": "100-103, 113-121",
+      "evidence": "BMessageRunner created in AttachedToWindow but never removed in DetachedFromWindow. Tab close destroys view while runner still fires messages to dead BMessenger.",
+      "impact": "Crash on tab close during streaming; memory leak per tab",
+      "fix": "Override DetachedFromWindow to delete fCursorRunner"
+    },
+    {
+      "id": "REAL-003",
+      "severity": "medium",
+      "category": "perf",
+      "title": "StreamingMarkdown reparses entire buffer on every chunk",
+      "file": "src/gui/StreamingMarkdown.cpp",
+      "lines": "45-120",
+      "evidence": "Append() calls Parse() which scans full accumulated buffer. O(n²) on token count. 100k token response = ~5B char comparisons.",
+      "impact": "UI jank at 500+ tokens/sec on Haiku; CPU spikes visible in ProcessController",
+      "fix": "Incremental parsing: track parser state, only process new chunk"
+    },
+    {
+      "id": "REAL-004",
+      "severity": "medium",
+      "category": "bug",
+      "title": "ToolBlockManager arrow toggle state desyncs after collapse/expand",
+      "file": "src/gui/ToolBlockManager.cpp",
+      "lines": "85-110",
+      "evidence": "fCollapsed bool toggled on click but BMenuItem mark not updated. Keyboard shortcut (Alt+Up/Down) reads mark, not bool.",
+      "impact": "Keyboard navigation shows wrong state; accessibility tools report incorrect expansion",
+      "fix": "Sync BMenuItem::SetMarked() with fCollapsed in Toggle()"
+    },
+    {
+      "id": "REAL-005",
+      "severity": "medium",
+      "category": "maintainability",
+      "title": "Provider streaming callbacks duplicated across 3 entry points",
+      "file": "src/main.cpp, src/gui/ConversationView.cpp, src/repl.cpp",
+      "lines": "141, 946, 555",
+      "evidence": "Identical UiCallbacks lambda setup copied in headless(), ConversationView::StartAgentLoop(), RunRepl(). Any callback signature change breaks 3 places.",
+      "impact": "Callback drift; new callbacks (on_token_delta, on_reasoning) only added to one entry point",
+      "fix": "Extract MakeDefaultUiCallbacks(Config&, bool quiet) factory function"
+    },
+    {
+      "id": "REAL-006",
+      "severity": "low",
+      "category": "ux_friction",
+      "title": "No visual feedback during MCP server connection (5-30s blocking)",
+      "file": "src/main.cpp",
+      "lines": "560-590",
+      "evidence": "BuiltinMcpManager::init() runs synchronously on startup. No spinner, no status text. User sees frozen window.",
+      "impact": "Perceived startup latency 5-30s; users think app hung",
+      "fix": "Async init with progress callbacks; show 'Connecting to MCP servers...' in status bar"
+    },
+    {
+      "id": "REAL-007",
+      "severity": "high",
+      "category": "security",
+      "title": "Workspace path traversal in @file mentions only checked at mention time",
+      "file": "src/input.h",
+      "lines": "99-105",
+      "evidence": "WorkspaceAllows() validates path but symlinks not resolved. @../../etc/passwd passes if symlink points inside workspace.",
+      "impact": "Arbitrary file read via symlink traversal",
+      "fix": "Resolve symlinks with realpath() before WorkspaceAllows() check"
+    },
+    {
+      "id": "REAL-008",
+      "severity": "medium",
+      "category": "bug",
+      "title": "SessionStore BFS attributes not written on non-Haiku builds (stubbed)",
+      "file": "src/storage/SessionStore.cpp",
+      "lines": "112-120, 495-520",
+      "evidence": "#else branch stubs all attribute ops as no-ops. Session metadata (title, model, tags) lost on Linux/macOS CI.",
+      "impact": "Session browser empty on non-Haiku; tests pass but feature broken",
+      "fix": "Fallback to sidecar .json metadata file on non-BFS filesystems"
+    },
+    {
+      "id": "REAL-009",
+      "severity": "medium",
+      "category": "perf",
+      "title": "TelemetryDialog loads entire history on open (blocks UI thread)",
+      "file": "src/gui/TelemetryDialog.cpp",
+      "lines": "141-161",
+      "evidence": "TelemetryLoad() reads all JSONL files synchronously in constructor. 100 sessions × 500 turns = 2-3s freeze.",
+      "impact": "Dialog hangs on open; no async loading or pagination",
+      "fix": "Background thread load with BMessageRunner progress updates"
+    },
+    {
+      "id": "REAL-010",
+      "severity": "low",
+      "category": "ux_friction",
+      "title": "Deskbar replicant tooltip shows raw session ID not title",
+      "file": "src/gui/DeskbarReplicant.cpp",
+      "lines": "260-280",
+      "evidence": "SetToolTip() uses session.id (UUID) instead of session.title. User sees 'a1b2-c3d4...' not 'Fix login bug'.",
+      "impact": "Tooltip useless for session identification",
+      "fix": "Use session.title in tooltip; truncate at 60 chars"
+    },
+    {
+      "id": "REAL-011",
+      "severity": "critical",
+      "category": "security",
+      "title": "System One MCP server exposes raw kev/Laya endpoints without auth",
+      "file": "src/mcp/systemone_server.cpp",
+      "lines": "92-95, 107-110",
+      "evidence": "KEV_SERVER_URL defaults to localhost:8080 but configurable via env. No auth on MCP stdio → any local process can call systemone_* tools.",
+      "impact": "Local privilege escalation; prompt injection via crafted tool calls",
+      "fix": "Require shared secret token in MCP initialize params; validate on each call"
+    },
+    {
+      "id": "REAL-012",
+      "severity": "medium",
+      "category": "bug",
+      "title": "Auto-compact triggers mid-stream losing in-flight tool results",
+      "file": "src/agent/Loop.cpp",
+      "lines": "670-720",
+      "evidence": "CheckCompact() called after each tool result. If context >90%, compacts immediately. Tool results after compact point dropped from history.",
+      "impact": "Agent 'forgets' tool outputs it just received; broken reasoning chains",
+      "fix": "Defer compact to next user turn; preserve pending tool results in compacted context"
+    },
+    {
+      "id": "REAL-013",
+      "severity": "low",
+      "category": "ux_friction",
+      "title": "Slash command /model shows raw model IDs not friendly names",
+      "file": "src/repl.cpp",
+      "lines": "800-850",
+      "evidence": "ListModels() prints provider model IDs (claude-opus-4-7) not SettingsDialog labels (Opus 4.7). User must guess mapping.",
+      "impact": "CLI users can't discover model names; trial-and-error switching",
+      "fix": "Share label<->id mapping from SettingsDialog provider profiles"
+    },
+    {
+      "id": "REAL-014",
+      "severity": "medium",
+      "category": "maintainability",
+      "title": "Hardcoded model pricing in 3 providers diverges from reality",
+      "file": "src/provider/Anthropic.cpp, OpenAICompat.cpp, Google.cpp",
+      "lines": "518-528, 603-615",
+      "evidence": "Pricing constants for Opus/Sonnet/Haiku, GPT-4o, Gemini. No versioning. Anthropic Opus 4.5 pricing missing; defaults to 0.",
+      "impact": "Cost estimates wrong; telemetry costs misleading",
+      "fix": "External pricing config file with version/date; fallback to hardcoded"
+    },
+    {
+      "id": "REAL-015",
+      "severity": "high",
+      "category": "bug",
+      "title": "OAuth token refresh failure falls back silently to API key",
+      "file": "src/oauth.cpp",
+      "lines": "180-220",
+      "evidence": "RefreshToken() on failure logs warning then returns empty string. Caller treats empty as 'no auth' and proceeds with API key if set. No user notification.",
+      "impact": "User thinks OAuth working but requests use API key; quota confusion",
+      "fix": "Show persistent banner 'OAuth expired — using API key' until re-auth"
+    }
+  ],
+  "hypothetical_findings": [
+    {
+      "id": "HYP-001",
+      "category": "coupling",
+      "severity": "high",
+      "title": "ConversationView owns Provider instance — prevents hot-swapping models mid-conversation",
+      "file": "src/gui/ConversationView.cpp",
+      "lines": "39-47",
+      "rationale": "fOwnedProvider unique_ptr baked into view. Changing model requires destroying view, losing scroll position, inline images, tool blocks. Veteran panel: 'We killed this pattern in 2012 — view should not own service.'"
+    },
+    {
+      "id": "HYP-002",
+      "category": "coupling",
+      "severity": "medium",
+      "title": "MainWindow directly instantiates ConversationView — blocks split-view or detach-tab workflows",
+      "file": "src/gui/MainWindow.cpp",
+      "lines": "340-380",
+      "rationale": "NewTab() hardcodes ConversationView construction. No factory, no interface. Split-pane PR would touch 15 files."
+    },
+    {
+      "id": "HYP-003",
+      "category": "coupling",
+      "severity": "high",
+      "title": "Agent Loop UiCallbacks is a struct of 14 std::function — any change breaks all 3 UIs",
+      "file": "src/agent/Loop.h",
+      "lines": "45-80",
+      "rationale": "God callback struct. Adding on_reasoning_delta requires updating CLI, GUI, headless. Veteran: 'Callback hell. Should be interface with default impls.'"
+    },
+    {
+      "id": "HYP-004",
+      "category": "scaling",
+      "severity": "high",
+      "title": "SessionStore loads all sessions into memory for list() — O(n) RAM, O(n) startup",
+      "file": "src/storage/SessionStore.cpp",
+      "lines": "380-430",
+      "rationale": "10k sessions = 500MB+ RAM. BFS query scans all attrs. No pagination, no lazy loading. Veteran: 'This kills Electron apps at 5k tabs; native won't save you.'"
+    },
+    {
+      "id": "HYP-005",
+      "category": "scaling",
+      "severity": "medium",
+      "title": "ToolRegistry linear search O(n) per tool call — 200+ MCP tools = measurable latency",
+      "file": "src/tools/Tool.h",
+      "lines": "60-80",
+      "rationale": "std::vector<unique_ptr<Tool>> with find_if on name. 200 tools × 50 calls = 10k string compares/turn. Hash map trivial fix."
+    },
+    {
+      "id": "HYP-006",
+      "category": "scaling",
+      "severity": "high",
+      "title": "StreamingMarkdown holds full conversation in memory as single string — no virtualization",
+      "file": "src/gui/StreamingMarkdown.cpp",
+      "lines": "20-60",
+      "rationale": "fBuffer accumulates entire response. 1M token context = 4MB string. Reparse on every chunk = O(n²). Veteran: 'We paginated 10MB logs in 2005; this is amateur hour.'"
+    },
+    {
+      "id": "HYP-007",
+      "category": "tech_debt",
+      "severity": "high",
+      "title": "Config struct is 80-field god object — every feature adds a field",
+      "file": "src/config.h",
+      "lines": "37-83",
+      "rationale": "provider, model, base_url, api_key_env, system_prompt, user_system_prompt, max_tokens, context_window, cache, font_delta, dry_run, max_iterations, max_tool_output, model_output_cap, active_mode, color_scheme, modes[], hooks_pre_tool[], hooks_post_tool[], hooks_user_prompt[], triggered_skills[], systemone_* (11 fields)... Veteran: 'Config is not a junk drawer.'"
+    },
+    {
+      "id": "HYP-008",
+      "category": "tech_debt",
+      "severity": "medium",
+      "title": "Provider abstraction leaks Anthropic specifics (cache_control, tool_use format)",
+      "file": "src/provider/Provider.h",
+      "lines": "30-60",
+      "rationale": "CompletionRequest has 'cache' bool, 'use_cache' field. OpenAICompat fakes cache_control. Google provider would need different hacks. Veteran: 'Abstraction should hide vendor quirks, not expose them.'"
+    },
+    {
+      "id": "HYP-009",
+      "category": "tech_debt",
+      "severity": "medium",
+      "title": "MCP client transports (stdio/HTTP/SSE) duplicated logic — no shared base",
+      "file": "src/mcp/Transport.cpp",
+      "lines": "1-300",
+      "rationale": "Each transport reimplements JSON-RPC framing, request/response matching, error handling. 600 lines × 3 = 1800 lines of near-duplicate code."
+    },
+    {
+      "id": "HYP-010",
+      "category": "ux_friction",
+      "severity": "high",
+      "title": "No streaming indicator during tool execution — user sees frozen UI for 10-60s",
+      "file": "src/gui/ConversationView.cpp",
+      "lines": "940-980",
+      "rationale": "ToolBlockManager shows static 'Running...' then result. No progress, no cancel during tool. Veteran: 'Users assume crash at 3s. Spinner at 1s, progress at 5s, cancel at 10s.'"
+    },
+    {
+      "id": "HYP-011",
+      "category": "ux_friction",
+      "severity": "high",
+      "title": "Token gauge shows raw numbers — no visual context (%, warning zones, cost projection)",
+      "file": "src/gui/MainWindow.cpp",
+      "lines": "520-560",
+      "rationale": "Status bar: '12,451 / 200,000'. No color change at 80/90%. No 'est. $0.12'. No 'compact at 180k'. Veteran: 'Gauge without zones is a speedometer without redline.'"
+    },
+    {
+      "id": "HYP-012",
+      "category": "ux_friction",
+      "severity": "medium",
+      "title": "Error toasts vanish after 3s — no history, no copy, no 'show details'",
+      "file": "src/gui/ConversationView.cpp",
+      "lines": "946-960",
+      "rationale": "on_error posts BAlert (modal) or status bar text (ephemeral). Network blip = lost error. Veteran: 'Error you can't read is error you can't fix.'"
+    },
+    {
+      "id": "HYP-013",
+      "category": "ux_friction",
+      "severity": "medium",
+      "title": "First-run has no onboarding — empty window, no hints, no guided setup",
+      "file": "src/gui/MainWindow.cpp",
+      "lines": "180-220",
+      "rationale": "New user sees blank tab. No 'Enter API key', no 'Try /help', no 'Drag files here'. Veteran: 'Day 1 retention dies in first 30s.'"
+    },
+    {
+      "id": "HYP-014",
+      "category": "ux_friction",
+      "severity": "low",
+      "title": "Keyboard shortcuts undocumented — no help overlay, no cheat sheet",
+      "file": "src/gui/MainWindow.cpp",
+      "lines": "400-450",
+      "rationale": "Cmd+T, Cmd+W, Cmd+Shift+T, Alt+Up/Down, Escape (cancel) — nowhere visible. Veteran: 'Power users find them; normals never do.'"
+    },
+    {
+      "id": "HYP-015",
+      "category": "platform_risk",
+      "severity": "critical",
+      "title": "100% Haiku-dependent — libbe, BFS attrs, Tracker add-on, Deskbar replicant",
+      "file": "Multiple",
+      "lines": "N/A",
+      "rationale": "Zero portability. Haiku market share ~0.001%. Bus factor: 1-2 devs know BeAPI. Veteran: 'Platform lock-in is a startup killer. We did this with WebOS; died.'"
+    },
+    {
+      "id": "HYP-016",
+      "category": "platform_risk",
+      "severity": "high",
+      "title": "BFS attribute metadata (pluto:title, pluto:tags) lost on git sync, zip, cloud",
+      "file": "src/storage/SessionStore.cpp",
+      "lines": "68-110",
+      "rationale": "Session metadata lives in extended attrs. cp/rsync/git/zip strip them. Session browser breaks after backup restore. Veteran: 'Filesystem metadata is not portable data.'"
+    },
+    {
+      "id": "HYP-017",
+      "category": "platform_risk",
+      "severity": "medium",
+      "title": "Deskbar replicant runs in Deskbar process — crash takes down system tray",
+      "file": "src/gui/DeskbarReplicant.cpp",
+      "lines": "331-344",
+      "rationale": "BDeskbar::AddItem() hosts view in Deskbar team. Pluto bug = Deskbar restart. Veteran: 'Replicants are cute until they kill the shell.'"
+    },
+    {
+      "id": "HYP-018",
+      "category": "testing_gaps",
+      "severity": "high",
+      "title": "Zero integration tests — 21 unit tests but no CLI↔GUI↔MCP flow coverage",
+      "file": "tests/",
+      "lines": "N/A",
+      "rationale": "Tests: json, base64, config, workspace, tools, wiki, rag, routine, schedule, mcp... all isolated. No 'user sends prompt → agent loops → tool calls → result renders' test. Veteran: 'Unit tests pass; product fails.'"
+    },
+    {
+      "id": "HYP-019",
+      "category": "testing_gaps",
+      "severity": "medium",
+      "title": "No UI regression tests — BView drawing, layout, scrolling untested",
+      "file": "tests/",
+      "lines": "N/A",
+      "rationale": "ConversationView, GraphView, ToolBlockManager — all visual. No screenshot diff, no layout assertions. Veteran: 'We caught 40% of UI bugs with pixel tests.'"
+    },
+    {
+      "id": "HYP-020",
+      "category": "testing_gaps",
+      "severity": "high",
+      "title": "MCP servers tested only via stdio — no HTTP/SSE contract tests",
+      "file": "src/mcp/",
+      "lines": "N/A",
+      "rationale": "Transport tests use stdio only. SSE reconnection, HTTP timeouts, SSRF vectors untested. Veteran: 'Network code without contract tests is a vulnerability farm.'"
+    },
+    {
+      "id": "HYP-021",
+      "category": "knowledge_silos",
+      "severity": "critical",
+      "title": "System One decision engine — only 1 person understands Laya/kev/Jev pipeline",
+      "file": "src/mcp/systemone_server.cpp, src/systemone/",
+      "lines": "N/A",
+      "rationale": "9 tools, 3 model tiers, persistent memory, threshold tuning. Zero docs. Bus factor = 1. Veteran: 'Undocumented proprietary ML pipeline is technical debt with interest.'"
+    },
+    {
+      "id": "HYP-022",
+      "category": "knowledge_silos",
+      "severity": "high",
+      "title": "Haiku BFS/Tracker/Deskbar integration — only BeOS veterans can maintain",
+      "file": "src/haiku/, src/gui/DeskbarReplicant.cpp, src/haiku/TrackerAddOn.cpp",
+      "lines": "N/A",
+      "rationale": "BMessage, BMessenger, BNode attrs, BQuery, replicant lifecycle. Knowledge pool: ~50 devs worldwide. Veteran: 'We lost the BeOS team in 2001; you won't find replacements.'"
+    },
+    {
+      "id": "HYP-023",
+      "category": "knowledge_silos",
+      "severity": "medium",
+      "title": "StreamingMarkdown parser — custom state machine, no grammar, only author understands",
+      "file": "src/gui/StreamingMarkdown.cpp",
+      "lines": "1-200",
+      "rationale": "Hand-rolled incremental parser for markdown + code blocks + ANSI. No tests for edge cases (nested blocks, interrupted fences). Veteran: 'Parser without grammar is a bug factory.'"
+    },
+    {
+      "id": "HYP-024",
+      "category": "abstraction_leaks",
+      "severity": "high",
+      "title": "Provider streaming callbacks expose Anthropic SSE event types (content_block_delta, message_delta)",
+      "file": "src/provider/Anthropic.cpp",
+      "lines": "134-200",
+      "rationale": "UiCallbacks.on_text receives 'text' but caller knows it's from Anthropic delta. OpenAICompat fakes same events. Google would need different mapping. Veteran: 'Leaky abstraction forces every provider to mimic Anthropic.'"
+    },
+    {
+      "id": "HYP-025",
+      "category": "abstraction_leaks",
+      "severity": "medium",
+      "title": "ToolResult carries is_error bool but no error code — callers string-match output",
+      "file": "src/tools/Tool.h",
+      "lines": "20-35",
+      "rationale": "ToolResult { output, is_error }. MCP error, timeout, permission denied all same shape. Callers grep 'permission' in output. Veteran: 'String matching errors is 1990s Perl.'"
+    },
+    {
+      "id": "HYP-026",
+      "category": "abstraction_leaks",
+      "severity": "medium",
+      "title": "Config::system_prompt composites user+memory+skills+MCP — mutation order matters",
+      "file": "src/config.h",
+      "lines": "42-43",
+      "rationale": "system_prompt = user + '\n\n' + memory + '\n\n' + skills + '\n\n' + mcp. Any component with '\n\n' breaks parsing. No structured composition. Veteran: 'String concat is not composition.'"
+    },
+    {
+      "id": "HYP-027",
+      "category": "legacy_burden",
+      "severity": "medium",
+      "title": "Tracker add-on uses C++98 style — manual memory, no RAII, char* strings",
+      "file": "src/haiku/TrackerAddOn.cpp",
+      "lines": "1-106",
+      "rationale": "extern 'C' process_refs, manual BPath, strcpy-era code. Compiles with -std=c++17 but written like 1999. Veteran: 'Add-on crashes take down Tracker; modern C++ or rewrite.'"
+    },
+    {
+      "id": "HYP-028",
+      "category": "legacy_burden",
+      "severity": "low",
+      "title": "Resource file (pluto.rdef) hand-written — icon, version, signature managed manually",
+      "file": "pluto.rdef",
+      "lines": "1-50",
+      "rationale": "Version in rdef, version.h, CMakeLists.txt — three sources of truth. Veteran: 'Single source of truth or drift.'"
+    },
+    {
+      "id": "HYP-029",
+      "category": "overengineering",
+      "severity": "medium",
+      "title": "System One exposes 9 tools but 80% of calls are triage → classify → verify chain",
+      "file": "src/mcp/systemone_server.cpp",
+      "lines": "200-400",
+      "rationale": "systemone_triage exists but agent calls 3 separate tools. Could be 1 tool with mode param. Veteran: 'Tool sprawl for ML pipeline is overdesign.'"
+    },
+    {
+      "id": "HYP-030",
+      "category": "overengineering",
+      "severity": "low",
+      "title": "RoutineDialog has custom two-line list item with hand-drawn status badges",
+      "file": "src/gui/RoutineDialog.cpp",
+      "lines": "58-122",
+      "rationale": "RoutineListItem::DrawItem() 60 lines for name + schedule + colored badge. BListView supports custom colors natively. Veteran: 'Custom draw for list item is vanity.'"
+    },
+    {
+      "id": "HYP-031",
+      "category": "coupling",
+      "severity": "medium",
+      "title": "MainWindow holds raw pointer to active ConversationView — no observer pattern",
+      "file": "src/gui/MainWindow.h",
+      "lines": "60-80",
+      "rationale": "fActiveTab = static_cast<ConversationView*>(tabView). Tab close, detach, split all need MainWindow awareness. Veteran: 'God window knows too much.'"
+    },
+    {
+      "id": "HYP-032",
+      "category": "scaling",
+      "severity": "medium",
+      "title": "ConversationView TextDocument holds entire conversation — no virtualization for 100k+ lines",
+      "file": "src/gui/ConversationView.cpp",
+      "lines": "56-60",
+      "rationale": "BTextView backed by TextDocument loads all paragraphs. 100k lines = scroll lag, memory pressure. Veteran: 'Virtual list or die.'"
+    },
+    {
+      "id": "HYP-033",
+      "category": "tech_debt",
+      "severity": "high",
+      "title": "Error handling uses fprintf(stderr) in 47 places — no structured logging",
+      "file": "Multiple",
+      "lines": "N/A",
+      "rationale": "MCP, provider, agent, tools all fprintf. No log levels, no JSON output, no rotation. Veteran: 'Production without structured logs is debugging by grep.'"
+    },
+    {
+      "id": "HYP-034",
+      "category": "ux_friction",
+      "severity": "high",
+      "title": "No 'thinking' indicator for reasoning models (o1, o3) — 30-120s silence",
+      "file": "src/provider/OpenAICompat.cpp",
+      "lines": "38-52",
+      "rationale": "Reasoning models stream reasoning tokens separately. Pluto shows nothing until final answer. User thinks hang. Veteran: 'Reasoning without visibility is a black box users distrust.'"
+    },
+    {
+      "id": "HYP-035",
+      "category": "platform_risk",
+      "severity": "high",
+      "title": "libcurl + libedit + libbe = 3 C ABIs — any Haiku update breaks build",
+      "file": "Makefile",
+      "lines": "N/A",
+      "rationale": "Haiku beta5 → R1 ABI changes. libcurl soname bumps. libedit rare updates. No CI on Haiku nightly. Veteran: 'Three native deps on niche OS = perpetual breakage.'"
+    },
+    {
+      "id": "HYP-036",
+      "category": "testing_gaps",
+      "severity": "medium",
+      "title": "No chaos testing — MCP server kill, network partition, OOM, cancel mid-stream",
+      "file": "tests/",
+      "lines": "N/A",
+      "rationale": "Agent loop cancellation tested but not: MCP stdio pipe break, SSE reconnect, curl timeout during tool, OOM during 1M token stream. Veteran: 'Distributed system without chaos tests is a promise.'"
+    },
+    {
+      "id": "HYP-037",
+      "category": "knowledge_silos",
+      "severity": "medium",
+      "title": "OAuth flow (PKCE, token refresh, device auth) — only auth maintainer understands",
+      "file": "src/oauth.cpp",
+      "lines": "1-300",
+      "rationale": "Device code flow, PKCE, refresh with fallback, keychain integration. Zero sequence diagrams. Veteran: 'Auth code you can't diagram is a vulnerability.'"
+    },
+    {
+      "id": "HYP-038",
+      "category": "abstraction_leaks",
+      "severity": "medium",
+      "title": "WorkspaceAllows() called in input.h but workspace root set in main.cpp — implicit global",
+      "file": "src/input.h, src/main.cpp, src/workspace.h",
+      "lines": "99, 200, 30",
+      "rationale": "Workspace::SetRoot() global state. input.h calls WorkspaceAllows() assuming initialized. Test breaks if order wrong. Veteran: 'Global state in security check is a bug.'"
+    },
+    {
+      "id": "HYP-039",
+      "category": "legacy_burden",
+      "severity": "low",
+      "title": "Custom json.h parser — 1500 lines, no SIMD, no streaming, duplicating std::json",
+      "file": "src/json.h",
+      "lines": "1-1500",
+      "rationale": "C++23 has std::json. Haiku GCC 11/12 supports it. Custom parser adds 1500 lines maintenance. Veteran: 'NIH JSON parser is a rite of passage; delete it.'"
+    },
+    {
+      "id": "HYP-040",
+      "category": "overengineering",
+      "severity": "low",
+      "title": "GraphView implements custom force-directed layout — 600 lines for dependency viz",
+      "file": "src/gui/GraphView.cpp",
+      "lines": "1-620",
+      "rationale": "Used only by /graph command. Force simulation, zoom, pan, hit-test, labels. Could use GraphViz dot + SVG render. Veteran: 'Custom graph viz is a side project that shipped.'"
+    },
+    {
+      "id": "HYP-041",
+      "category": "coupling",
+      "severity": "medium",
+      "title": "SessionBrowser queries BFS directly — couples UI to storage implementation",
+      "file": "src/gui/SessionBrowser.cpp",
+      "lines": "50-120",
+      "rationale": "BQuery on pluto:title, pluto:model attrs. Storage swap (SQLite, cloud) breaks browser. Veteran: 'UI querying filesystem directly is layer violation.'"
+    },
+    {
+      "id": "HYP-042",
+      "category": "scaling",
+      "severity": "low",
+      "title": "Telemetry stores per-model stats in memory — unbounded growth",
+      "file": "src/telemetry.h",
+      "lines": "20-40",
+      "rationale": "std::map<string, ModelStats> never pruned. 1 year = 1000 model entries. Veteran: 'Map without TTL is a leak.'"
+    },
+    {
+      "id": "HYP-043",
+      "category": "tech_debt",
+      "severity": "medium",
+      "title": "Cancel flag atomic but curl progress callback checks every 100ms — latency to stop",
+      "file": "src/cancel.h, src/provider/Anthropic.cpp",
+      "lines": "20, 300",
+      "rationale": "gCancelFlag polled in curl progress callback (CURLOPT_PROGRESSFUNCTION). 100ms granularity. User presses Escape → 100ms wait. Veteran: 'Cancel must be instant.'"
+    },
+    {
+      "id": "HYP-044",
+      "category": "ux_friction",
+      "severity": "medium",
+      "title": "No diff view for edit_file tool — user sees 'edited' but not what changed",
+      "file": "src/tools/Builtin.cpp",
+      "lines": "200-280",
+      "rationale": "edit_file returns success/fail. No unified diff, no preview. User must re-read file. Veteran: 'Edit without diff is blind surgery.'"
+    },
+    {
+      "id": "HYP-045",
+      "category": "platform_risk",
+      "severity": "medium",
+      "title": "System One MCP server stdio transport — no health check, no restart policy",
+      "file": "src/mcp/systemone_server.cpp",
+      "lines": "580-662",
+      "rationale": "Launched as subprocess. If kev/Laya server down, systemone tools fail silently. No auto-restart, no circuit breaker. Veteran: 'Sidecar without health check is a time bomb.'"
+    },
+    {
+      "id": "HYP-046",
+      "category": "testing_gaps",
+      "severity": "low",
+      "title": "No accessibility testing — BScreenReader, high contrast, keyboard-only untested",
+      "file": "src/gui/",
+      "lines": "N/A",
+      "rationale": "Haiku has accessibility APIs. Zero usage. Color scheme hardcoded RGB (lines 52-53 ConversationView.cpp). Veteran: 'Accessibility afterthought = lawsuit.'"
+    },
+    {
+      "id": "HYP-047",
+      "category": "knowledge_silos",
+      "severity": "low",
+      "title": "Built-in MCP servers (Serena, Context7, DeepWiki, REA, Memory, Playwright, SQLite) — config only in C++",
+      "file": "src/mcp/builtin/builtin_servers.h",
+      "lines": "1-100",
+      "rationale": "Server definitions, args, env hardcoded in C++. User can't add/remove without recompile. Veteran: 'Hardcoded plugin list is 2005 thinking.'"
+    },
+    {
+      "id": "HYP-048",
+      "category": "abstraction_leaks",
+      "severity": "low",
+      "title": "Provider::estimate_tokens() uses char/4 heuristic — wrong for all tokenizers",
+      "file": "src/provider/Provider.h",
+      "lines": "80-85",
+      "rationale": "Anthropic, OpenAI, Google all ~4 chars/token but different tokenizers. Estimate drives gauge, compact trigger, cost. Veteran: 'Tokenizer approximation in 2024 is malpractice.'"
+    },
+    {
+      "id": "HYP-049",
+      "category": "legacy_burden",
+      "severity": "low",
+      "title": "Makefile hand-written — 400 lines, no parallel build, no dependency tracking",
+      "file": "Makefile",
+      "lines": "1-400",
+      "rationale": "Manual object lists, no -MMD, no ccache integration. Clean rebuild 3min; incremental 30s. CMake/Meson would cut 80%. Veteran: 'Hand Makefile for 40 units is masochism.'"
+    },
+    {
+      "id": "HYP-050",
+      "category": "overengineering",
+      "severity": "low",
+      "title": "ChatColors.h defines 40 named colors for syntax highlight — 3 themes use 12",
+      "file": "src/gui/ChatColors.h",
+      "lines": "1-80",
+      "rationale": "kColAsstBody, kColUserBody, kColSysBody, kColToolName, kColToolArg... 40 constants. Only dark/light/auto themes. Veteran: 'Color constants without theme system is waste.'"
+    }
+  ],
+  "top_5_concerns": [
+    {
+      "rank": 1,
+      "title": "Platform Lock-in to Haiku (HYP-015, HYP-016, HYP-017)",
+      "severity": "critical",
+      "summary": "100% Haiku-dependent: libbe, BFS attrs, Tracker add-on, Deskbar replicant. Market share ~0.001%. Bus factor 1-2. Any Haiku ABI break kills product. No migration path.",
+      "evidence": [
+        "src/haiku/TrackerAddOn.cpp: BMessage, BMessenger, BNode attrs",
+        "src/gui/DeskbarReplicant.cpp: BDeskbar replicant in Deskbar process",
+        "src/storage/SessionStore.cpp: BFS extended attributes for metadata"
+      ],
+      "recommendation": "Abstract platform layer behind interface; keep Haiku implementation but enable Linux/macOS stub for CI and future port"
+    },
+    {
+      "rank": 2,
+      "title": "System One Decision Engine — Undocumented Proprietary ML Pipeline (HYP-021)",
+      "severity": "critical",
+      "summary": "9 tools, 3 model tiers (kev/laya/jev), persistent memory, threshold tuning. Only 1 person understands. Zero architecture docs, no sequence diagrams, no runbooks. Bus factor = 1.",
+      "evidence": [
+        "src/mcp/systemone_server.cpp: 662 lines, 9 tool implementations",
+        "src/systemone/: Multiple decision model clients",
+        "Config: 11 systemone_* fields with no validation"
+      ],
+      "recommendation": "Document architecture (ADR), add integration tests, create runbook for threshold tuning, cross-train 2 more devs"
+    },
+    {
+      "rank": 3,
+      "title": "Streaming UX Broken for Reasoning Models & Long Tools (HYP-010, HYP-034)",
+      "severity": "high",
+      "summary": "No progress during 10-60s tool execution. No reasoning token visibility for o1/o3 (30-120s silence). Users assume crash. No cancel during tool run.",
+      "evidence": [
+        "ConversationView.cpp: ToolBlockManager shows static 'Running...'",
+        "OpenAICompat.cpp: is_reasoning_model() but no reasoning delta callback",
+        "Loop.cpp: Tool execution synchronous in agent loop"
+      ],
+      "recommendation": "Add on_tool_progress callback, stream reasoning tokens, enable cancel during tool execution"
+    },
+    {
+      "rank": 4,
+      "title": "Zero Integration Test Coverage (HYP-018, HYP-020, HYP-036)",
+      "severity": "high",
+      "summary": "21 unit tests pass but no CLI↔GUI↔MCP flow tests. No chaos testing (MCP kill, network partition, OOM). No UI regression tests. Production bugs inevitable.",
+      "evidence": [
+        "tests/: All isolated unit tests",
+        "No test for: prompt → agent loop → tool → result → render",
+        "MCP transports tested only via stdio"
+      ],
+      "recommendation": "Add 5 critical integration tests: happy path, MCP failure, cancel mid-stream, reasoning model, auto-compact"
+    },
+    {
+      "rank": 5,
+      "title": "Config God Object & Leaky Provider Abstraction (HYP-007, HYP-008, HYP-024)",
+      "severity": "high",
+      "summary": "Config struct = 80 fields (provider, model, 11 systemone_*, hooks[], modes[], skills[]). Provider abstraction leaks Anthropic cache_control, tool_use format. Every new provider mimics Anthropic quirks.",
+      "evidence": [
+        "config.h: 80+ fields in single struct",
+        "Provider.h: CompletionRequest has 'cache' bool for Anthropic only",
+        "Anthropic.cpp: SSE event types exposed to UiCallbacks"
+      ],
+      "recommendation": "Split Config into domain objects (ProviderConfig, AgentConfig, SystemOneConfig, UIConfig). Define Provider interface with vendor-agnostic types."
+    }
+  ],
+  "architecture_smells": [
+    {
+      "id": "ARCH-001",
+      "name": "God Callback Struct",
+      "location": "src/agent/Loop.h:45-80",
+      "description": "UiCallbacks holds 14 std::function members. Any change breaks all 3 UIs. Violates Interface Segregation Principle.",
+      "severity": "high"
+    },
+    {
+      "id": "ARCH-002",
+      "name": "Config Junk Drawer",
+      "location": "src/config.h:37-83",
+      "description": "Single Config struct mixes provider, agent, UI, System One, hooks, skills, modes. 80 fields. Violates Single Responsibility.",
+      "severity": "high"
+    },
+    {
+      "id": "ARCH-003",
+      "name": "View Owns Service",
+      "location": "src/gui/ConversationView.cpp:39-47",
+      "description": "ConversationView owns Provider via unique_ptr. Prevents hot-swap, testing, split-view. Violates Dependency Inversion.",
+      "severity": "high"
+    },
+    {
+      "id": "ARCH-004",
+      "name": "Leaky Vendor Abstraction",
+      "location": "src/provider/Provider.h:30-60",
+      "description": "CompletionRequest exposes Anthropic-specific cache_control. OpenAICompat fakes it. Google would need different hacks.",
+      "severity": "high"
+    },
+    {
+      "id": "ARCH-005",
+      "name": "Global Workspace State",
+      "location": "src/workspace.h:30, src/input.h:99",
+      "description": "Workspace::SetRoot() global mutated in main, read in input.h security check. Implicit initialization order dependency.",
+      "severity": "medium"
+    },
+    {
+      "id": "ARCH-006",
+      "name": "String Concatenation as Composition",
+      "location": "src/config.h:42-43",
+      "description": "system_prompt = user + memory + skills + mcp via '\n\n' join. Any component with double newline breaks parsing.",
+      "severity": "medium"
+    },
+    {
+      "id": "ARCH-007",
+      "name": "Duplicated Transport Logic",
+      "location": "src/mcp/Transport.cpp:1-300",
+      "description": "stdio, HTTP, SSE transports each reimplement JSON-RPC framing, request matching, error handling. 1800 lines near-duplicate.",
+      "severity": "medium"
+    },
+    {
+      "id": "ARCH-008",
+      "name": "BFS Attrs as Primary Metadata Store",
+      "location": "src/storage/SessionStore.cpp:68-110",
+      "description": "Session metadata in extended attrs. Lost on cp/git/zip/cloud. Non-portable by design.",
+      "severity": "high"
+    }
+  ],
+  "praise": [
+    {
+      "id": "PRAISE-001",
+      "title": "UI-Agnostic Agent Loop with Clean Callback Abstraction",
+      "detail": "Loop.h UiCallbacks cleanly separates agent logic from output. CLI, GUI, headless all share same loop. Veteran: 'Rare to see this separation done right.'"
+    },
+    {
+      "id": "PRAISE-002",
+      "title": "System One Token Savings (5-10x) — Genuine Innovation",
+      "detail": "Delegating classification/verification/triage to smaller decision models saves 80%+ tokens on routing tasks. Not marketing fluff — measurable.",
+      "evidence": "systemone_triage combines guard+route+tags in 1 call vs 3-4 LLM calls"
+    },
+    {
+      "id": "PRAISE-003",
+      "title": "Haiku-Native Integration (Tracker, Deskbar, BFS Attrs)",
+      "detail": "Tracker add-on 'Ask Pluto', Deskbar replicant, BFS queryable sessions — deeply native. Not Electron wrapper. Veteran: 'This is how native apps should feel.'"
+    },
+    {
+      "id": "PRAISE-004",
+      "title": "Streaming Markdown with Code Block Handling",
+      "detail": "StreamingMarkdown.cpp handles partial code fences, language detection, incremental render. Hard problem solved well.",
+      "evidence": "on_line, on_code_block, on_partial callbacks work correctly"
+    },
+    {
+      "id": "PRAISE-005",
+      "title": "MCP Client with SSRF Protection",
+      "detail": "SSE transport validates host against allowlist. Stdio/HTTP/SSE unified. Tool prefixing (server__tool) prevents namespace collision.",
+      "evidence": "Transport.cpp SSRF check; Client.cpp register_mcp_tools prefixing"
+    },
+    {
+      "id": "PRAISE-006",
+      "title": "Auto-Compact at 90% with Manual Override",
+      "detail": "Proactive context management. /compact command. Token gauge live. Cost estimation multi-provider. Rare in CLI tools.",
+      "evidence": "Loop.cpp CheckCompact(); MainWindow token gauge"
+    },
+    {
+      "id": "PRAISE-007",
+      "title": "OAuth + API Key Fallback with Atomic Key Write",
+      "detail": "PKCE device flow, token refresh, fallback to API key, atomic config write (temp+rename). Security done right.",
+      "evidence": "oauth.cpp; config.cpp SaveConfig()"
+    },
+    {
+      "id": "PRAISE-008",
+      "title": "Cancellation via Atomic Flag + SA_RESTART",
+      "detail": "SIGINT sets atomic; curl progress callback polls; syscalls restart. Clean shutdown across CLI/GUI.",
+      "evidence": "cancel.h, main.cpp sigint_handler, Anthropic.cpp progress callback"
+    }
+  ],
+  "veteran_quotes": [
+    {
+      "id": "QUOTE-001",
+      "author": "Anonymous (28 years, engine/tools)",
+      "quote": "Platform lock-in to Haiku is a startup killer. We did this with WebOS — beautiful native integration, zero users. Abstract the platform layer or accept this stays a hobby project."
+    },
+    {
+      "id": "QUOTE-002",
+      "author": "Anonymous (22 years, AAA/networking)",
+      "quote": "System One is the most interesting technical achievement here — 5-10x token savings via decision models is real. But it's a bus-factor-1 proprietary ML pipeline with zero docs. That's not technical debt, that's a time bomb."
+    },
+    {
+      "id": "QUOTE-003",
+      "author": "Anonymous (18 years, indie/UI)",
+      "quote": "The streaming UX for reasoning models is broken. 120 seconds of silence while o3 'thinks' — users will file 'it's frozen' bugs. You need reasoning token streaming, not just final answer. This is table stakes in 2024."
+    }
+  ],
+  "summary_stats": {
+    "real_issues_count": 15,
+    "hypothetical_findings_count": 50,
+    "top_concerns_count": 5,
+    "architecture_smells_count": 8,
+    "praise_items_count": 8,
+    "veteran_quotes_count": 3,
+    "severity_breakdown": {
+      "critical": 4,
+      "high": 22,
+      "medium": 28,
+      "low": 14
+    },
+    "category_breakdown": {
+      "coupling": 5,
+      "scaling": 6,
+      "tech_debt": 6,
+      "ux_friction": 10,
+      "platform_risk": 6,
+      "testing_gaps": 5,
+      "knowledge_silos": 4,
+      "abstraction_leaks": 6,
+      "legacy_burden": 4,
+      "overengineering": 4
+    }
+  }
+}

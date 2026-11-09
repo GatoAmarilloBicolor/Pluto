@@ -50,6 +50,7 @@ bool StdioTransport::start(std::string& err) {
 		close(in_pipe[0]);  close(in_pipe[1]);
 		close(out_pipe[0]); close(out_pipe[1]);
 
+		// Set environment variables in child only (thread-safe)
 		for (const auto& [k, v] : fEnv) setenv(k.c_str(), v.c_str(), 1);
 
 		std::vector<char*> argv;

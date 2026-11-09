@@ -2,8 +2,7 @@
 #include "filelock.h"
 #include "frontmatter.h"
 #include "oauth.h"
-#include "provider/Anthropic.h"
-#include "provider/OpenAICompat.h"
+#include "provider/Provider.h"
 #include "rag.h"
 #include "util.h"
 #include "haiku/ModelCaps.h"
@@ -386,29 +385,43 @@ void AutoDetectProvider(Config& cfg) {
 std::unique_ptr<Provider> CreateProvider(const Config& cfg) {
 	std::string key = ResolveApiKey(cfg);
 
-	if (cfg.provider == "openai-compat" && !cfg.base_url.empty()) {
+	ProviderConfig pconfig;
+	if (cfg.provider == "openai-compat") {
+		pconfig.type = ProviderType::OPENAI_COMPAT;
+	} else {
+		pconfig.type = ProviderType::ANTHROPIC;
+	}
+	pconfig.api_key = key;
+	pconfig.base_url = cfg.base_url;
+	pconfig.model = cfg.model;
+	pconfig.max_tokens = cfg.max_tokens;
+	pconfig.use_cache = cfg.cache;
+
+	// For Anthropic with OAuth, we need special handling
+	if (pconfig.type == ProviderType::ANTHROPIC) {
+		OAuthTokens tok = LoadOAuthTokens();
+		if (!tok.empty()) {
+			std::string oauth_key = OAuthEnsureValidToken(tok);
+			if (!oauth_key.empty()) {
+				pconfig.api_key = oauth_key;
+				pconfig.auth_type = ProviderConfig::AuthType::OAUTH;
+			}
+		}
+		if (pconfig.auth_type == ProviderConfig::AuthType::API_KEY && key.empty()) {
+			std::fprintf(stderr, "[error] Anthropic provider requires API key. "
+				"Set %s env var or run 'pluto login' for OAuth.\n", cfg.api_key_env.c_str());
+		}
+	}
+
+	if (pconfig.type == ProviderType::OPENAI_COMPAT && !cfg.base_url.empty()) {
 		if (key.empty() && cfg.base_url.find("localhost") == std::string::npos
 			&& cfg.base_url.find("127.0.0.1") == std::string::npos) {
 			std::fprintf(stderr, "[warn] %s set but no key found (env or ~/config/settings/pluto/keys/%s)\n",
 				cfg.api_key_env.c_str(), cfg.api_key_env.c_str());
 		}
-		return std::make_unique<OpenAICompatProvider>(key, cfg.base_url);
 	}
 
-	AuthType auth = AuthType::API_KEY;
-	OAuthTokens tok = LoadOAuthTokens();
-	if (!tok.empty()) {
-		std::string oauth_key = OAuthEnsureValidToken(tok);
-		if (!oauth_key.empty()) {
-			key = oauth_key;
-			auth = AuthType::OAUTH;
-		}
-	}
-	if (auth == AuthType::API_KEY && key.empty()) {
-		std::fprintf(stderr, "[error] Anthropic provider requires API key. "
-			"Set %s env var or run 'pluto login' for OAuth.\n", cfg.api_key_env.c_str());
-	}
-	return std::make_unique<AnthropicProvider>(key, auth);
+	return ProviderConfigFactory::create(pconfig);
 }
 
 int GuessMaxOutputTokens(const std::string& provider,

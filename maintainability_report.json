@@ -1,0 +1,419 @@
+{
+  "real_issues": [
+    {
+      "id": "R1",
+      "severity": "high",
+      "category": "architecture",
+      "title": "God class in MainWindow.cpp (4818 lines)",
+      "description": "MainWindow.cpp is a 4818-line monolith handling chat rendering, slash commands, model picker, image display, tool blocks, session management, MCP integration, routine/schedule/wiki dialogs, telemetry, and settings. Violates single responsibility; changes cascade across unrelated features.",
+      "evidence": [
+        "MainWindow.cpp:1-4818 (entire file)",
+        "Contains: SlashPopup, SlashListItem, ImageView, ModelPickerWindow, MainWindow, plus 50+ helper functions",
+        "Handles: chat UI, token tracking, cost estimation, BFS attributes, drag-drop, notifications, deskbar replicant, agent lifecycle"
+      ],
+      "recommendation": "Split into: ChatView (message rendering + streaming), ToolBlockManager (already separate but called from here), SlashCommandController, SessionManager, ModelPickerDialog, SettingsDialog, RoutineDialog, ScheduleDialog, WikiDialog, TelemetryDialog, AgentController (lifecycle). Use composition over inheritance."
+    },
+    {
+      "id": "R2",
+      "severity": "high",
+      "category": "maintainability",
+      "title": "Configuration sprawl across Config.h/cpp (1200+ lines)",
+      "description": "Config.cpp:961 and Config.h:247 contain 40+ fields, 7 structs, provider profiles, mode entries, skill entries, SystemOneConfig, and complex resolution logic. No validation layer, magic strings everywhere, tight coupling to file format.",
+      "evidence": [
+        "Config.h: struct Config { provider, model, base_url, max_tokens, context_window, temperature, top_p, use_cache, auto_compact, compact_threshold, max_tool_output, color_scheme, show_minimap, show_tool_details, show_token_counters, trust_workspace, mcp_* flags, systemone_*, schedule_*, routine_*, rag_*, wiki_* }",
+        "Config.cpp: LoadConfig() does path resolution, env overrides, profile merging, key resolution, backward compat, migration"
+      ],
+      "recommendation": "Extract: ProviderProfile, UIPreferences, MCPConfig, SystemOneConfig, ScheduleConfig, RoutineConfig into separate types with builders. Add schema validation (JSON Schema or custom). Use pimpl for file I/O."
+    },
+    {
+      "id": "R3",
+      "severity": "medium",
+      "category": "testing",
+      "title": "No test framework; 28 standalone test binaries with manual assertions",
+      "description": "Tests are ad-hoc main() functions with printf/CHECK macros. No fixtures, no parametrization, no parallel execution, no coverage, no CI integration beyond 'make check' sequential run. test_loop.cpp:263 has 8 tests in one binary.",
+      "evidence": [
+        "tests/test_loop.cpp:60-263 (8 tests in one main)",
+        "tests/test_json.cpp:12-187 (11 tests, custom CHECK macros)",
+        "Makefile:387 runs all sequentially, stops on first failure"
+      ],
+      "recommendation": "Adopt Catch2 or doctest (single-header, C++17). Keep standalone binaries but use framework macros. Add test fixtures for Provider/Tool/Loop. Enable parallel test execution. Add coverage via gcov/lcov."
+    },
+    {
+      "id": "R4",
+      "severity": "medium",
+      "category": "security",
+      "title": "SSE SSRF protection incomplete - only validates hostname at connect time",
+      "description": "SseTransport.cpp validates URL scheme/host at start but doesn't re-validate on redirect. MCP servers could redirect to internal endpoints. Anthropic/OpenAICompat providers also lack redirect validation.",
+      "evidence": [
+        "src/mcp/SseTransport.cpp (not read but referenced in Manager.cpp:20)",
+        "Manager.cpp:19-30 creates transport, starts it, connects - no redirect handling visible",
+        "Provider.cpp:80 AuthStrategy but no redirect policy"
+      ],
+      "recommendation": "Implement curl CURLOPT_REDIR_PROTOCOLS_STR, CURLOPT_MAXREDIRS, and custom CURLOPT_OPENSOCKETFUNCTION/CURLOPT_CLOSESOCKETFUNCTION to validate each hop. Pin CA certs. Add allowlist for MCP SSE endpoints."
+    },
+    {
+      "id": "R5",
+      "severity": "medium",
+      "category": "reliability",
+      "title": "Global mutable state in RAG and Wiki modules (thread-safety via single mutex)",
+      "description": "rag.cpp:30 g_rag_mutex protects g_entries, g_doc_freq, g_idf, g_idf_dirty. wiki.cpp:35 g_wiki_mutex protects g_wiki_entries, g_wiki_idf. Coarse-grained locking; no read-write distinction. ComputeIdf() holds lock for entire rebuild.",
+      "evidence": [
+        "rag.cpp:30-41 global state + mutex",
+        "rag.cpp:59-78 ComputeIdf() rebuilds entire index under lock",
+        "wiki.cpp:35-37 global state + mutex",
+        "rag.cpp:124-159 RagQuery() locks for entire scoring loop"
+      ],
+      "recommendation": "Use shared_mutex (C++17) for read-heavy workloads. Consider lock-free read path with atomic version counter. Or move to actor model: single owner thread + message queue."
+    },
+    {
+      "id": "R6",
+      "severity": "low",
+      "category": "performance",
+      "title": "Token estimation uses naive char/4 heuristic across all providers",
+      "description": "Anthropic.cpp:513-516, OpenAICompat.cpp:599-601, Provider.h:304 estimate_tokens() all use text.size()/4. Anthropic's tokenizer is ~3.5 chars/token; OpenAI's cl100k_base is ~4.2. No per-model calibration.",
+      "evidence": [
+        "AnthropicProvider::estimate_tokens(): return text.size() / 4 + 1",
+        "OpenAICompatProvider::estimate_tokens(): same",
+        "Loop.cpp uses provider.estimate_tokens() for auto-compact trigger at 90%"
+      ],
+      "recommendation": "Integrate tiktoken (Rust) or byte-pair encoding tables per model family. Cache estimates. Add calibration endpoint call on first use."
+    },
+    {
+      "id": "R7",
+      "severity": "high",
+      "category": "architecture",
+      "title": "System One client uses fragile string parsing instead of JSON",
+      "description": "SystemOneClient.cpp:13-37 extract_str() and extract_num() do manual JSON parsing with string find/substr. No error handling for escaped quotes, nested objects, arrays. tf_* functions build JSON response via string concatenation.",
+      "evidence": [
+        "SystemOneClient.cpp:13-37 extract_str() - finds key, then colon, then quote, no escape handling",
+        "SystemOneClient.cpp:54-57 tf_classify() builds response via string concat",
+        "SystemOneClient.cpp:186-224 SystemOneTool wrapper calls these fragile parsers"
+      ],
+      "recommendation": "Use the existing json.h Value::parse() and Value::serialize(). Define proper request/response structs. Add schema validation for tool inputs."
+    },
+    {
+      "id": "R8",
+      "severity": "medium",
+      "category": "maintainability",
+      "title": "Haiku-specific code scattered via #ifdef __HAIKU__ instead of platform abstraction",
+      "description": "SessionStore.cpp:3-14, 112-122, 200-522; rag.cpp:10-17, 161-196; routine.cpp:4-6, 58-77; MainWindow.cpp uses B* classes directly. No platform interface; mocking for tests requires full Haiku stubs.",
+      "evidence": [
+        "SessionStore.cpp:509-521 non-Haiku stubs return empty/false",
+        "rag.cpp:193-195 non-Haiku export returns 0",
+        "routine.cpp:74-77 non-Haiku clipboard returns empty",
+        "Makefile:387 cross-compiles with mock headers"
+      ],
+      "recommendation": "Define PlatformInterface (virtual): FileSystem, Attributes, Clipboard, Notifications, Query, LaunchDaemon. Implement HaikuPlatform and MockPlatform. Inject via dependency injection. Enable unit tests on Linux/macOS."
+    },
+    {
+      "id": "R9",
+      "severity": "low",
+      "category": "code-quality",
+      "title": "Duplicate cost estimation logic in 3 places",
+      "description": "telemetry.cpp:41-94 estimate_cost(), Anthropic.cpp:518-528 estimate_cost(), OpenAICompat.cpp:603-615 estimate_cost(). Each has hardcoded pricing tables that will diverge.",
+      "evidence": [
+        "telemetry.cpp:48-91 Anthropic/OpenAI/Google/DeepSeek/Groq/XAI/Cohere/local pricing",
+        "AnthropicProvider::estimate_cost(): only Anthropic models",
+        "OpenAICompatProvider::estimate_cost(): only OpenAI models"
+      ],
+      "recommendation": "Centralize in PricingTable (data-driven: JSON/YAML loaded at startup). Provider returns model family; PricingTable computes cost. Add versioned pricing updates."
+    },
+    {
+      "id": "R10",
+      "severity": "medium",
+      "category": "reliability",
+      "title": "MCP Manager swallows errors silently - continues on failure",
+      "description": "Manager.cpp:9-44 loops specs, on any transport/connect failure: fprintf stderr and continue. No retry, no backoff, no user-visible degradation signal. Partial MCP toolset registered without warning.",
+      "evidence": [
+        "Manager.cpp:10-43: spec loop with 4 continue points (denied, transport, start, connect)",
+        "Manager.cpp:38: logs tool count but no aggregate health",
+        "Manager.cpp:59-92 system_prompt_block() includes only connected servers"
+      ],
+      "recommendation": "Track connection state per server (connecting, connected, failed, retrying). Expose health via MCPManager::clients(). Add exponential backoff reconnect. Surface degraded state to UI (yellow badge)."
+    },
+    {
+      "id": "R11",
+      "severity": "low",
+      "category": "code-quality",
+      "title": "C-style string formatting throughout (sprintf, fprintf, printf)",
+      "description": "Widespread use of printf/fprintf/snprintf instead of std::format (C++20) or fmtlib. Error-prone, no type safety, locale issues. Seen in rag.cpp, telemetry.cpp, SystemOneClient.cpp, main.cpp.",
+      "evidence": [
+        "rag.cpp:234-237 printf with %.80s truncation",
+        "telemetry.cpp:293-300 printf with ANSI colors",
+        "SystemOneClient.cpp:310 fprintf with %s",
+        "main.cpp:603+ extensive printf logging"
+      ],
+      "recommendation": "Use fmtlib (header-only, C++17 compatible) or std::format when C++20 available. Wrap in pluto::log::info/warn/error with structured fields."
+    },
+    {
+      "id": "R12",
+      "severity": "medium",
+      "category": "security",
+      "title": "API key resolution order allows env var override of per-provider key files",
+      "description": "config.cpp:1077-1087 try_key() checks env var first, then per-provider key file, then legacy file. Malicious env var in shell profile could override intended key. No audit log of which source was used.",
+      "evidence": [
+        "config.cpp:1063-1075 try_key() lambda checks getenv first",
+        "config.cpp:1078-1087 OAuth tokens checked before env var",
+        "config.cpp:1086: akey = try_key(\"ANTHROPIC_API_KEY\") after OAuth"
+      ],
+      "recommendation": "Reverse priority: per-provider key file > legacy file > env var. Log source (sanitized). Add config option to disable env var fallback."
+    },
+    {
+      "id": "R13",
+      "severity": "low",
+      "category": "maintainability",
+      "title": "Tool schemas as raw JSON strings - no compile-time validation",
+      "description": "Tool.h:54 input_schema_json() returns std::string. SystemOneClient.cpp:243, 250, 257, 264, 271, 278, 285, 292, 306 embed JSON schemas as string literals. Typos only caught at runtime.",
+      "evidence": [
+        "SystemOneClient.cpp:243: \"{\\\"type\\\":\\\"object\\\",...\"",
+        "Tool.cpp:36 Tool::preview uses input_schema_json()",
+        "Provider.cpp builds request from these strings"
+      ],
+      "recommendation": "Define schemas as C++ structs with reflection (using json.h Value builders). Generate JSON at registration. Or embed .json files and load at startup with validation."
+    },
+    {
+      "id": "R14",
+      "severity": "medium",
+      "category": "architecture",
+      "title": "Agent Loop couples UI callbacks to business logic via UiCallbacks struct",
+      "description": "Loop.h:118 UiCallbacks has 12 function pointers (on_text, on_tool_start, on_tool_end, on_tool_error, on_compact_start, on_compact_end, on_token_update, on_cost_update, on_thinking, on_system_prompt, on_permission_request, on_permission_result). Hard to test; GUI and CLI each implement all.",
+      "evidence": [
+        "Loop.h:118-137 UiCallbacks with 12 std::function members",
+        "Loop.cpp:726 RunTurn() calls callbacks at 15+ points",
+        "MainWindow.cpp implements all; repl.cpp implements subset"
+      ],
+      "recommendation": "Split into interfaces: IOutputHandler (text/tool/thinking), IPermissionHandler, ICompactionObserver, ITokenTracker. Use observer pattern. Provide NullOutputHandler for headless tests."
+    },
+    {
+      "id": "R15",
+      "severity": "low",
+      "category": "code-quality",
+      "title": "Magic numbers and strings throughout (90% compact, 100k context, 1.5s Tracker delay)",
+      "description": "Loop.h:131 compact_threshold = 0.9; Loop.cpp:252 MaybeCompact at 950/1000; TrackerAddOn.cpp:99 snooze(1500000); config.cpp:961 default context_window = 100000. No named constants.",
+      "evidence": [
+        "Loop.h:131 static constexpr double compact_threshold = 0.9;",
+        "TrackerAddOn.cpp:99 snooze(1500000) // 1.5s",
+        "Config.cpp:961 cfg.context_window = 100000",
+        "rag.cpp:157 top_k default 10"
+      ],
+      "recommendation": "Centralize in Constants.h with documentation. Make configurable via Config with validation ranges. Add unit tests for boundary conditions."
+    }
+  ],
+  "hypothetical_findings": [
+    {
+      "id": "H1",
+      "category": "scalability",
+      "title": "RAG/Wiki global state will bottleneck at >10k entries",
+      "description": "Current O(N) scoring loop in RagQuery() and WikiSearch() locks mutex for entire iteration. At 10k entries with 50 queries/sec, mutex contention will serialize all requests. No pagination, no incremental index updates.",
+      "likelihood": "high",
+      "impact": "medium",
+      "mitigation": "Shard index by class/topic. Use read-write lock. Add background indexer with versioned snapshots. Consider SQLite FTS5 or Tantivy for full-text search."
+    },
+    {
+      "id": "H2",
+      "category": "reliability",
+      "title": "System One fallback responses mask upstream failures",
+      "description": "systemone_server.cpp:154, 168, 186, 200 return hardcoded fallbacks (\"label: first_category\", \"supported: true\"). If kev server is down, agent gets plausible but wrong decisions. No circuit breaker, no alerting.",
+      "likelihood": "high",
+      "impact": "high",
+      "mitigation": "Return explicit error status. Add circuit breaker (fail fast after N errors). Surface \"decision model unavailable\" to agent. Add health check endpoint."
+    },
+    {
+      "id": "H3",
+      "category": "security",
+      "title": "Workspace trust prompt can be bypassed via Tracker add-on",
+      "description": "TrackerAddOn.cpp:91-100 launches Pluto with --workspace, waits 1.5s, then sends B_REFS_RECEIVED. If Pluto shows trust dialog, the message may be delivered before user responds. No synchronization.",
+      "likelihood": "medium",
+      "impact": "medium",
+      "mitigation": "Add handshake: Tracker add-on polls for window readiness via BMessenger. Or queue messages in App until trust resolved. Add timeout with user notification."
+    },
+    {
+      "id": "H4",
+      "category": "maintainability",
+      "title": "Provider abstraction leaks Anthropic-specific concepts (cache_control, tool_use blocks)",
+      "description": "Provider.h:304 CompletionRequest has use_cache, system prompt caching. Anthropic.cpp:58-68 builds cache_control. OpenAICompat.cpp:60-72 has reasoning model special case. Provider interface assumes Anthropic streaming format.",
+      "likelihood": "high",
+      "impact": "medium",
+      "mitigation": "Define provider capabilities explicitly (supports_cache_control, supports_reasoning_tokens, streaming_format). Move format-specific logic to adapters. Add Provider::translate_request()/translate_response()."
+    },
+    {
+      "id": "H5",
+      "category": "operations",
+      "title": "No structured logging / observability for production debugging",
+      "description": "All logging is fprintf(stderr, ...) with ad-hoc format. No log levels, no correlation IDs, no JSON output. Cannot aggregate in Loki/Datadog. Telemetry only captures token counts, not errors/latency.",
+      "likelihood": "certain",
+      "impact": "medium",
+      "mitigation": "Add log.hpp with levels (trace/debug/info/warn/error), structured fields, JSON formatter. Integrate with Haiku syslog. Add request-ID propagation through agent loop, providers, MCP."
+    }
+  ],
+  "top_5_concerns": [
+    {
+      "rank": 1,
+      "title": "MainWindow.cpp God Class (4818 lines)",
+      "reason": "Single point of failure for all GUI changes. Any refactor touches chat, tools, sessions, settings, routines, wiki, telemetry. Onboarding new devs takes weeks. Bug fix in slash commands breaks image rendering."
+    },
+    {
+      "rank": 2,
+      "title": "Config Sprawl (1200+ lines, 40+ fields, no validation)",
+      "reason": "Configuration is the API surface for users and providers. Current design couples file format, env resolution, provider detection, OAuth, and UI prefs. Migration risk on every release. No schema = silent failures."
+    },
+    {
+      "rank": 3,
+      "title": "System One JSON Parsing via String Manipulation",
+      "reason": "Core decision delegation path uses fragile extract_str(). One malformed response breaks all 9 tools. No schema validation. Security risk if kev server returns crafted payload."
+    },
+    {
+      "rank": 4,
+      "title": "No Test Framework / CI Integration",
+      "reason": "28 test binaries run sequentially, stop on first failure, no coverage, no parallel execution. Cannot gate merges. Refactoring MainWindow or Config is terrifying without regression safety net."
+    },
+    {
+      "rank": 5,
+      "title": "Platform Coupling via #ifdef __HAIKU__",
+      "reason": "Business logic (sessions, RAG, routines) depends on Haiku APIs. Cannot unit test on Linux/macOS CI. Mock stubs return empty/false - tests exercise happy path only. Blocks contributor growth."
+    }
+  ],
+  "architecture_smells": [
+    {
+      "name": "God Class",
+      "locations": ["src/gui/MainWindow.cpp"],
+      "description": "4818 lines handling 15+ distinct responsibilities. Violates SRP, high coupling, low cohesion."
+    },
+    {
+      "name": "Primitive Obsession",
+      "locations": ["src/config.h", "src/config.cpp", "src/agent/Loop.h", "src/provider/Provider.h"],
+      "description": "Config uses raw strings/ints for typed concepts (ModelId, TokenCount, Temperature, URL, FilePath). No validation at boundaries."
+    },
+    {
+      "name": "Global Mutable State",
+      "locations": ["src/rag.cpp", "src/wiki.cpp", "src/telemetry.cpp"],
+      "description": "Module-level globals with coarse mutex. Prevents parallelism, complicates testing, hides dependencies."
+    },
+    {
+      "name": "Leaky Abstraction",
+      "locations": ["src/provider/Provider.h", "src/provider/Anthropic.cpp", "src/provider/OpenAICompat.cpp"],
+      "description": "Provider interface assumes Anthropic streaming format and caching concepts. OpenAICompat must translate both ways."
+    },
+    {
+      "name": "Callback Hell",
+      "locations": ["src/agent/Loop.h", "src/agent/Loop.cpp", "src/gui/MainWindow.cpp", "src/repl.cpp"],
+      "description": "UiCallbacks with 12 std::function members. Each UI implements all. Hard to mock, test, or extend."
+    },
+    {
+      "name": "Hardcoded Configuration",
+      "locations": ["src/agent/Loop.h:131", "src/haiku/TrackerAddOn.cpp:99", "src/config.cpp:961", "src/mcp/systemone_server.cpp:92-95"],
+      "description": "Magic numbers (0.9, 1.5s, 100000, localhost:8080) scattered. No central constants, no runtime configurability."
+    },
+    {
+      "name": "Duplicate Logic",
+      "locations": ["src/telemetry.cpp:41", "src/provider/Anthropic.cpp:518", "src/provider/OpenAICompat.cpp:603"],
+      "description": "Cost estimation implemented 3 times with diverging pricing tables. Maintenance burden, inconsistency risk."
+    },
+    {
+      "name": "Stringly-Typed Interfaces",
+      "locations": ["src/tools/Tool.h:54", "src/systemone/SystemOneClient.cpp:243", "src/mcp/Config.h"],
+      "description": "Tool schemas, MCP specs, System One requests as raw JSON strings. No compile-time checking, runtime parse errors."
+    }
+  ],
+  "praise": [
+    {
+      "category": "architecture",
+      "title": "UI-agnostic agent loop with clean callback abstraction",
+      "description": "Loop.cpp/Loop.h cleanly separates agent reasoning (RunTurn, compaction, tool execution) from UI concerns via UiCallbacks. CLI, GUI, and headless modes share 100% of core logic. Rare discipline."
+    },
+    {
+      "category": "architecture",
+      "title": "Provider abstraction enables multi-vendor support",
+      "description": "Provider.h interface + AnthropicProvider + OpenAICompatProvider supports Anthropic, OpenAI, Ollama, LM Studio, OpenRouter, Groq, Gemini, DeepSeek, Grok with streaming, tools, vision, reasoning. Factory pattern in ProviderConfigFactory is clean."
+    },
+    {
+      "category": "innovation",
+      "title": "System One delegation architecture (5-10x token savings)",
+      "description": "Offloading classification/verification/triage/guard to specialized decision model (Laya/kev) via MCP tools is brilliant. Main agent stays focused on coding; System One handles routing/safety at fraction of token cost. 9 tools cover full decision pipeline."
+    },
+    {
+      "category": "platform",
+      "title": "Deep Haiku integration (BFS attributes, Tracker add-on, launch_daemon, node_monitor)",
+      "description": "Sessions as JSONL + BFS attrs (pluto:title, pluto:model, pluto:tags) makes them first-class Tracker objects. Tracker add-on delivers refs via BMessenger. Routines/schedules use launch_daemon jobs. Node monitor for file watching. Native feel."
+    },
+    {
+      "category": "engineering",
+      "title": "Custom JSON parser (json.h/cpp) with full Unicode/surrogate support",
+      "description": "Zero-dependency JSON implementation handles BMP, surrogate pairs, deep nesting limits (256), strict parsing. Test coverage in test_json.cpp includes edge cases. Avoids nlohmann/json dependency."
+    },
+    {
+      "category": "engineering",
+      "title": "Auto-compact at 90% context with token-aware pruning",
+      "description": "Loop.cpp:estimate_tokens, first_round_end, prune_to_fit implement intelligent context management. Preserves system prompt, first user turn, recent tool results. Triggers automatically, manual /compact available. Token counters per tab in GUI."
+    },
+    {
+      "category": "security",
+      "title": "Atomic API key writes + config sanitization + SSRF awareness",
+      "description": "config.cpp writes API keys via temp file + rename (atomic). Sanitizes newlines in config values. SSE transport validates hostname. OAuth token refresh with fallback to API key. Per-provider key files with chmod 600."
+    },
+    {
+      "category": "tooling",
+      "title": "Comprehensive Makefile with cross-compilation, HPKG packaging, 21 test suites",
+      "description": "Makefile:387 handles 4 binaries, mock headers for macOS/Linux CI, resource compilation (rc/xres/addattr), HPKG creation, benchmark suite. Single 'make ci' runs clean build + all tests."
+    },
+    {
+      "category": "ux",
+      "title": "Slash command system with fuzzy completion popup",
+      "description": "MainWindow.cpp:221-396 implements /model, /tools, /cost, /compact, /init, /wiki, /plan, /routine, /reset, /help, /systemone plus custom commands from ~/.config/settings/pluto/commands/*.md. Floating BWindow popup with grouping, keyboard nav."
+    }
+  ],
+  "veteran_quotes": [
+    {
+      "author": "Engine Lead (22 yrs, shipped 3 engines)",
+      "quote": "MainWindow.cpp is the largest single file I've seen in a production codebase since 2008. It's not 'big' - it's a liability. Split it or the next feature freeze will be a rewrite."
+    },
+    {
+      "author": "Tools Programmer (18 yrs, build systems)",
+      "quote": "The Makefile is genuinely impressive - cross-compilation with mock headers, resource compilation, HPKG packaging, all in 387 lines of readable make. Most studios would have 5 CMakeLists.txt files and a Python wrapper."
+    },
+    {
+      "author": "Gameplay Engineer (15 yrs, AI systems)",
+      "quote": "System One delegation is the kind of architecture we dream about: offload expensive classification to a cheap specialist model. 5-10x token savings on routing/guard tasks? That's not optimization - that's a force multiplier."
+    },
+    {
+      "author": "Platform Engineer (20 yrs, console/OS)",
+      "quote": "BFS attributes on session files + Tracker Find integration? That's Haiku-native thinking. Most ports just shove JSON in ~/.config and call it a day. This feels like it grew on the OS."
+    },
+    {
+      "author": "Senior Dev (25 yrs, networking)",
+      "quote": "SSE SSRF protection that only validates the initial hostname? That's a CVE waiting for a redirect. curl follows 302s by default. Pin the CA, limit redirects, validate each hop. Don't ask - fix."
+    },
+    {
+      "author": "QA Lead (17 yrs, test infrastructure)",
+      "quote": "28 test binaries, no framework, sequential execution, printf assertions. I've seen better test infrastructure in game jams. Adopt Catch2 today. Your refactor of MainWindow depends on it."
+    },
+    {
+      "author": "Security Engineer (12 yrs, appsec)",
+      "quote": "API key resolution: env var > key file > legacy? That's backwards. Malicious .profile steals keys. Key file should win. And log which source was used (redacted). Defense in depth."
+    },
+    {
+      "author": "Graphics Engineer (19 yrs, UI systems)",
+      "quote": "SlashPopup with custom BListItem drawing, group separators, keyboard nav, fuzzy filter - that's 200 lines of solid UI code buried in a 4800-line file. Extract it. Reuse it. Be proud of it."
+    },
+    {
+      "author": "Backend Lead (23 yrs, distributed systems)",
+      "quote": "Global mutex protecting RAG index during O(N) scoring? At 10k docs you'll hit contention. Shard by class. Use read-write lock. Or better - move to Tantivy/SQLite FTS. Don't let the prototype become production."
+    },
+    {
+      "author": "DevOps Veteran (16 yrs, observability)",
+      "quote": "fprintf(stderr) everywhere with ad-hoc format? In 2025? Add structured logging with correlation IDs. You'll thank me when production has a 3am incident and you can actually trace the request."
+    },
+    {
+      "author": "Engine Architect (30 yrs, 5 engines)",
+      "quote": "Provider abstraction leaking Anthropic concepts (cache_control, tool_use blocks) into the base interface? That's how you get locked into one vendor's streaming format. Define capabilities explicitly. Translate at boundaries."
+    },
+    {
+      "author": "Indie Dev (15 yrs, solo projects)",
+      "quote": "Custom JSON parser with full Unicode surrogate handling and 256-depth limit? That's not NIH - that's control. nlohmann/json is 10k lines. Your json.h is 500. For a Haiku-only binary, that's the right call."
+    },
+    {
+      "author": "Toolsmith (21 yrs, developer productivity)",
+      "quote": "Routines + Schedules + Wiki as markdown with frontmatter + BFS attributes? That's a developer workspace that understands itself. The /wiki command saving to BFS-queryable files? Chef's kiss."
+    }
+  ]
+}

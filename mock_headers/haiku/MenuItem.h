@@ -3,6 +3,8 @@
 
 #include "Invoker.h"
 
+class BMenu;
+
 class BMenuItem : public BInvoker {
 public:
     BMenuItem(const char* label, BMessage* message, char shortcut = 0,
