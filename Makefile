@@ -98,44 +98,46 @@ CLI_SRCS = src/repl.cpp \
            src/cli/McpBootstrap.cpp
 
 GUI_SRCS = src/gui/main_gui.cpp \
-           src/gui/App.cpp \
-           src/gui/MainWindow.cpp \
-           src/gui/SlashCommands.cpp \
-           src/gui/SessionManager.cpp \
-           src/gui/ConversationView.cpp \
-           src/gui/ChatColors.cpp \
-           src/gui/ToolBlockManager.cpp \
-           src/gui/StreamingMarkdown.cpp \
-           src/gui/SettingsDialog.cpp \
-           src/gui/AgentStoreDialog.cpp \
-           src/gui/RoutineDialog.cpp \
-           src/gui/ScheduleDialog.cpp \
-           src/gui/SessionBrowser.cpp \
-           src/gui/MiniMapView.cpp \
-           src/gui/GraphView.cpp \
-           src/gui/GraphWindow.cpp \
-           src/gui/TelemetryDialog.cpp \
-           src/gui/DeskbarReplicant.cpp \
-           src/gui/textview/Bullet.cpp \
-           src/gui/textview/BulletData.cpp \
-           src/gui/textview/CharacterStyle.cpp \
-           src/gui/textview/CharacterStyleData.cpp \
-           src/gui/textview/ImageCache.cpp \
-           src/gui/textview/MarkdownParser.cpp \
-           src/gui/textview/Paragraph.cpp \
-           src/gui/textview/ParagraphLayout.cpp \
-           src/gui/textview/ParagraphStyle.cpp \
-           src/gui/textview/ParagraphStyleData.cpp \
-           src/gui/textview/StyleColoursData.cpp \
-           src/gui/textview/TextDocument.cpp \
-           src/gui/textview/TextDocumentLayout.cpp \
-           src/gui/textview/TextDocumentView.cpp \
-           src/gui/textview/TextEditor.cpp \
-           src/gui/textview/TextListener.cpp \
-           src/gui/textview/TextSelection.cpp \
-           src/gui/textview/TextSpan.cpp \
-           src/gui/textview/TextView.cpp \
-           src/gui/textview/UndoableEditListener.cpp
+            src/gui/App.cpp \
+            src/gui/MainWindow.cpp \
+            src/gui/SlashCommands.cpp \
+            src/gui/SessionManager.cpp \
+            src/gui/ConversationView.cpp \
+            src/gui/ChatColors.cpp \
+            src/gui/ToolBlockManager.cpp \
+            src/gui/StreamingMarkdown.cpp \
+            src/gui/SettingsDialog.cpp \
+            src/gui/AgentStoreDialog.cpp \
+            src/gui/RoutineDialog.cpp \
+            src/gui/ScheduleDialog.cpp \
+            src/gui/SessionBrowser.cpp \
+            src/gui/MiniMapView.cpp \
+            src/gui/GraphView.cpp \
+            src/gui/GraphWindow.cpp \
+            src/gui/TelemetryDialog.cpp \
+            src/gui/DeskbarReplicant.cpp \
+            src/gui/ColumnListView.cpp \
+            src/gui/ColumnTypes.cpp \
+            src/gui/textview/Bullet.cpp \
+            src/gui/textview/BulletData.cpp \
+            src/gui/textview/CharacterStyle.cpp \
+            src/gui/textview/CharacterStyleData.cpp \
+            src/gui/textview/ImageCache.cpp \
+            src/gui/textview/MarkdownParser.cpp \
+            src/gui/textview/Paragraph.cpp \
+            src/gui/textview/ParagraphLayout.cpp \
+            src/gui/textview/ParagraphStyle.cpp \
+            src/gui/textview/ParagraphStyleData.cpp \
+            src/gui/textview/StyleColoursData.cpp \
+            src/gui/textview/TextDocument.cpp \
+            src/gui/textview/TextDocumentLayout.cpp \
+            src/gui/textview/TextDocumentView.cpp \
+            src/gui/textview/TextEditor.cpp \
+            src/gui/textview/TextListener.cpp \
+            src/gui/textview/TextSelection.cpp \
+            src/gui/textview/TextSpan.cpp \
+            src/gui/textview/TextView.cpp \
+            src/gui/textview/UndoableEditListener.cpp
 
 # md4c is C, not C++
 MD4C_OBJ = src/gui/textview/md4c.o
