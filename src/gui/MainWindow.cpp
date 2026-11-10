@@ -26,6 +26,7 @@
 #include <Menu.h>
 #include <MenuBar.h>
 #include <MenuItem.h>
+#include <PopUpMenu.h>
 #include <Message.h>
 #include <Messenger.h>
 #include <Notification.h>
