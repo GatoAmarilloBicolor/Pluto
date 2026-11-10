@@ -83,18 +83,17 @@ void NotificationCenter::Post(const std::string& title,
     // Rate limiting + deduplication
     bigtime_t now = system_time();
     if (fLock) {
-        BLocker locker(*fLock);
-        if (locker.Lock()) {
+        if (fLock->Lock()) {
             bigtime_t elapsed = now - fLastNotificationTime;
             if (elapsed < kMinInterval &&
                 fLastTitle == title && fLastBody == body) {
-                locker.Unlock();
+                fLock->Unlock();
                 return;  // Skip duplicate within rate limit window
             }
             fLastNotificationTime = now;
             fLastTitle = title;
             fLastBody = body;
-            locker.Unlock();
+            fLock->Unlock();
         }
     }
 
