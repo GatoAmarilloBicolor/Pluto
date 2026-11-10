@@ -192,3 +192,4 @@ inline constexpr uint32 kMsgTabCtxRename       = 'tCtR';
 inline constexpr uint32 kMsgOpenNewTab         = 'plOT';  // from peer: open a new tab
 inline constexpr uint32 kMsgPlayerPlay         = 'plPP';  // mini player: play/pause
 inline constexpr uint32 kMsgPlayerStop         = 'plPS';  // mini player: stop
+inline constexpr uint32 kMsgPlayerToggle       = 'plPt';  // mini player: toggle
