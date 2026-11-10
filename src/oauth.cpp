@@ -38,6 +38,7 @@
 namespace pluto {
 
 namespace oauth_internal {
+const char* kClientId = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 
 // =============================================================================
 // Token Encryption (AES-256-GCM)
