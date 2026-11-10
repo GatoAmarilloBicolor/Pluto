@@ -116,8 +116,6 @@ GUI_SRCS = src/gui/main_gui.cpp \
             src/gui/GraphWindow.cpp \
             src/gui/TelemetryDialog.cpp \
             src/gui/DeskbarReplicant.cpp \
-            src/gui/ColumnListView.cpp \
-            src/gui/ColumnTypes.cpp \
             src/gui/textview/Bullet.cpp \
             src/gui/textview/BulletData.cpp \
             src/gui/textview/CharacterStyle.cpp \

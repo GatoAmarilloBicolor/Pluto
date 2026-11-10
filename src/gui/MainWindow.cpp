@@ -880,23 +880,20 @@ public:
 			new BMessage('filt'));
 		fFilter->SetModificationMessage(new BMessage('filt'));
 
-		fColumnList = new BColumnListView("models", 0, B_FANCY_BORDER);
-		fColumnList->AddColumn(
-			new BStringColumn("Provider", 140, 80, 300, B_TRUNCATE_END), 0);
-		fColumnList->AddColumn(
-			new BStringColumn("Model", 400, 150, 800, B_TRUNCATE_END), 1);
-		fColumnList->SetInvocationMessage(new BMessage('pick'));
-		fColumnList->SetSortingEnabled(true);
-		fColumnList->SetSortColumn(fColumnList->ColumnAt(0), true, true);
+		fList = new BListView("models", B_SINGLE_SELECTION_LIST);
+		fList->SetInvocationMessage(new BMessage('pick'));
 
 		fStatus = new BStringView("status", "Fetching models…");
 
-		fColumnList->SetExplicitMinSize(BSize(500, 300));
+		fList->SetExplicitMinSize(BSize(500, 300));
+
+		auto* scroll = new BScrollView("modelScroll", fList,
+			B_FOLLOW_ALL, false, true, B_FANCY_BORDER);
 
 		BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_SMALL_SPACING)
 			.SetInsets(B_USE_WINDOW_SPACING)
 			.Add(fFilter)
-			.Add(fColumnList, 1.0)
+			.Add(scroll, 1.0)
 			.Add(fStatus);
 
 		CenterOnScreen();
@@ -915,11 +912,11 @@ public:
 				break;
 
 			case 'pick': {
-				BRow* row = fColumnList->CurrentSelection();
-				if (!row) break;
-				auto* field = static_cast<BStringField*>(row->GetField(1));
-				if (!field) break;
-				std::string display = field->String();
+				int32 sel = fList->CurrentSelection();
+				if (sel < 0) break;
+				auto* item = static_cast<BStringItem*>(fList->ItemAt(sel));
+				if (!item) break;
+				std::string display = item->Text();
 				std::string id;
 				for (const auto& m : fAllModels) {
 					if (m.display == display) { id = m.id; break; }
@@ -954,11 +951,8 @@ private:
 		for (auto& c : query)
 			c = std::tolower(static_cast<unsigned char>(c));
 
-		BRow* r;
-		while ((r = fColumnList->RowAt((int32)0)) != nullptr) {
-			fColumnList->RemoveRow(r);
-			delete r;
-		}
+		while (fList->CountItems() > 0)
+			delete fList->RemoveItem((int32)0);
 
 		int shown = 0;
 		for (const auto& m : fAllModels) {
@@ -969,10 +963,8 @@ private:
 				if (lower.find(query) == std::string::npos)
 					continue;
 			}
-			BRow* row = new BRow();
-			row->SetField(new BStringField(m.provider.c_str()), 0);
-			row->SetField(new BStringField(m.display.c_str()), 1);
-			fColumnList->AddRow(row);
+			fList->AddItem(new BStringItem(
+				(m.provider + " — " + m.display).c_str()));
 			++shown;
 		}
 
@@ -1195,7 +1187,7 @@ private:
 	BMessenger          fTarget;
 	const Config*       fConfig;
 	BTextControl*       fFilter      = nullptr;
-	BColumnListView*    fColumnList  = nullptr;
+	BListView*          fList        = nullptr;
 	BStringView*        fStatus      = nullptr;
 	std::vector<ModelEntry> fAllModels;
 };
