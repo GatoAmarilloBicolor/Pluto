@@ -30,7 +30,9 @@ NotificationCenter::~NotificationCenter() {
 	if (fLooper) {
 		fLooper->Lock();
 		fLooper->Quit();
-		fLooper->Unlock();
+		// Do NOT call Unlock() after Quit() - the looper unlocks itself
+		// when it exits its Run() loop. Calling Unlock() here would
+		// trigger BLooper::AssertLocked() failure during shutdown.
 		delete fLooper;
 		fLooper = nullptr;
 	}
