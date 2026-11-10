@@ -163,6 +163,8 @@ SettingsDialog::SettingsDialog(BMessenger target, const Config& current)
 	for (int i = 0; i < kProfileCount; ++i) {
 		auto* msg = new BMessage(kMsgProfilePick);
 		msg->AddInt32("index", i);
+		// Also store a unique profile identifier for robust lookup
+		msg->AddString("profile_id", kProfiles[i].provider_id);
 		providerMenu->AddItem(new BMenuItem(kProfiles[i].label, msg));
 	}
 	// Append user-defined profiles after built-in ones (before "Custom").
@@ -173,6 +175,8 @@ SettingsDialog::SettingsDialog(BMessenger target, const Config& current)
 	for (size_t i = 0; i < fUserProfiles.size(); ++i) {
 		auto* msg = new BMessage(kMsgProfilePick);
 		msg->AddInt32("index", kProfileCount + static_cast<int32>(i));
+		// User profiles use a unique ID format: "user:<label>"
+		msg->AddString("profile_id", "user:" + fUserProfiles[i].label);
 		providerMenu->AddItem(new BMenuItem(
 			fUserProfiles[i].label.c_str(), msg));
 	}
@@ -195,6 +199,7 @@ SettingsDialog::SettingsDialog(BMessenger target, const Config& current)
 		existing.empty() ? "Login with Claude account"
 		                 : "Logged in \xe2\x80\x94 Re-authenticate",
 		new BMessage('plOL'));
+	fOAuthBtn->SetExplicitMinSize(BSize(180, B_SIZE_UNSET));
 	fOAuthStatus = new BStringView("oauthStatus", "");
 	if (!existing.empty()) {
 		fOAuthStatus->SetText("\xe2\x9c\x93 Logged in");
@@ -213,6 +218,7 @@ SettingsDialog::SettingsDialog(BMessenger target, const Config& current)
 
 	fFetchBtn = new BButton("fetch", "Fetch Models",
 		new BMessage(kMsgFetchModels));
+	fFetchBtn->SetExplicitMinSize(BSize(100, B_SIZE_UNSET));
 
 	// --- Tuning ---
 	fMaxTokens = new BTextControl("max_tokens", "Max tokens:",
@@ -251,6 +257,7 @@ SettingsDialog::SettingsDialog(BMessenger target, const Config& current)
 
 	fAdvancedToggle = new BButton("advanced", "Advanced \xe2\x96\xb6",
 		new BMessage(kMsgToggleAdvanced));
+	fAdvancedToggle->SetExplicitMinSize(BSize(100, B_SIZE_UNSET));
 	fAdvancedToggle->SetExplicitAlignment(
 		BAlignment(B_ALIGN_LEFT, B_ALIGN_MIDDLE));
 
@@ -275,6 +282,8 @@ SettingsDialog::SettingsDialog(BMessenger target, const Config& current)
 
 	auto* ok     = new BButton("ok",     "OK",     new BMessage(kMsgOk));
 	auto* cancel = new BButton("cancel", "Cancel", new BMessage(kMsgCancel));
+	ok->SetExplicitMinSize(BSize(80, B_SIZE_UNSET));
+	cancel->SetExplicitMinSize(BSize(80, B_SIZE_UNSET));
 
 	// --- Grouped layout (Haiku preference-panel style) ---
 
@@ -349,13 +358,30 @@ SettingsDialog::SettingsDialog(BMessenger target, const Config& current)
 	// Select matching profile and populate presets.
 	int32 idx = find_profile_for_config(current, fUserProfiles);
 	_SelectProfile(idx);
-	// Mark the provider menu item. User profiles are offset in the menu
-	// by +1 for the separator item (if any user profiles exist).
-	int32 menu_idx = idx;
-	if (idx >= kProfileCount && !fUserProfiles.empty())
-		menu_idx = idx + 1;  // account for separator
-	if (BMenuItem* item = providerMenu->ItemAt(menu_idx))
-		item->SetMarked(true);
+
+	// Mark the provider menu item by finding it via profile_id (robust against
+	// menu structure changes like separators, reordering, etc.)
+	std::string target_profile_id;
+	if (idx < kProfileCount) {
+		target_profile_id = kProfiles[idx].provider_id;
+	} else {
+		int ui = idx - kProfileCount;
+		if (ui >= 0 && ui < (int)fUserProfiles.size())
+			target_profile_id = "user:" + fUserProfiles[ui].label;
+	}
+	if (!target_profile_id.empty()) {
+		for (int32 i = 0; i < providerMenu->CountItems(); ++i) {
+			BMenuItem* item = providerMenu->ItemAt(i);
+			if (item && item->Message()) {
+				const char* pid = nullptr;
+				if (item->Message()->FindString("profile_id", &pid) == B_OK
+				    && pid && target_profile_id == pid) {
+					item->SetMarked(true);
+					break;
+				}
+			}
+		}
+	}
 
 	CenterOnScreen();
 	// Focus on the model preset menu rather than the hidden text field.
@@ -496,8 +522,28 @@ void SettingsDialog::_SaveSystemOne() {
 	fResult.systemone_jev_url = fSystemOneJevUrl->Text() ? fSystemOneJevUrl->Text() : "";
 	fResult.systemone_base_url = fSystemOneBaseUrl->Text() ? fSystemOneBaseUrl->Text() : "";
 
-	fResult.systemone_threshold = atof(fSystemOneThreshold->Text() ? fSystemOneThreshold->Text() : "0.5");
-	fResult.systemone_timeout_secs = atoi(fSystemOneTimeout->Text() ? fSystemOneTimeout->Text() : "30");
+	// Threshold with validation (0.0 - 1.0)
+	const char* threshText = fSystemOneThreshold->Text();
+	double thresh = 0.5;
+	if (threshText && *threshText) {
+		char* endptr = nullptr;
+		thresh = strtod(threshText, &endptr);
+		if (endptr == threshText || thresh < 0.0 || thresh > 1.0)
+			thresh = 0.5;  // default on error
+	}
+	fResult.systemone_threshold = thresh;
+
+	// Timeout with validation (1 - 300 seconds)
+	const char* timeoutText = fSystemOneTimeout->Text();
+	int timeout = 30;
+	if (timeoutText && *timeoutText) {
+		char* endptr = nullptr;
+		long val = strtol(timeoutText, &endptr, 10);
+		if (endptr != timeoutText && val > 0 && val <= 300)
+			timeout = static_cast<int>(val);
+	}
+	fResult.systemone_timeout_secs = timeout;
+
 	fResult.systemone_prefer_local = (fSystemOnePreferLocal->Value() == B_CONTROL_ON);
 	fResult.systemone_fallback_to_local = (fSystemOneFallbackLocal->Value() == B_CONTROL_ON);
 }
@@ -893,21 +939,46 @@ void SettingsDialog::_FetchModels() {
 		a->Go(nullptr);
 		return;
 	}
+
+	// Copy all needed data BEFORE spawning thread (thread safety)
+	std::string base_url = url_text;
+	std::string api_key_env = fApiKeyEnv->Text() ? fApiKeyEnv->Text() : "";
+
 	fFetchBtn->SetEnabled(false);
-	fFetchBtn->SetLabel("Fetching…");
+	fFetchBtn->SetLabel("Fetching\xe2\x80\xa6");
+
+	// Pass data via struct to the thread (avoids UI access from background thread)
+	struct FetchData {
+		SettingsDialog* self;
+		std::string base_url;
+		std::string api_key_env;
+	};
+	FetchData* fd = new FetchData{this, base_url, api_key_env};
+
 	thread_id tid = spawn_thread(_FetchThread, "fetch_models",
-		B_NORMAL_PRIORITY, this);
-	if (tid >= 0) resume_thread(tid);
-	else {
+		B_NORMAL_PRIORITY, fd);
+	if (tid >= 0) {
+		resume_thread(tid);
+	} else {
 		fFetchBtn->SetEnabled(true);
 		fFetchBtn->SetLabel("Fetch Models");
+		delete fd;
 	}
 }
 
 int32 SettingsDialog::_FetchThread(void* data) {
-	auto* self = static_cast<SettingsDialog*>(data);
+	// Read data from FetchData struct (passed from _FetchModels)
+	struct FetchData {
+		SettingsDialog* self;
+		std::string base_url;
+		std::string api_key_env;
+	};
+	FetchData* fd = static_cast<FetchData*>(data);
+	std::string base_url = fd->base_url;
+	std::string api_key_env = fd->api_key_env;
+	SettingsDialog* self = fd->self;
+	delete fd;
 
-	std::string base_url = self->fBaseUrl->Text() ? self->fBaseUrl->Text() : "";
 	while (!base_url.empty() && base_url.back() == '/') base_url.pop_back();
 
 	BMessage done(kMsgFetchDone);
@@ -932,11 +1003,13 @@ int32 SettingsDialog::_FetchThread(void* data) {
 	// Apply centralized TLS security with certificate pinning
 	ApplyCurlSecurityWithPinning(curl, url);
 
-	CURLcode rc = curl_easy_perform(curl);
-	long http_code = 0;
-	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+	CURLcode rc1 = curl_easy_perform(curl);
+	long http_code1 = 0;
+	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code1);
 
-	if (rc == CURLE_OK && http_code == 200) {
+	bool ollama_ok = (rc1 == CURLE_OK && http_code1 == 200);
+
+	if (ollama_ok) {
 		// Parse Ollama response.
 		try {
 			json::Value root = json::Value::parse(body);
@@ -991,10 +1064,9 @@ int32 SettingsDialog::_FetchThread(void* data) {
 	}
 
 	struct curl_slist* auth_hdrs = nullptr;
-	std::string env_name = self->fApiKeyEnv->Text() ? self->fApiKeyEnv->Text() : "";
-	if (!env_name.empty()) {
+	if (!api_key_env.empty()) {
 		pluto::Config tmp;
-		tmp.api_key_env = env_name;
+		tmp.api_key_env = api_key_env;
 		std::string key = pluto::ResolveApiKey(tmp);
 		if (!key.empty()) {
 			std::string hdr = "Authorization: Bearer " + key;
@@ -1003,21 +1075,22 @@ int32 SettingsDialog::_FetchThread(void* data) {
 		}
 	}
 
-	rc = curl_easy_perform(curl);
-	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+	CURLcode rc2 = curl_easy_perform(curl);
+	long http_code2 = 0;
+	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code2);
 	curl_slist_free_all(auth_hdrs);
 	curl_easy_cleanup(curl);
 
-	if (rc != CURLE_OK) {
+	if (rc2 != CURLE_OK) {
 		BString err;
-		err.SetToFormat("Connection failed: %s", curl_easy_strerror(rc));
+		err.SetToFormat("Connection failed: %s", curl_easy_strerror(rc2));
 		done.AddString("error", err.String());
 		BMessenger(self).SendMessage(&done);
 		return 0;
 	}
-	if (http_code != 200) {
+	if (http_code2 != 200) {
 		BString err;
-		err.SetToFormat("Server returned HTTP %ld", http_code);
+		err.SetToFormat("Server returned HTTP %ld", http_code2);
 		done.AddString("error", err.String());
 		BMessenger(self).SendMessage(&done);
 		return 0;
