@@ -27,6 +27,7 @@ namespace BLayoutBuilder {
         GroupBuilder& SetInsets(float insets) { (void)insets; return *this; }
         GroupBuilder& SetInsets(float left, float top, float right, float bottom) { (void)left; (void)top; (void)right; (void)bottom; return *this; }
         GroupBuilder& AddSplit(BView* view) { (void)view; return *this; }
+        GroupBuilder& AddSplit(int orientation, int distribution, float weight) { (void)orientation; (void)distribution; (void)weight; return *this; }
         GroupBuilder& AddGroup(int orient, float spacing = 0) { (void)orient; (void)spacing; return *this; }
         GroupBuilder& End() { return *this; }
         

@@ -13,4 +13,10 @@ public:
     static BArchivable* Instantiate(BMessage* archive) { (void)archive; return nullptr; }
 };
 
+// Global function for validating archived object instantiation
+bool validate_instantiation(BMessage* archive, const char* className) {
+    (void)archive; (void)className;
+    return true;
+}
+
 #endif

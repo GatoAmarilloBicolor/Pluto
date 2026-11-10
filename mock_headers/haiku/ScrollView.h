@@ -16,6 +16,15 @@ public:
         (void)name; (void)target; (void)resizingMode; (void)flags;
         (void)horizontal; (void)vertical; (void)border;
     }
+    
+    // Alternative constructor used by TelemetryDialog
+    BScrollView(const char* name, BView* target,
+                uint32 flags, bool horizontal, bool vertical)
+        : BView(BRect(), name, 0, flags) {
+        (void)name; (void)target; (void)flags;
+        (void)horizontal; (void)vertical;
+    }
+    
     virtual ~BScrollView() = default;
     
     virtual BView* Target() const { return nullptr; }

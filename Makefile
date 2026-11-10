@@ -149,7 +149,11 @@ GUI_OBJS  = $(GUI_SRCS:.cpp=.o)
 # Include Haiku-specific sources for cross-compilation with mock headers
 CORE_OBJS += $(HAIKU_SRCS:.cpp=.o)
 
+ifeq ($(UNAME),Haiku)
 all: Pluto_cli Pluto build-addon systemone_server
+else
+all: Pluto_cli systemone_server
+endif
 
 # Compile resource definition (icon + app metadata) - Haiku only.
 ifeq ($(UNAME),Haiku)

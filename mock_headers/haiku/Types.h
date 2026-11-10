@@ -307,6 +307,18 @@ const uint32 B_SCROLL_LOCK = 0x20;
 const uint32 B_NUM_LOCK = 0x40;
 const uint32 B_MENU_KEY = 0x80;
 
+// Mouse event masks
+const uint32 B_POINTER_EVENTS = 0x01;
+const uint32 B_NO_POINTER_HISTORY = 0x02;
+const uint32 B_KEYBOARD_EVENTS = 0x04;
+const uint32 B_TRACKING_EVENTS = 0x08;
+
+// Mouse transit constants
+const uint32 B_ENTERED_VIEW = 1;
+const uint32 B_INSIDE_VIEW = 2;
+const uint32 B_EXITED_VIEW = 3;
+const uint32 B_MOUSE_WHEEL_CHANGED = 4;
+
 // Thread priorities
 const int32 B_LOW_PRIORITY = 10;
 const int32 B_NORMAL_PRIORITY = 20;
@@ -386,6 +398,8 @@ struct BSize {
 
 const rgb_color B_TRANSPARENT_COLOR = {0, 0, 0, 0};
 
+const int B_MINI_ICON = 16;
+
 // POSIX environ
 extern char** environ;
 
@@ -454,5 +468,26 @@ extern "C" thread_id find_thread(const char* name);
 extern "C" char* getcwd(char* buf, size_t size);
 #include <sys/stat.h>
 extern "C" int stat(const char* path, struct stat* buf);
+
+// Date/Time format constants
+enum {
+    B_LONG_DATE_FORMAT = 0,
+    B_MEDIUM_DATE_FORMAT = 1,
+    B_SHORT_DATE_FORMAT = 2,
+    B_FULL_DATE_FORMAT = 3,
+};
+
+typedef enum {
+    B_LONG_TIME_FORMAT = 0,
+    B_MEDIUM_TIME_FORMAT = 1,
+    B_SHORT_TIME_FORMAT = 2,
+    B_FULL_TIME_FORMAT = 3,
+} BTimeFormatStyle;
+
+// BDateFormatStyle is same as BTimeFormatStyle in Haiku
+typedef BTimeFormatStyle BDateFormatStyle;
+
+// B_COUNT_OF macro
+#define B_COUNT_OF(x) (sizeof(x) / sizeof((x)[0]))
 
 #endif

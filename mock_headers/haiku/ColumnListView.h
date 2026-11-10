@@ -33,8 +33,8 @@ enum {
 };
 
 enum {
-    B_NAVIGABLE = 1 << 0,
-    B_NAVIGABLE_JUMP = 1 << 1
+    CLV_NAVIGABLE = 1 << 0,
+    CLV_NAVIGABLE_JUMP = 1 << 1
 };
 
 enum ColumnListViewColor {

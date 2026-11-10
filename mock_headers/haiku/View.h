@@ -28,6 +28,9 @@ public:
         : BHandler(name) {
         (void)flags;
     }
+    BView(BMessage* archive) : BHandler("archived") {
+        (void)archive;
+    }
     virtual ~BView() = default;
     
     virtual void Draw(BRect updateRect) { (void)updateRect; }
@@ -110,7 +113,9 @@ public:
     virtual float PenSize() const { return 1.0f; }
     virtual void StrokeLine(BPoint start, BPoint end) { (void)start; (void)end; }
     virtual void StrokeBezier(BPoint p1, BPoint p2, BPoint p3, BPoint p4) { (void)p1; (void)p2; (void)p3; (void)p4; }
+    virtual void StrokeBezier(const BPoint points[4]) { (void)points; }
     virtual void FillEllipse(BPoint center, float rx, float ry) { (void)center; (void)rx; (void)ry; }
+    virtual void FillEllipse(BRect rect) { (void)rect; }
     virtual void StrokeEllipse(BPoint center, float rx, float ry) { (void)center; (void)rx; (void)ry; }
     virtual void FillTriangle(BPoint p1, BPoint p2, BPoint p3) { (void)p1; (void)p2; (void)p3; }
     virtual void FillRoundRect(BRect rect, float rx, float ry) { (void)rect; (void)rx; (void)ry; }
@@ -129,8 +134,13 @@ public:
                               drawing_mode mode = B_OP_COPY, BPoint offset = BPoint()) {
         (void)message; (void)dragBitmap; (void)mode; (void)offset;
     }
+    virtual void SetMouseEventMask(uint32 mask, uint32 options = 0) { (void)mask; (void)options; }
+    virtual BView* Parent() const { return nullptr; }
+    virtual void SetToolTip(const char* tip) { (void)tip; }
+    virtual void SetTargetForItems(BHandler* target) { (void)target; }
 
     enum {
+        B_FOLLOW_NONE = 0,
         B_FOLLOW_LEFT = 1,
         B_FOLLOW_RIGHT = 2,
         B_FOLLOW_LEFT_RIGHT = B_FOLLOW_LEFT | B_FOLLOW_RIGHT,
@@ -157,5 +167,60 @@ public:
         B_PULSE_NEEDED = 64
     };
 };
+
+// Global constants (as in real Haiku headers)
+enum {
+    B_FOLLOW_LEFT_G = 1,
+    B_FOLLOW_RIGHT_G = 2,
+    B_FOLLOW_LEFT_RIGHT_G = B_FOLLOW_LEFT_G | B_FOLLOW_RIGHT_G,
+    B_FOLLOW_TOP_G = 4,
+    B_FOLLOW_BOTTOM_G = 8,
+    B_FOLLOW_H_CENTER_G = 16,
+    B_FOLLOW_V_CENTER_G = 32,
+    B_FOLLOW_ALL_G = B_FOLLOW_LEFT_G | B_FOLLOW_RIGHT_G | B_FOLLOW_TOP_G | B_FOLLOW_BOTTOM_G,
+    B_FOLLOW_ALL_SIDES_G = B_FOLLOW_ALL_G,
+    B_FOLLOW_LEFT_TOP_G = B_FOLLOW_LEFT_G | B_FOLLOW_TOP_G,
+    B_FOLLOW_RIGHT_TOP_G = B_FOLLOW_RIGHT_G | B_FOLLOW_TOP_G,
+    B_FOLLOW_LEFT_BOTTOM_G = B_FOLLOW_LEFT_G | B_FOLLOW_BOTTOM_G,
+    B_FOLLOW_RIGHT_BOTTOM_G = B_FOLLOW_RIGHT_G | B_FOLLOW_BOTTOM_G
+};
+
+enum {
+    B_WILL_DRAW_G = 1,
+    B_FRAME_EVENTS_G = 2,
+    B_NAVIGABLE_G = 4,
+    B_NAVIGABLE_JUMP_G = 8,
+    B_SUBPIXEL_PRECISE_G = 16,
+    B_FULL_UPDATE_ON_RESIZE_G = 32,
+    B_PULSE_NEEDED_G = 64
+};
+
+#define B_FOLLOW_LEFT B_FOLLOW_LEFT_G
+#define B_FOLLOW_RIGHT B_FOLLOW_RIGHT_G
+#define B_FOLLOW_LEFT_RIGHT B_FOLLOW_LEFT_RIGHT_G
+#define B_FOLLOW_TOP B_FOLLOW_TOP_G
+#define B_FOLLOW_BOTTOM B_FOLLOW_BOTTOM_G
+#define B_FOLLOW_H_CENTER B_FOLLOW_H_CENTER_G
+#define B_FOLLOW_V_CENTER B_FOLLOW_V_CENTER_G
+#define B_FOLLOW_ALL B_FOLLOW_ALL_G
+#define B_FOLLOW_ALL_SIDES B_FOLLOW_ALL_SIDES_G
+#define B_FOLLOW_LEFT_TOP B_FOLLOW_LEFT_TOP_G
+#define B_FOLLOW_RIGHT_TOP B_FOLLOW_RIGHT_TOP_G
+#define B_FOLLOW_LEFT_BOTTOM B_FOLLOW_LEFT_BOTTOM_G
+#define B_FOLLOW_RIGHT_BOTTOM B_FOLLOW_RIGHT_BOTTOM_G
+
+#define B_WILL_DRAW B_WILL_DRAW_G
+#define B_FRAME_EVENTS B_FRAME_EVENTS_G
+#define B_NAVIGABLE B_NAVIGABLE_G
+#define B_NAVIGABLE_JUMP B_NAVIGABLE_JUMP_G
+#define B_SUBPIXEL_PRECISE B_SUBPIXEL_PRECISE_G
+#define B_FULL_UPDATE_ON_RESIZE B_FULL_UPDATE_ON_RESIZE_G
+#define B_PULSE_NEEDED B_PULSE_NEEDED_G
+
+// Global validate_instantiation function
+bool validate_instantiation(BMessage* archive, const char* className) {
+    (void)archive; (void)className;
+    return true;
+}
 
 #endif

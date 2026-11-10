@@ -3,6 +3,7 @@
 
 #include "Types.h"
 #include "View.h"
+#include "List.h"
 #include <string>
 
 class BListItem {
