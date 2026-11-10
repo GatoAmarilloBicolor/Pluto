@@ -102,7 +102,7 @@ void ConversationView::AttachedToWindow() {
 		fCursorRunner = new BMessageRunner(BMessenger(this), &tick, 500000);
 	}
 	if (fDocView)
-		fDocView->BView::SetTarget(this);
+		fDocView->SetTarget(this);
 }
 
 void ConversationView::FrameResized(float w, float h) {
