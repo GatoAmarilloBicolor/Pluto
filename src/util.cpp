@@ -5,6 +5,7 @@
 
 #include <cctype>
 #include <cstdlib>
+#include <cstring>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -65,7 +66,7 @@ std::string Trim(const std::string& s) {
 PipeGuard::PipeGuard(const char* command, const char* mode)
     : fPipe(nullptr), fPid(-1) {
     // Only support "r" mode (reading from command stdout)
-    if (std::strcmp(mode, "r") != 0) return;
+    if (strcmp(mode, "r") != 0) return;
 
     // Parse command into argv
     std::vector<std::string> argv = split_command(command);
