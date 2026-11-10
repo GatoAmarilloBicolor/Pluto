@@ -145,6 +145,13 @@ bool SaveConfig(const Config& cfg);
 // but model=gpt-4.1). Also called on model switch in the GUI.
 void AutoDetectProvider(Config& cfg);
 
+// Unified provider detection from model name. Returns provider, base_url, api_key_env.
+// Used by AutoDetectProvider and can be called directly for model-based detection.
+void DetectProviderFromModel(const std::string& model,
+                              std::string& provider,
+                              std::string& base_url,
+                              std::string& api_key_env);
+
 // Create the appropriate Provider for the given config. Resolves credentials
 // (OAuth → API key) and instantiates AnthropicProvider or OpenAICompatProvider.
 // Centralised factory — use this instead of inline provider construction.

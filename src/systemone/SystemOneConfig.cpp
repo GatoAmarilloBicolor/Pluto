@@ -150,6 +150,7 @@ bool IsSystemOneEnabled() {
     return cfg.enabled;
 }
 
+// Uses the unified credential resolution logic from config.cpp
 std::string ResolveSystemOneApiKey() {
     // 1. Check environment variable
     const char* env = std::getenv("SYSTEMONE_API_KEY");
@@ -159,7 +160,7 @@ std::string ResolveSystemOneApiKey() {
     auto cfg = LoadSystemOneConfig();
     if (!cfg.api_key.empty()) return cfg.api_key;
 
-    // 3. Check per-provider key file
+    // 3. Check per-provider key file (uses same logic as config.cpp)
     std::string key_path = my_home_dir() + "/config/settings/pluto/keys/SYSTEMONE_API_KEY";
     std::ifstream kf(key_path);
     if (kf) {

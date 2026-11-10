@@ -338,48 +338,61 @@ Config LoadConfig() {
 	return cfg;
 }
 
-void AutoDetectProvider(Config& cfg) {
-	const std::string& m = cfg.model;
+// Unified provider detection based on model name.
+// Returns ProviderType and optionally sets base_url and api_key_env.
+void DetectProviderFromModel(const std::string& model, 
+                              std::string& provider, 
+                              std::string& base_url, 
+                              std::string& api_key_env) {
+	const std::string& m = model;
 
 	if (m.find('/') != std::string::npos) {
-		cfg.provider = "openai-compat";
-		cfg.base_url = "https://openrouter.ai/api";
-		cfg.api_key_env = "OPENROUTER_API_KEY";
+		provider = "openai-compat";
+		base_url = "https://openrouter.ai/api";
+		api_key_env = "OPENROUTER_API_KEY";
 		return;
 	}
 
 	if (m.find("claude") != std::string::npos) {
-		cfg.provider = "anthropic";
-		cfg.base_url.clear();
-		cfg.api_key_env = "ANTHROPIC_API_KEY";
+		provider = "anthropic";
+		base_url.clear();
+		api_key_env = "ANTHROPIC_API_KEY";
 	} else if (m.find("gpt-") != std::string::npos
 	        || m.find("dall-e") != std::string::npos
 	        || (m.size() >= 2 && m[0] == 'o' && m[1] >= '1' && m[1] <= '9')) {
-		cfg.provider = "openai-compat";
-		cfg.base_url = "https://api.openai.com";
-		cfg.api_key_env = "OPENAI_API_KEY";
+		provider = "openai-compat";
+		base_url = "https://api.openai.com";
+		api_key_env = "OPENAI_API_KEY";
 	} else if (m.find("gemini") != std::string::npos) {
-		cfg.provider = "openai-compat";
-		cfg.base_url = "https://generativelanguage.googleapis.com/v1beta/openai";
-		cfg.api_key_env = "GEMINI_API_KEY";
+		provider = "openai-compat";
+		base_url = "https://generativelanguage.googleapis.com/v1beta/openai";
+		api_key_env = "GEMINI_API_KEY";
 	} else if (m.find("grok") != std::string::npos) {
-		cfg.provider = "openai-compat";
-		cfg.base_url = "https://api.x.ai";
-		cfg.api_key_env = "XAI_API_KEY";
+		provider = "openai-compat";
+		base_url = "https://api.x.ai";
+		api_key_env = "XAI_API_KEY";
 	} else if (m.find("llama") != std::string::npos
 	        || m.find("mistral") != std::string::npos
 	        || m.find("qwen") != std::string::npos
 	        || m.find("gemma") != std::string::npos
 	        || m.find("deepseek") != std::string::npos) {
-		if (cfg.provider == "anthropic") {
-			cfg.provider = "openai-compat";
-			cfg.base_url = "http://localhost:11434";
-			cfg.api_key_env.clear();
-		} else if (cfg.provider == "openai-compat" && cfg.base_url.empty()) {
-			cfg.base_url = "http://localhost:11434";
-			cfg.api_key_env.clear();
-		}
+		provider = "openai-compat";
+		base_url = "http://localhost:11434";
+		api_key_env.clear();
+	} else {
+		// Default to anthropic
+		provider = "anthropic";
+		base_url.clear();
+		api_key_env = "ANTHROPIC_API_KEY";
 	}
+}
+
+void AutoDetectProvider(Config& cfg) {
+	std::string provider, base_url, api_key_env;
+	DetectProviderFromModel(cfg.model, provider, base_url, api_key_env);
+	cfg.provider = provider;
+	cfg.base_url = base_url;
+	cfg.api_key_env = api_key_env;
 }
 
 std::unique_ptr<Provider> CreateProvider(const Config& cfg) {
