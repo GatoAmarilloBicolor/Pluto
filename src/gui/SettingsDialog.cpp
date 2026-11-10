@@ -873,12 +873,14 @@ void SettingsDialog::MessageReceived(BMessage* msg) {
 			fOAuthBtn->SetLabel("Waiting for browser\xe2\x80\xa6");
 			fOAuthStatus->SetText("Check your browser to complete login.");
 			fOAuthStatus->SetHighColor(100, 100, 100, 255);
-			thread_id tid = spawn_thread(_OAuthThread, "oauth_login",
+			fOAuthThread = spawn_thread(_OAuthThread, "oauth_login",
 				B_NORMAL_PRIORITY, this);
-			if (tid >= 0) resume_thread(tid);
-			else {
+			if (fOAuthThread >= 0) {
+				resume_thread(fOAuthThread);
+			} else {
 				fOAuthBtn->SetEnabled(true);
 				fOAuthBtn->SetLabel("Login with Claude account");
+				fOAuthThread = -1;
 			}
 			break;
 		}
@@ -896,6 +898,8 @@ void SettingsDialog::MessageReceived(BMessage* msg) {
 				fOAuthStatus->SetText("Login failed.");
 				fOAuthStatus->SetHighColor(200, 50, 50, 255);
 			}
+			// OAuth thread has finished
+			fOAuthThread = -1;
 			break;
 		}
 
@@ -905,6 +909,11 @@ void SettingsDialog::MessageReceived(BMessage* msg) {
 }
 
 bool SettingsDialog::QuitRequested() {
+	// Wait for OAuth thread to finish if it's running, to avoid use-after-free
+	if (fOAuthThread >= 0) {
+		wait_for_thread(fOAuthThread, nullptr);
+		fOAuthThread = -1;
+	}
 	return true;
 }
 

@@ -87,6 +87,9 @@ private:
 	int32         fCurrentProfile = -1;
 	Config        fResult;
 
+	// OAuth thread tracking
+	thread_id     fOAuthThread = -1;
+
 	// User-defined provider profiles loaded from
 	// ~/config/settings/pluto/providers/*.conf
 	std::vector<UserProvider> fUserProfiles;
