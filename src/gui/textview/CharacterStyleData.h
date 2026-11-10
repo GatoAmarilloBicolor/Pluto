@@ -6,7 +6,7 @@
 #define CHARACTER_STYLE_DATA_H
 
 #include <Font.h>
-#include <Referenceable.h>
+
 #include <support/Referenceable.h>
 
 #include "StyleColoursData.h"
