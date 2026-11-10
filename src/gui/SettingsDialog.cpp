@@ -252,7 +252,7 @@ SettingsDialog::SettingsDialog(BMessenger target, const Config& current)
 	fAdvancedToggle = new BButton("advanced", "Advanced \xe2\x96\xb6",
 		new BMessage(kMsgToggleAdvanced));
 	fAdvancedToggle->SetExplicitAlignment(
-		BAlignment(BAlignment::B_ALIGN_LEFT, BAlignment::B_ALIGN_MIDDLE));
+		BAlignment(B_ALIGN_LEFT, B_ALIGN_MIDDLE));
 
 	auto* sysLabel = new BStringView("sysLabel",
 		"System prompt (prepended to memory and skills):");
