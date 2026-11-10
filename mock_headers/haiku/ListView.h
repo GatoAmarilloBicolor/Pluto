@@ -65,6 +65,7 @@ public:
     BStringItem(const char* text, uint32 level = 0, bool expanded = true) { (void)text; (void)level; (void)expanded; }
     virtual ~BStringItem() = default;
     virtual void DrawItem(BView* owner, BRect frame, bool complete = false) { (void)owner; (void)frame; (void)complete; }
+    const char* Text() const { return ""; }
 };
 
 #endif

@@ -7,7 +7,7 @@
 
 #include <Bitmap.h>
 #include <Referenceable.h>
-#include <support/Referenceable.h>
+#include <Referenceable.h>
 #include <String.h>
 
 #include <map>
