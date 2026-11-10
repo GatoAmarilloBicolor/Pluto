@@ -1,5 +1,5 @@
 #include "Builtin.h"
-#include "Tool.h"
+#include "FileToolBase.h"
 #include "../json.h"
 #include "../workspace.h"
 #include "../util.h"
@@ -51,7 +51,7 @@ static std::vector<std::string> split_command(const std::string& cmd) {
     return args;
 }
 
-class BashTool : public Tool {
+class BashTool : public FileToolBase {
 public:
     std::string name() const override { return "bash"; }
     std::string description() const override {
@@ -63,14 +63,16 @@ public:
     std::string input_schema_json() const override {
         return R"JSON({"type":"object","properties":{"command":{"type":"string","description":"Command to execute (parsed into argv, no shell)"},"timeout_secs":{"type":"integer","description":"Timeout in seconds, default 120, max 600"}},"required":["command"]})JSON";
     }
-    std::string preview(const std::string& input_json) const override {
-        try {
-            auto v = json::Value::parse(input_json);
-            std::string cmd = v.str("command");
-            if (cmd.size() > 200) { cmd.resize(197); cmd += "..."; }
-            return "bash: " + cmd;
-        } catch (...) { return Tool::preview(input_json); }
+
+protected:
+    std::string tool_name_for_preview() const override { return "bash"; }
+    std::string extract_path_for_preview(const json::Value& v) const override {
+        std::string cmd = v.str("command");
+        if (cmd.size() > 200) { cmd.resize(197); cmd += "..."; }
+        return cmd;
     }
+
+public:
     ToolResult execute(const std::string& input_json) override {
         ToolResult r;
         std::string cmd;
@@ -81,9 +83,11 @@ public:
             if (const auto* t = v.find("timeout_secs"); t && t->is_num())
                 timeout_secs = static_cast<int>(t->as_num());
         } catch (const std::exception& e) {
-            r.is_error = true; r.output = e.what(); return r;
+            set_json_error(r, e);
+            return r;
         }
-        if (cmd.empty()) { r.is_error = true; r.output = "command required"; return r; }
+        if (cmd.empty()) { set_missing_field_error(r, "command"); return r; }
+        
         // Check that cwd is within workspace.
         {
             std::string ws = WorkspaceRoot();

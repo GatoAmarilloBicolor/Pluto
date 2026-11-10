@@ -783,11 +783,10 @@ public:
 		SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 	}
 
-	~ImagePreviewView() override { delete fBitmap; }
+	~ImagePreviewView() override = default;
 
 	void SetBitmap(BBitmap* bitmap) {
-		delete fBitmap;
-		fBitmap = bitmap;
+		fBitmap.reset(bitmap);
 		if (fBitmap) {
 			BRect br = fBitmap->Bounds();
 			fImgWidth = br.Width() + 1;
@@ -808,7 +807,7 @@ public:
 	}
 
 	bool HasBitmap() const { return fBitmap != nullptr; }
-	BBitmap* Bitmap() const { return fBitmap; }
+	BBitmap* Bitmap() const { return fBitmap.get(); }
 
 	void MouseDown(BPoint where) override {
 		if (!fBitmap) return;
@@ -842,7 +841,7 @@ public:
 		float x = (bounds.Width() - w) / 2;
 		BRect dest(x, 0, x + w, h);
 		SetDrawingMode(B_OP_ALPHA);
-		DrawBitmap(fBitmap, fBitmap->Bounds(), dest);
+		DrawBitmap(fBitmap.get(), fBitmap->Bounds(), dest);
 	}
 
 private:
@@ -855,7 +854,7 @@ private:
 		menu->Go(where, true, true, true);
 	}
 
-	BBitmap* fBitmap = nullptr;
+	std::unique_ptr<BBitmap> fBitmap;
 	float fImgWidth = 0;
 	float fImgHeight = 0;
 };
@@ -1961,6 +1960,9 @@ void MainWindow::_BuildMenuBar() {
 		prevTab->SetShortcut(B_LEFT_ARROW, B_COMMAND_KEY);
 		view->AddItem(prevTab);
 	}
+	view->AddSeparatorItem();
+	view->AddItem(new BMenuItem("Audio player",
+		new BMessage(kMsgPlayerToggle)));
 	fMenuBar->AddItem(view);
 
 	BMenu* session = new BMenu("Session");
@@ -2157,7 +2159,8 @@ void MainWindow::_UpdateSidePanel(const std::string& title,
 			if (file.InitCheck() == B_OK) {
 				off_t sz = 0;
 				file.GetSize(&sz);
-				if (sz > 0 && sz < 20 * 1024 * 1024) {
+				static const off_t kMaxImageSize = 20 * 1024 * 1024;
+				if (sz > 0 && sz < kMaxImageSize) {
 					BMallocIO memIO;
 					memIO.SetSize(sz);
 					ssize_t bytesRead = file.Read(
@@ -2850,6 +2853,16 @@ void MainWindow::MessageReceived(BMessage* msg) {
 			// We can't stop an external player, but we can hide our bar.
 			fPlayerBar->Hide();
 			fPlayerPath.clear();
+			break;
+		}
+
+		case kMsgPlayerToggle: {
+			// Toggle the audio player bar visibility.
+			if (fPlayerBar->IsHidden())
+				fPlayerBar->Show();
+			else
+				fPlayerBar->Hide();
+			InvalidateLayout();
 			break;
 		}
 
@@ -4496,8 +4509,9 @@ void MainWindow::_AttachFileToInput(const std::string& path) {
 void MainWindow::_AttachImageToInput(const std::string& path,
                                      const std::string& media_type) {
 	// Read binary data and encode as base64.
+	static const off_t kMaxImageSize = 20 * 1024 * 1024;
 	struct stat st;
-	if (stat(path.c_str(), &st) != 0 || st.st_size > 20 * 1024 * 1024) {
+	if (stat(path.c_str(), &st) != 0 || st.st_size > kMaxImageSize) {
 		_Append("Image too large or unreadable: " + path + "\n", rgb_color{245, 101, 101, 255});
 		return;
 	}
@@ -4701,8 +4715,9 @@ static std::string _ProbeMediaInfo(const std::string& path,
 void MainWindow::_AttachMediaToInput(const std::string& path,
                                      const std::string& format,
                                      const std::string& kind) {
+	static const off_t kMaxImageSize = 20 * 1024 * 1024;
 	struct stat st;
-	if (stat(path.c_str(), &st) != 0 || st.st_size > 20 * 1024 * 1024) {
+	if (stat(path.c_str(), &st) != 0 || st.st_size > kMaxImageSize) {
 		_Append("File too large or unreadable: " + path + "\n", rgb_color{245, 101, 101, 255});
 		return;
 	}

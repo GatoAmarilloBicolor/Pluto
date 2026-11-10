@@ -7,6 +7,7 @@
 #include <Notification.h>
 #include <String.h>
 #include <stdio.h>
+#include <memory>
 #endif
 
 #include <cstdio>

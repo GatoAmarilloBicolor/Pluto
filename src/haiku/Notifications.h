@@ -12,6 +12,7 @@
 #include <Looper.h>
 #include <Message.h>
 #include <Locker.h>
+#include <memory>
 #endif
 
 namespace pluto {

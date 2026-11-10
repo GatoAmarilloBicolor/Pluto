@@ -18,6 +18,8 @@
 #include <Roster.h>
 #include <String.h>
 
+#include "BQueryUtil.h"
+
 #include <vector>
 #include <string>
 #include <memory>
@@ -195,21 +197,29 @@ public:
                                    const std::vector<std::string>& volumes) const override {
         std::vector<QueryResult> results;
         
-        BVolumeRoster roster;
-        BVolume vol;
-        
         if (volumes.empty()) {
             // Query all volumes
-            while (roster.GetNextVolume(&vol) == B_OK) {
-                if (!vol.IsPersistent() || vol.IsReadOnly()) continue;
-                query_volume(vol, predicate, results);
-            }
+            bquery::for_each_volume([&](const BVolume& vol) {
+                bquery::query_volume(vol, predicate, [&](const std::string& path, const BEntry& entry) {
+                    QueryResult qr;
+                    qr.path = path;
+                    BNode node(&entry);
+                    qr.attrs = bquery::read_string_attrs(node);
+                    results.push_back(std::move(qr));
+                });
+                return true;
+            });
         } else {
-            for (const auto& v : volumes) {
-                if (roster.GetVolume(v.c_str(), &vol) == B_OK) {
-                    query_volume(vol, predicate, results);
-                }
-            }
+            bquery::for_each_volume(volumes, [&](const BVolume& vol) {
+                bquery::query_volume(vol, predicate, [&](const std::string& path, const BEntry& entry) {
+                    QueryResult qr;
+                    qr.path = path;
+                    BNode node(&entry);
+                    qr.attrs = bquery::read_string_attrs(node);
+                    results.push_back(std::move(qr));
+                });
+                return true;
+            });
         }
         return results;
     }
@@ -367,19 +377,16 @@ public:
         
         // Build BQuery predicate from query string
         std::string predicate = build_predicate(query);
-        
-        BVolumeRoster roster;
-        BVolume vol;
         int count = 0;
         
-        while (roster.GetNextVolume(&vol) == B_OK && count < max_results) {
-            if (!vol.IsPersistent() || vol.IsReadOnly()) continue;
+        bquery::for_each_volume([&](const BVolume& vol) {
+            if (count >= max_results) return false;
             
             BQuery bquery;
             bquery.SetVolume(&vol);
             bquery.SetPredicate(predicate.c_str());
             
-            if (bquery.Fetch() != B_OK) continue;
+            if (bquery.Fetch() != B_OK) return true;
             
             BEntry entry;
             while (bquery.GetNextEntry(&entry) == B_OK && count < max_results) {
@@ -389,15 +396,7 @@ public:
                 sr.name = path.Leaf();
                 
                 BNode node(&entry);
-                char attrName[B_ATTR_NAME_LENGTH];
-                while (node.GetNextAttrName(attrName) == B_OK) {
-                    attr_info info;
-                    if (node.GetAttrInfo(attrName, &info) == B_OK && info.type == B_STRING_TYPE) {
-                        std::string value(info.size, '\0');
-                        node.ReadAttr(attrName, info.type, 0, &value[0], info.size);
-                        sr.attrs[attrName] = value;
-                    }
-                }
+                sr.attrs = bquery::read_string_attrs(node);
                 
                 // Generate snippet from attrs
                 sr.snippet = generate_snippet(sr.attrs, query);
@@ -406,7 +405,8 @@ public:
                 results.push_back(sr);
                 count++;
             }
-        }
+            return true;
+        });
         
         // Sort by score
         std::sort(results.begin(), results.end(), 

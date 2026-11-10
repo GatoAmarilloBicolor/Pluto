@@ -78,7 +78,8 @@ CORE_SRCS = src/lsp/LspClient.cpp \
             src/mcp/SseTransport.cpp \
             src/provider/Anthropic.cpp \
             src/provider/OpenAICompat.cpp \
-            src/provider/Provider.cpp
+            src/provider/Provider.cpp \
+            src/provider/StreamClient.cpp
 
 # Haiku-specific sources (only on Haiku)
 HAIKU_SRCS = src/haiku/BfsTools.cpp \
@@ -87,6 +88,7 @@ HAIKU_SRCS = src/haiku/BfsTools.cpp \
              src/haiku/Notifications.cpp \
              src/haiku/ModelCaps.cpp \
              src/haiku/AsyncStream.cpp \
+             src/haiku/BQueryUtil.cpp \
              src/ipc/PlutoMessenger.cpp \
              src/oauth.cpp
 
