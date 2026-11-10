@@ -903,7 +903,12 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 					+ graph.Summary()
 					+ "\nAnswer this question about the codebase:\n"
 					+ question;
-				messages.push_back({"user", {{ContentBlock::TEXT, prompt}}});
+				ContentBlock block;
+				block.type = ContentBlock::TEXT;
+				block.text = prompt;
+				block.tool_index = -1;
+				block.is_error = false;
+				messages.push_back({"user", {block}});
 				// Fall through to the agent loop (don't continue).
 			} else {
 				// /map — scan and build graph (with live progress)
@@ -930,7 +935,12 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 					+ "\nWrite a brief GRAPH_REPORT.md summarizing the architecture: "
 					"key modules, most connected components, potential issues, "
 					"and suggested areas to explore. Be concise.";
-				messages.push_back({"user", {{ContentBlock::TEXT, prompt}}});
+				ContentBlock block;
+				block.type = ContentBlock::TEXT;
+				block.text = prompt;
+				block.tool_index = -1;
+				block.is_error = false;
+				messages.push_back({"user", {block}});
 				// Fall through to agent loop.
 			}
 		}
