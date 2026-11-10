@@ -4,8 +4,9 @@
 #include "Handler.h"
 #include "Message.h"
 
-class BInvoker {
+class BInvoker : public BHandler {
 public:
+    BInvoker() = default;
     BInvoker(BMessage* message, BHandler* target) {
         (void)message; (void)target;
     }

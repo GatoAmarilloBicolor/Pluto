@@ -6,6 +6,12 @@
 #include "List.h"
 #include <string>
 
+// Global enum (matches real Haiku API)
+enum list_type {
+    B_SINGLE_SELECTION_LIST = 0,
+    B_MULTIPLE_SELECTION_LIST = 1
+};
+
 class BListItem {
 public:
     BListItem() = default;
@@ -24,11 +30,6 @@ public:
 
 class BListView : public BView {
 public:
-    enum list_type {
-        B_SINGLE_SELECTION_LIST = 0,
-        B_MULTIPLE_SELECTION_LIST = 1
-    };
-    
     BListView(const char* name, list_type type = B_SINGLE_SELECTION_LIST)
         : BView(BRect(), name, B_FOLLOW_LEFT | B_FOLLOW_TOP, B_WILL_DRAW | B_FRAME_EVENTS | B_NAVIGABLE) {}
     virtual ~BListView() = default;
@@ -52,7 +53,7 @@ public:
 
 class BOutlineListView : public BListView {
 public:
-    BOutlineListView(const char* name) : BListView(name) {}
+    BOutlineListView(const char* name) : BListView(name, B_SINGLE_SELECTION_LIST) {}
     virtual ~BOutlineListView() = default;
     virtual void AddItem(BListItem* item, BListItem* superItem, bool expanded = true) { (void)item; (void)superItem; (void)expanded; }
     virtual BListItem* RemoveItem(BListItem* item) { (void)item; return nullptr; }

@@ -3,6 +3,7 @@
 
 #include "Types.h"
 #include "Handler.h"
+#include "Invoker.h"
 #include "Rect.h"
 #include "Message.h"
 #include "InterfaceDefs.h"
@@ -18,17 +19,17 @@ public:
 class BBitmap;  // forward declaration
 class BWindow;  // forward declaration
 
-class BView : public virtual BHandler {
+class BView : public virtual BInvoker {
 public:
     BView(BRect frame, const char* name, uint32 resizingMode, uint32 flags)
-        : BHandler(name) {
-        (void)frame; (void)resizingMode; (void)flags;
+        : BInvoker() {
+        (void)frame; (void)name; (void)resizingMode; (void)flags;
     }
     BView(const char* name, uint32 flags)
-        : BHandler(name) {
-        (void)flags;
+        : BInvoker() {
+        (void)name; (void)flags;
     }
-    BView(BMessage* archive) : BHandler("archived") {
+    BView(BMessage* archive) : BInvoker() {
         (void)archive;
     }
     virtual ~BView() = default;

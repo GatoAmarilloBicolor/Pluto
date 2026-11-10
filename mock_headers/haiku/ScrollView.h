@@ -27,7 +27,6 @@ public:
     
     virtual ~BScrollView() = default;
     
-    virtual BView* Target() const { return nullptr; }
     virtual void SetTarget(BView* target) { (void)target; }
     
     virtual BScrollBar* ScrollBar(int orientation) const { (void)orientation; return nullptr; }
