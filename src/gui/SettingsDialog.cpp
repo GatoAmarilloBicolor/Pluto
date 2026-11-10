@@ -176,7 +176,8 @@ SettingsDialog::SettingsDialog(BMessenger target, const Config& current)
 		auto* msg = new BMessage(kMsgProfilePick);
 		msg->AddInt32("index", kProfileCount + static_cast<int32>(i));
 		// User profiles use a unique ID format: "user:<label>"
-		msg->AddString("profile_id", "user:" + fUserProfiles[i].label);
+		std::string profileId = "user:" + fUserProfiles[i].label;
+		msg->AddString("profile_id", profileId.c_str());
 		providerMenu->AddItem(new BMenuItem(
 			fUserProfiles[i].label.c_str(), msg));
 	}

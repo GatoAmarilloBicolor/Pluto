@@ -16,9 +16,7 @@ inline status_t snooze(bigtime_t usecs) {
     return B_OK;
 }
 
-inline bigtime_t system_time() {
-    return 0;
-}
+
 
 inline bigtime_t real_time_clock() {
     return 0;

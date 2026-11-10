@@ -6,6 +6,7 @@
 #include <Application.h>
 #include <Notification.h>
 #include <String.h>
+#include <stdio.h>
 #endif
 
 #include <cstdio>
@@ -16,65 +17,103 @@ namespace pluto {
 
 void Notify(const std::string& title, const std::string& body,
             const std::string& /*icon*/) {
-	BNotification notification(B_INFORMATION_NOTIFICATION);
-	notification.SetTitle(title.c_str());
-	notification.SetContent(body.c_str());
-	notification.Send();
+    // Note: BNotification::SetIcon() only accepts BBitmap*, not a string path.
+    // For cross-compilation, we ignore the icon parameter.
+    BNotification notification(B_INFORMATION_NOTIFICATION);
+    notification.SetTitle(title.c_str());
+    notification.SetContent(body.c_str());
+    status_t err = notification.Send();
+    if (err != B_OK) {
+        fprintf(stderr, "[pluto] notification send failed: %s\n", strerror(err));
+    }
+}
+
+NotificationCenter::NotificationLooper::NotificationLooper()
+    : BLooper("pluto-notifications") {
+    Run();
+}
+
+void NotificationCenter::NotificationLooper::MessageReceived(BMessage* msg) {
+    if (msg->what == static_cast<uint32>(1)) {
+        BString title, body;
+        msg->FindString("title", &title);
+        msg->FindString("body", &body);
+
+        BNotification notification(B_INFORMATION_NOTIFICATION);
+        notification.SetTitle(title);
+        notification.SetContent(body);
+        // Note: icon parameter is ignored since BNotification::SetIcon() requires BBitmap*
+        status_t err = notification.Send();
+        if (err != B_OK) {
+            fprintf(stderr, "[pluto] notification send failed: %s\n", strerror(err));
+        }
+    } else {
+        BLooper::MessageReceived(msg);
+    }
 }
 
 NotificationCenter::NotificationCenter() {
-	fLooper = new NotificationLooper();
+    fLooper.store(new NotificationLooper(), std::memory_order_release);
 }
 
 NotificationCenter::~NotificationCenter() {
-	if (fLooper) {
-		fLooper->Lock();
-		fLooper->Quit();
-		// Do NOT call Unlock() after Quit() - the looper unlocks itself
-		// when it exits its Run() loop. Calling Unlock() here would
-		// trigger BLooper::AssertLocked() failure during shutdown.
-		delete fLooper;
-		fLooper = nullptr;
-	}
+    Shutdown();
+}
+
+void NotificationCenter::Shutdown() {
+    NotificationLooper* looper = fLooper.exchange(nullptr, std::memory_order_acq_rel);
+    if (looper) {
+        // Quit the looper and wait for thread to finish
+        looper->Lock();
+        looper->Quit();
+        // Wait for the looper thread to finish (it will unlock itself when exiting Run())
+        // We don't call Unlock() here - the looper unlocks itself when exiting Run()
+        delete looper;
+    }
 }
 
 void NotificationCenter::Post(const std::string& title,
                                const std::string& body,
-                               const std::string& icon) {
-	if (!fLooper) return;
+                               const std::string& /*icon*/) {
+    NotificationLooper* looper = fLooper.load(std::memory_order_acquire);
+    if (!looper) return;
 
-	BMessage msg(static_cast<uint32>(1));
-	msg.AddString("title", title.c_str());
-	msg.AddString("body", body.c_str());
-	if (!icon.empty()) msg.AddString("icon", icon.c_str());
+    // Rate limiting + deduplication
+    bigtime_t now = system_time();
+    {
+        BLocker locker(fLock);
+        if (locker.Lock()) {
+            bigtime_t elapsed = now - fLastNotificationTime;
+            if (elapsed < kMinInterval &&
+                fLastTitle == title && fLastBody == body) {
+                locker.Unlock();
+                return;  // Skip duplicate within rate limit window
+            }
+            fLastNotificationTime = now;
+            fLastTitle = title;
+            fLastBody = body;
+            locker.Unlock();
+        }
+    }
 
-	fLooper->PostMessage(&msg);
-}
+    BMessage msg(static_cast<uint32>(1));
+    msg.AddString("title", title.c_str());
+    msg.AddString("body", body.c_str());
+    // Note: icon parameter is not passed since BNotification::SetIcon() requires BBitmap*
 
-void NotificationCenter::NotificationLooper::MessageReceived(BMessage* msg) {
-	if (msg->what == static_cast<uint32>(1)) {
-		BString title, body;
-		msg->FindString("title", &title);
-		msg->FindString("body", &body);
-
-		BNotification notification(B_INFORMATION_NOTIFICATION);
-		notification.SetTitle(title);
-		notification.SetContent(body);
-		notification.Send();
-	} else {
-		BLooper::MessageReceived(msg);
-	}
+    looper->PostMessage(&msg);
 }
 
 #else  // __HAIKU__
 
 void Notify(const std::string& /*title*/, const std::string& /*body*/,
             const std::string& /*icon*/) {
-	// No-op on non-Haiku platforms.
+    // No-op on non-Haiku platforms.
 }
 
 NotificationCenter::NotificationCenter() {}
 NotificationCenter::~NotificationCenter() {}
+void NotificationCenter::Shutdown() {}
 void NotificationCenter::Post(const std::string&, const std::string&,
                               const std::string&) {}
 

@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/time.h>
 #include <initializer_list>
 #include <algorithm>
 #include <vector>
@@ -189,7 +190,7 @@ typedef enum {
 	B_DOCUMENT_TEXT_COLOR = 5,
 	B_CONTROL_BACKGROUND_COLOR = 6,
 	B_CONTROL_TEXT_COLOR = 7,
-	B_CONTROL_HIGHLIGHT_COLOR = 8,
+	B_CONTROL_HIGHLIGHT_COLOR = 7,
 	B_NAVIGATION_BASE_COLOR = 9,
 	B_NAVIGATION_PULSE_COLOR = 10,
 	B_KEYBOARD_NAVIGATION_COLOR = 11,
@@ -219,6 +220,13 @@ typedef enum {
 // Allow implicit conversion from rgb_color to color_which for ui_color()
 inline color_which operator+(color_which lhs, const rgb_color& rhs) { (void)rhs; return lhs; }
 inline color_which operator+(const rgb_color& lhs, color_which rhs) { (void)lhs; return rhs; }
+
+// system_time() for cross-compilation
+inline bigtime_t system_time() {
+    struct timeval tv;
+    gettimeofday(&tv, nullptr);
+    return static_cast<bigtime_t>(tv.tv_sec) * 1000000LL + tv.tv_usec;
+}
 
 typedef uint32_t color_space;
 

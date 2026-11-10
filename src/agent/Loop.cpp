@@ -15,7 +15,11 @@
 namespace pluto {
 
 #ifdef __HAIKU__
-static NotificationCenter g_notify_center;
+// Function-local static (Meyers singleton) to avoid static initialization order issues
+NotificationCenter& GetNotificationCenter() {
+    static NotificationCenter g_notify_center;
+    return g_notify_center;
+}
 #endif
 
 namespace {
@@ -538,10 +542,10 @@ void RunTurn(Provider& provider,
 					}
 				});
 			}
-			if (had_error) {
+if (had_error) {
 #ifdef __HAIKU__
-				g_notify_center.Post("Pluto — error",
-				                     "Request failed: " + cfg.model);
+			GetNotificationCenter().Post("Pluto — error",
+			                     "Request failed: " + cfg.model);
 #endif
 				messages.resize(entry_size);
 				return;
@@ -612,7 +616,7 @@ void RunTurn(Provider& provider,
 		// Loop: next iteration feeds tool_results back to the model.
 	}
 #ifdef __HAIKU__
-	g_notify_center.Post("Pluto — response complete",
+	GetNotificationCenter().Post("Pluto — response complete",
 	                     "Turn finished successfully in " + cfg.model);
 #endif
 }

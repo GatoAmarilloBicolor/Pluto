@@ -4,8 +4,6 @@
 #include <Application.h>
 #include <Autolock.h>
 #include <Button.h>
-#include <ColumnListView.h>
-#include <ColumnTypes.h>
 #include <Entry.h>
 #include <Font.h>
 #include <TextControl.h>
