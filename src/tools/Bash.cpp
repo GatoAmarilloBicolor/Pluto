@@ -19,38 +19,6 @@ namespace pluto {
 
 namespace {
 
-// Split command string into argv array (simple shell-like parsing)
-static std::vector<std::string> split_command(const std::string& cmd) {
-    std::vector<std::string> args;
-    std::string current;
-    bool in_single = false;
-    bool in_double = false;
-    bool escaped = false;
-    
-    for (size_t i = 0; i < cmd.size(); ++i) {
-        char c = cmd[i];
-        if (escaped) {
-            current += c;
-            escaped = false;
-        } else if (c == '\\') {
-            escaped = true;
-        } else if (c == '\'' && !in_double) {
-            in_single = !in_single;
-        } else if (c == '"' && !in_single) {
-            in_double = !in_double;
-        } else if ((c == ' ' || c == '\t') && !in_single && !in_double) {
-            if (!current.empty()) {
-                args.push_back(current);
-                current.clear();
-            }
-        } else {
-            current += c;
-        }
-    }
-    if (!current.empty()) args.push_back(current);
-    return args;
-}
-
 class BashTool : public FileToolBase {
 public:
     std::string name() const override { return "bash"; }
@@ -113,7 +81,7 @@ public:
         if (timeout_secs > 600) timeout_secs = 600;
 
         // Parse command into argv (validate - no shell metacharacters allowed in raw form)
-        auto argv = split_command(cmd);
+        auto argv = pluto::split_command(cmd);
         if (argv.empty()) { r.is_error = true; r.output = "empty command"; return r; }
         
         // Build argv with cd to workspace root
@@ -196,17 +164,6 @@ public:
             r.output += "\n[truncated]";
         }
         return r;
-    }
-
-private:
-    static std::string shq(const std::string& s) {
-        std::string out = "'";
-        for (char c : s) {
-            if (c == '\'') out += "'\\''";
-            else out += c;
-        }
-        out += "'";
-        return out;
     }
 };
 

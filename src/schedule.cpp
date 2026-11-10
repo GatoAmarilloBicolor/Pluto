@@ -34,17 +34,6 @@ std::string home_dir() {
 	return HomeDir();
 }
 
-// Shell-quote a string: wraps in single quotes, escaping embedded quotes.
-std::string shq(const std::string& s) {
-	std::string out = "'";
-	for (char c : s) {
-		if (c == '\'') out += "'\\''";
-		else out += c;
-	}
-	out += "'";
-	return out;
-}
-
 void ensure_dir(const std::string& dir) {
 	std::string acc;
 	for (size_t i = 0; i < dir.size(); ++i) {

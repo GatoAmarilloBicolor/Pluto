@@ -20,91 +20,6 @@
 
 namespace {
 
-// Execute a command with arguments via fork/execvp, capture stdout.
-// The command is executed without shell. Returns exit code, fills output.
-static int execvp_capture_output(const std::vector<std::string>& argv, std::string& output) {
-    if (argv.empty()) return -1;
-
-    int pipefd[2];
-    if (pipe(pipefd) != 0) return -1;
-
-    pid_t pid = fork();
-    if (pid < 0) {
-        close(pipefd[0]);
-        close(pipefd[1]);
-        return -1;
-    }
-
-    if (pid == 0) {
-        close(pipefd[0]);
-        dup2(pipefd[1], STDOUT_FILENO);
-        dup2(pipefd[1], STDERR_FILENO);
-        close(pipefd[1]);
-        std::vector<char*> args;
-        args.reserve(argv.size() + 1);
-        for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
-        args.push_back(nullptr);
-        execvp(args[0], args.data());
-        _exit(127);
-    }
-
-    close(pipefd[1]);
-    char buf[4096];
-    ssize_t n;
-    while ((n = read(pipefd[0], buf, sizeof(buf))) > 0) {
-        output.append(buf, n);
-    }
-    close(pipefd[0]);
-
-    int status = 0;
-    waitpid(pid, &status, 0);
-    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-}
-
-// Execute command in a specific working directory via fork/execvp.
-// Returns exit code, fills output. No shell.
-static int execvp_capture_cwd(const std::string& cwd, const std::vector<std::string>& argv, std::string& output) {
-    if (argv.empty()) return -1;
-
-    int pipefd[2];
-    if (pipe(pipefd) != 0) return -1;
-
-    pid_t pid = fork();
-    if (pid < 0) {
-        close(pipefd[0]);
-        close(pipefd[1]);
-        return -1;
-    }
-
-    if (pid == 0) {
-        if (!cwd.empty() && chdir(cwd.c_str()) != 0) {
-            _exit(127);
-        }
-        close(pipefd[0]);
-        dup2(pipefd[1], STDOUT_FILENO);
-        dup2(pipefd[1], STDERR_FILENO);
-        close(pipefd[1]);
-        std::vector<char*> args;
-        args.reserve(argv.size() + 1);
-        for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
-        args.push_back(nullptr);
-        execvp(args[0], args.data());
-        _exit(127);
-    }
-
-    close(pipefd[1]);
-    char buf[4096];
-    ssize_t n;
-    while ((n = read(pipefd[0], buf, sizeof(buf))) > 0) {
-        output.append(buf, n);
-    }
-    close(pipefd[0]);
-
-    int status = 0;
-    waitpid(pid, &status, 0);
-    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-}
-
 }  // namespace
 
 namespace pluto {
@@ -139,17 +54,6 @@ std::string trim(const std::string& s) {
 	while (b > a && (s[b - 1] == ' ' || s[b - 1] == '\t' || s[b - 1] == '\r'))
 		--b;
 	return s.substr(a, b - a);
-}
-
-// Shell-safe quoting: wraps in single quotes, escapes embedded quotes.
-std::string shq(const std::string& s) {
-	std::string out = "'";
-	for (char c : s) {
-		if (c == '\'') out += "'\\''";
-		else out += c;
-	}
-	out += "'";
-	return out;
 }
 
 // Normalize a path string by resolving . and .. components.
@@ -408,7 +312,7 @@ ProjectInfo DetectProject(const std::string& root) {
 	{
 		std::vector<std::string> argv = {"git", "remote", "get-url", "origin"};
 		std::string output;
-		if (execvp_capture_cwd(root, argv, output) == 0) {
+		if (pluto::execvp_capture_cwd(root, argv, output) == 0) {
 			// Remove trailing newlines
 			while (!output.empty() && (output.back() == '\n' || output.back() == '\r'))
 				output.pop_back();
@@ -420,7 +324,7 @@ ProjectInfo DetectProject(const std::string& root) {
 	{
 		std::vector<std::string> argv = {"find", ".", "-maxdepth", "1", "-type", "d"};
 		std::string output;
-		if (execvp_capture_cwd(root, argv, output) == 0) {
+		if (pluto::execvp_capture_cwd(root, argv, output) == 0) {
 			std::vector<std::string> dirs;
 			std::string line;
 			std::istringstream iss(output);
@@ -475,7 +379,7 @@ ProjectInfo DetectProject(const std::string& root) {
 		// Try git ls-files first, then fall back to find
 		std::vector<std::string> git_argv = {"git", "ls-files"};
 		std::string output;
-		bool used_git = (execvp_capture_cwd(root, git_argv, output) == 0);
+		bool used_git = (pluto::execvp_capture_cwd(root, git_argv, output) == 0);
 		
 		if (!used_git) {
 			std::vector<std::string> find_argv = {
@@ -487,7 +391,7 @@ ProjectInfo DetectProject(const std::string& root) {
 				"-not", "-path", "*/__pycache__/*"
 			};
 			output.clear();
-			execvp_capture_cwd(root, find_argv, output);
+			pluto::execvp_capture_cwd(root, find_argv, output);
 		}
 
 		std::string line;
@@ -606,7 +510,7 @@ ProjectInfo DetectProject(const std::string& root) {
 			// Try git ls-files first, then fall back to find
 			std::vector<std::string> git_argv = {"git", "ls-files"};
 			std::string output;
-			bool used_git = (execvp_capture_cwd(root, git_argv, output) == 0);
+			bool used_git = (pluto::execvp_capture_cwd(root, git_argv, output) == 0);
 
 			if (!used_git) {
 				std::vector<std::string> find_argv = {
@@ -615,7 +519,7 @@ ProjectInfo DetectProject(const std::string& root) {
 					"-not", "-path", "*/node_modules/*"
 				};
 				output.clear();
-				execvp_capture_cwd(root, find_argv, output);
+				pluto::execvp_capture_cwd(root, find_argv, output);
 			}
 
 			std::string line;

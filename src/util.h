@@ -69,6 +69,11 @@ private:
 	pid_t fPid;
 };
 
+// Shell-quote a string: wraps in single quotes, escaping embedded quotes.
+// Use this when constructing shell commands (e.g., for system(), popen, or
+// passing to `sh -c`). Never interpolate unquoted user data into commands.
+std::string shq(const std::string& s);
+
 // Execute a hook command safely using fork/exec (no shell injection).
 // Sets the given environment variable in the child process before exec.
 // Returns the exit code, or -1 on fork failure.
@@ -88,5 +93,9 @@ std::vector<std::string> split_command(const std::string& cmd);
 // Execute command via fork/execvp with argv array (no shell).
 // Returns exit code, or -1 on error. Captures stdout+stderr into output.
 int execvp_capture(const std::vector<std::string>& argv, std::string& output);
+
+// Execute command in a specific working directory via fork/execvp.
+// Returns exit code, fills output. No shell.
+int execvp_capture_cwd(const std::string& cwd, const std::vector<std::string>& argv, std::string& output);
 
 }  // namespace pluto

@@ -272,4 +272,60 @@ int execvp_capture(const std::vector<std::string>& argv, std::string& output) {
 	return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
+// Shell-quote a string: wraps in single quotes, escaping embedded quotes.
+// Use when constructing shell commands (for system(), popen, sh -c).
+std::string shq(const std::string& s) {
+	std::string out = "'";
+	for (char c : s) {
+		if (c == '\'') out += "'\\''";
+		else out += c;
+	}
+	out += "'";
+	return out;
+}
+
+// Execute command in a specific working directory via fork/execvp.
+// Returns exit code, fills output. No shell.
+int execvp_capture_cwd(const std::string& cwd, const std::vector<std::string>& argv, std::string& output) {
+	if (argv.empty()) return -1;
+
+	int pipefd[2];
+	if (pipe(pipefd) != 0) return -1;
+
+	pid_t pid = fork();
+	if (pid < 0) {
+		close(pipefd[0]);
+		close(pipefd[1]);
+		return -1;
+	}
+
+	if (pid == 0) {
+		if (!cwd.empty() && chdir(cwd.c_str()) != 0) {
+			_exit(127);
+		}
+		close(pipefd[0]);
+		dup2(pipefd[1], STDOUT_FILENO);
+		dup2(pipefd[1], STDERR_FILENO);
+		close(pipefd[1]);
+		std::vector<char*> args;
+		args.reserve(argv.size() + 1);
+		for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
+		args.push_back(nullptr);
+		execvp(args[0], args.data());
+		_exit(127);
+	}
+
+	close(pipefd[1]);
+	char buf[4096];
+	ssize_t n;
+	while ((n = read(pipefd[0], buf, sizeof(buf))) > 0) {
+		output.append(buf, n);
+	}
+	close(pipefd[0]);
+
+	int status = 0;
+	waitpid(pid, &status, 0);
+	return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
 } // namespace pluto

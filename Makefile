@@ -80,7 +80,6 @@ CORE_SRCS = src/lsp/LspClient.cpp \
             src/provider/Anthropic.cpp \
             src/provider/OpenAICompat.cpp \
             src/provider/Provider.cpp \
-            src/provider/StreamClient.cpp
 
 # Haiku-specific sources (only on Haiku)
 HAIKU_SRCS = src/haiku/BfsTools.cpp \

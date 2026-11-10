@@ -43,16 +43,7 @@ std::string trim(const std::string& s) {
 	return s.substr(a, b - a + 1);
 }
 
-// Shell-quote a string: wraps in single quotes, escaping embedded quotes.
-std::string shq(const std::string& s) {
-	std::string out = "'";
-	for (char c : s) {
-		if (c == '\'') out += "'\\''";
-		else out += c;
-	}
-	out += "'";
-	return out;
-}
+
 
 bool parse_fm_line(const std::string& line, std::string& key, std::string& val) {
 	size_t colon = line.find(':');
