@@ -217,10 +217,4 @@ enum {
 #define B_FULL_UPDATE_ON_RESIZE B_FULL_UPDATE_ON_RESIZE_G
 #define B_PULSE_NEEDED B_PULSE_NEEDED_G
 
-// Global validate_instantiation function
-bool validate_instantiation(BMessage* archive, const char* className) {
-    (void)archive; (void)className;
-    return true;
-}
-
 #endif

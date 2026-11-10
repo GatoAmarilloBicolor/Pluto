@@ -8,7 +8,7 @@ ifeq ($(UNAME),Haiku)
 else
     # On macOS/Linux, use mock headers for cross-compilation
     CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -O2 -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include -Imock_headers/override -idirafter mock_headers/haiku -Isrc -I/opt/homebrew/include -MMD -MP
-    LDLIBS   = -lcurl -lcrypto -ledit -Lmock_libs -lbe -lnetwork -ltranslation -ltracker -L/opt/homebrew/lib
+    LDLIBS   = -lcurl -lcrypto -ledit -Lmock_libs -lbe -lnetwork -ltranslation -ltracker -lmock_archivable -L/opt/homebrew/lib
 endif
 
 PKG_NAME    = pluto
@@ -116,8 +116,6 @@ GUI_SRCS = src/gui/main_gui.cpp \
            src/gui/GraphWindow.cpp \
            src/gui/TelemetryDialog.cpp \
            src/gui/DeskbarReplicant.cpp \
-           src/gui/ColumnListView.cpp \
-           src/gui/ColumnTypes.cpp \
            src/gui/textview/Bullet.cpp \
            src/gui/textview/BulletData.cpp \
            src/gui/textview/CharacterStyle.cpp \
