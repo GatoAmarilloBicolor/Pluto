@@ -6,7 +6,7 @@
 #define TEXT_DOCUMENT_LAYOUT_H
 
 #include <Referenceable.h>
-#include <Reference.h>
+#include <support/Referenceable.h>
 
 #include "List.h"
 #include "TextDocument.h"

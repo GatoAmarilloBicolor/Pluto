@@ -9,7 +9,7 @@
 #include "Bullet.h"
 #include "InterfaceDefs.h"
 #include "StyleColoursData.h"
-#include <Reference.h>
+#include <support/Referenceable.h>
 
 
 enum Alignment {

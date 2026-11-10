@@ -8,7 +8,7 @@
 
 #include <Point.h>
 #include <Referenceable.h>
-#include <Reference.h>
+#include <support/Referenceable.h>
 
 #include "CharacterStyle.h"
 #include "TextDocument.h"

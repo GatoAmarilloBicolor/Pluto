@@ -7,7 +7,7 @@
 
 #include <Font.h>
 #include <Referenceable.h>
-#include <Reference.h>
+#include <support/Referenceable.h>
 
 #include "StyleColoursData.h"
 
