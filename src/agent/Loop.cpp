@@ -233,19 +233,21 @@ void RunTurn(Provider& provider,
 	// leaves garbage in history that breaks subsequent requests.
 	const size_t entry_size = messages.size();
 
-	// Local context-window truncation. We use a soft cap at 80% of the
-	// configured context window, estimated cheaply from char counts.
-	// Run AFTER repair but BEFORE provider call so compact can take over
-	// at 90% with real token counts if needed.
+	// Local context-window truncation using provider's token estimator.
+	// Uses cfg.context_soft_limit (default 0.80) of context_window.
+	// Runs AFTER repair but BEFORE provider call so compact can take over
+	// at context_compact_threshold (default 0.90) with real token counts if needed.
 	if (cfg.context_window > 0) {
-		size_t target = static_cast<size_t>(cfg.context_window) * 80 / 100;
-		size_t current_tokens = estimate_tokens(messages);
-		if (current_tokens > target) {
-			int dropped = prune_to_fit(messages, target);
+		double soft_limit = cfg.context_soft_limit > 0 ? cfg.context_soft_limit : 0.80;
+		size_t target = static_cast<size_t>(cfg.context_window * soft_limit);
+		int current_tokens = estimate_tokens(provider, messages);
+		if (static_cast<size_t>(current_tokens) > target) {
+			int dropped = prune_to_fit(provider, messages, target);
 			if (dropped > 0) {
 				std::fprintf(stderr,
-					"[pluto] context window pressure: dropped %d oldest pair(s)\n",
-					dropped);
+					"[pluto] context window pressure: dropped %d oldest pair(s) "
+					"(at %.0f%% limit, est. %d tokens)\n",
+					dropped, soft_limit * 100, current_tokens);
 			}
 		}
 	}
@@ -480,6 +482,12 @@ void RunTurn(Provider& provider,
 				case StreamEvent::RETRY_INFO:
 					if (ui.on_status) ui.on_status(ev.text);
 					break;
+				case StreamEvent::USAGE:
+					// Usage info already handled in MESSAGE_END
+					break;
+				case StreamEvent::DONE:
+					// Stream complete marker
+					break;
 			}
 		});
 
@@ -625,11 +633,20 @@ bool MaybeCompact(Provider& provider,
                    const Config& cfg,
                    std::vector<Message>& messages,
                    int cumulative_input_tokens,
-                   const UiCallbacks& ui) {
+                   const UiCallbacks& ui,
+                   CompactionResult* result) {
 	if (cfg.context_window <= 0) return false;
-	int threshold = cfg.context_window * 90 / 100;
+	
+	double compact_threshold = cfg.context_compact_threshold > 0 ? cfg.context_compact_threshold : 0.90;
+	int threshold = static_cast<int>(cfg.context_window * compact_threshold);
 	if (cumulative_input_tokens < threshold) return false;
 	if (messages.size() <= 2) return false;  // nothing useful to compact
+
+	if (result) {
+		result->messages_before = static_cast<int>(messages.size());
+		result->tokens_before = cumulative_input_tokens;
+		result->model_used = cfg.summary_model.empty() ? cfg.model : cfg.summary_model;
+	}
 
 	// Find a safe split point that doesn't break tool_use/tool_result pairs.
 	// Start from the end and walk backwards to find the last complete "round":
@@ -637,6 +654,7 @@ bool MaybeCompact(Provider& provider,
 	// We keep the last complete round intact. A round ends at a user message
 	// that either has no tool_results, or is the final user turn.
 	size_t keep_from = messages.size();
+	bool found_boundary = false;
 	for (size_t i = messages.size(); i-- > 0; ) {
 		// If we hit the very last user message, we stop (keep everything from here).
 		if (messages[i].role == "user") {
@@ -647,6 +665,7 @@ bool MaybeCompact(Provider& provider,
 			if (!has_tool_result) {
 				// This user message has no tool_results - safe to keep from here.
 				keep_from = i;
+				found_boundary = true;
 				break;
 			}
 			// This user has tool_results - check if previous is assistant with tool_use.
@@ -663,6 +682,7 @@ bool MaybeCompact(Provider& provider,
 			}
 			// No matching tool_use before this tool_result - safe boundary.
 			keep_from = i;
+			found_boundary = true;
 			break;
 		}
 		// Assistant message without tool_use is a safe boundary.
@@ -672,21 +692,40 @@ bool MaybeCompact(Provider& provider,
 				if (b.type == ContentBlock::TOOL_USE) { has_tool_use = true; break; }
 			if (!has_tool_use) {
 				keep_from = i;
+				found_boundary = true;
 				break;
 			}
 			// Assistant with tool_use but no following user with tool_result
 			// (should have been repaired) - treat as boundary.
 			if (i + 1 >= messages.size() || messages[i + 1].role != "user") {
 				keep_from = i;
+				found_boundary = true;
 				break;
 			}
 			// Continue walking back.
 		}
 	}
 
+	// If no boundary found (shouldn't happen), don't compact
+	if (!found_boundary) return false;
+
 	// Ensure we keep at least the last 2 messages (final user turn + optional assistant).
-	if (keep_from < messages.size() - 2)
-		keep_from = messages.size() - 2;
+	// BUT: only if the kept portion doesn't start with an orphaned tool_use
+	if (keep_from < messages.size() - 2) {
+		// Check if messages[keep_from] is an assistant with tool_use but no following user
+		if (keep_from < messages.size() && messages[keep_from].role == "assistant") {
+			bool has_tool_use = false;
+			for (const auto& b : messages[keep_from].content)
+				if (b.type == ContentBlock::TOOL_USE) { has_tool_use = true; break; }
+			if (has_tool_use && (keep_from + 1 >= messages.size() || messages[keep_from + 1].role != "user")) {
+				// This would leave an orphaned tool_use - don't force the minimum
+			} else {
+				keep_from = messages.size() - 2;
+			}
+		} else {
+			keep_from = messages.size() - 2;
+		}
+	}
 
 	// Build the text to summarize.
 	std::string conversation_text;
@@ -701,6 +740,8 @@ bool MaybeCompact(Provider& provider,
 				std::string out = b.text;
 				if (out.size() > 200) out = out.substr(0, 200) + "...";
 				conversation_text += "(tool_result: " + out + ")\n";
+			} else if (b.type == ContentBlock::IMAGE) {
+				conversation_text += "(image: " + b.image_media_type + ")\n";
 			}
 		}
 	}
@@ -711,13 +752,21 @@ bool MaybeCompact(Provider& provider,
 
 	if (ui.on_status) ui.on_status("Compacting conversation...");
 
+	// Use summary_model if configured (e.g., smaller/faster model for compaction)
+	std::string summary_model = cfg.summary_model.empty() ? cfg.model : cfg.summary_model;
+	
+	// Use custom prompt if provided
+	std::string summary_prompt = cfg.summary_prompt.empty() 
+		? "You are a conversation summarizer. Produce a concise summary "
+		  "of the conversation below, preserving key decisions, code changes, "
+		  "file paths, and important context. Be factual and brief."
+		: cfg.summary_prompt;
+
 	// Ask the model to summarize.
 	CompletionRequest req;
-	req.model = cfg.model;
-	req.system = "You are a conversation summarizer. Produce a concise summary "
-		"of the conversation below, preserving key decisions, code changes, "
-		"file paths, and important context. Be factual and brief.";
-	req.max_tokens = 2048;
+	req.model = summary_model;
+	req.system = summary_prompt;
+	req.max_tokens = cfg.summary_max_tokens > 0 ? cfg.summary_max_tokens : 2048;
 	req.use_cache = false;
 
 	Message sum_user;
@@ -739,6 +788,10 @@ bool MaybeCompact(Provider& provider,
 
 	if (had_error || summary.empty()) return false;
 
+	if (result) {
+		result->summary_tokens = provider.estimate_tokens(summary);
+	}
+
 	// Replace old messages with a single user message containing the summary.
 	std::vector<Message> compacted;
 	Message summary_msg;
@@ -756,11 +809,27 @@ bool MaybeCompact(Provider& provider,
 
 	messages = std::move(compacted);
 
+	if (result) {
+		result->messages_after = static_cast<int>(messages.size());
+		result->tokens_after = estimate_tokens(provider, messages);
+		result->performed = true;
+	}
+
 	if (ui.on_status) {
 		ui.on_status("Compacted: " + std::to_string(keep_from)
-			+ " messages summarized");
+			+ " messages summarized, ~" + std::to_string(result ? result->tokens_before - result->tokens_after : 0)
+			+ " tokens saved");
 	}
 	return true;
+}
+
+// Backward-compatible overload
+bool MaybeCompact(Provider& provider,
+                   const Config& cfg,
+                   std::vector<Message>& messages,
+                   int cumulative_input_tokens,
+                   const UiCallbacks& ui) {
+    return MaybeCompact(provider, cfg, messages, cumulative_input_tokens, ui, nullptr);
 }
 
 }  // namespace pluto

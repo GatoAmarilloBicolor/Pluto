@@ -309,10 +309,10 @@ Config LoadConfig() {
 		if (eq == std::string::npos) continue;
 		std::string k = Trim(s.substr(0, eq));
 		std::string v = Trim(s.substr(eq + 1));
-		if      (k == "provider")     cfg.provider = v;
-		else if (k == "model")        cfg.model = v;
-		else if (k == "base_url")     cfg.base_url = v;
-		else if (k == "api_key_env")  cfg.api_key_env = v;
+		if      (k == "provider")              cfg.provider = v;
+		else if (k == "model")                 cfg.model = v;
+		else if (k == "base_url")              cfg.base_url = v;
+		else if (k == "api_key_env")           cfg.api_key_env = v;
 		else if (k == "system") {
 			cfg.system_prompt = v;
 			cfg.user_system_prompt = v;
@@ -323,17 +323,28 @@ Config LoadConfig() {
 		else if (k == "context_window") {
 			try { cfg.context_window = std::stoi(v); } catch (...) {}
 		}
-		else if (k == "cache")          cfg.cache = (v == "true" || v == "1" || v == "yes");
+		else if (k == "cache")                 cfg.cache = (v == "true" || v == "1" || v == "yes");
 		else if (k == "font_delta") {
 			try { cfg.font_delta = std::stoi(v); } catch (...) {}
 		}
 		else if (k == "max_iterations") {
 			try { cfg.max_iterations = std::stoi(v); } catch (...) {}
 		}
-		else if (k == "color_scheme")   cfg.color_scheme = v;
-		else if (k == "hook_pre_tool")    cfg.hooks_pre_tool.push_back(v);
-		else if (k == "hook_post_tool")   cfg.hooks_post_tool.push_back(v);
-		else if (k == "hook_user_prompt") cfg.hooks_user_prompt.push_back(v);
+		else if (k == "color_scheme")          cfg.color_scheme = v;
+		else if (k == "context_soft_limit") {
+			try { cfg.context_soft_limit = std::stod(v); } catch (...) {}
+		}
+		else if (k == "context_compact_threshold") {
+			try { cfg.context_compact_threshold = std::stod(v); } catch (...) {}
+		}
+		else if (k == "summary_max_tokens") {
+			try { cfg.summary_max_tokens = std::stoi(v); } catch (...) {}
+		}
+		else if (k == "summary_model")         cfg.summary_model = v;
+		else if (k == "summary_prompt")        cfg.summary_prompt = v;
+		else if (k == "hook_pre_tool")         cfg.hooks_pre_tool.push_back(v);
+		else if (k == "hook_post_tool")        cfg.hooks_post_tool.push_back(v);
+		else if (k == "hook_user_prompt")      cfg.hooks_user_prompt.push_back(v);
 	}
 	return cfg;
 }
@@ -469,26 +480,36 @@ bool SaveConfig(const Config& cfg) {
 	{
 		std::ofstream f(tmp, std::ios::trunc);
 		if (!f) return false;
-		f << "provider = "       << sanitize(cfg.provider)       << "\n";
-		f << "model = "          << sanitize(cfg.model)          << "\n";
+		f << "provider = "              << sanitize(cfg.provider)       << "\n";
+		f << "model = "                 << sanitize(cfg.model)          << "\n";
 		if (!cfg.base_url.empty())
-			f << "base_url = "   << sanitize(cfg.base_url)       << "\n";
-		f << "api_key_env = "    << sanitize(cfg.api_key_env)    << "\n";
+			f << "base_url = "          << sanitize(cfg.base_url)       << "\n";
+		f << "api_key_env = "           << sanitize(cfg.api_key_env)    << "\n";
 		if (!cfg.user_system_prompt.empty())
-			f << "system = "     << sanitize(cfg.user_system_prompt) << "\n";
-		f << "max_tokens = "     << cfg.max_tokens     << "\n";
-		f << "context_window = " << cfg.context_window << "\n";
-		f << "cache = "          << (cfg.cache ? "true" : "false") << "\n";
+			f << "system = "            << sanitize(cfg.user_system_prompt) << "\n";
+		f << "max_tokens = "            << cfg.max_tokens               << "\n";
+		f << "context_window = "        << cfg.context_window           << "\n";
+		f << "cache = "                 << (cfg.cache ? "true" : "false") << "\n";
 		if (cfg.font_delta != 0)
-			f << "font_delta = "  << cfg.font_delta << "\n";
+			f << "font_delta = "        << cfg.font_delta               << "\n";
 		if (cfg.color_scheme != "auto")
-			f << "color_scheme = " << sanitize(cfg.color_scheme) << "\n";
+			f << "color_scheme = "      << sanitize(cfg.color_scheme)   << "\n";
+		if (cfg.context_soft_limit > 0 && cfg.context_soft_limit != 0.80)
+			f << "context_soft_limit = "  << cfg.context_soft_limit     << "\n";
+		if (cfg.context_compact_threshold > 0 && cfg.context_compact_threshold != 0.90)
+			f << "context_compact_threshold = " << cfg.context_compact_threshold << "\n";
+		if (cfg.summary_max_tokens > 0 && cfg.summary_max_tokens != 2048)
+			f << "summary_max_tokens = "   << cfg.summary_max_tokens     << "\n";
+		if (!cfg.summary_model.empty())
+			f << "summary_model = "      << sanitize(cfg.summary_model)  << "\n";
+		if (!cfg.summary_prompt.empty())
+			f << "summary_prompt = "     << sanitize(cfg.summary_prompt) << "\n";
 		for (const auto& h : cfg.hooks_pre_tool)
-			f << "hook_pre_tool = " << sanitize(h) << "\n";
+			f << "hook_pre_tool = "     << sanitize(h) << "\n";
 		for (const auto& h : cfg.hooks_post_tool)
-			f << "hook_post_tool = " << sanitize(h) << "\n";
+			f << "hook_post_tool = "    << sanitize(h) << "\n";
 		for (const auto& h : cfg.hooks_user_prompt)
-			f << "hook_user_prompt = " << sanitize(h) << "\n";
+			f << "hook_user_prompt = "  << sanitize(h) << "\n";
 		if (!f.good()) { std::remove(tmp.c_str()); return false; }
 	}
 	if (::rename(tmp.c_str(), path.c_str()) != 0) {

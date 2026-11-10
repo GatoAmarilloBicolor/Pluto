@@ -49,6 +49,13 @@ struct Config {
 int max_iterations = 25; // max agent loop iterations per turn
 	int max_tool_output = 48 * 1024; // max tool output bytes before truncation
 	int model_output_cap = 0; // 0 = auto-detect from model name
+
+	// Context management configuration
+	double context_soft_limit = 0.80;     // local prune threshold (fraction of context_window)
+	double context_compact_threshold = 0.90; // auto-compact trigger (fraction of context_window)
+	int summary_max_tokens = 2048;        // max tokens for compaction summary
+	std::string summary_model;            // optional: use different model for summarization (e.g. "haiku" for speed)
+	std::string summary_prompt;           // optional: custom summarization prompt
 	std::string active_mode; // current mode name, empty = default (all tools)
 	std::string color_scheme = "auto";  // "auto" (system), "dark", "light"
 

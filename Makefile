@@ -34,6 +34,7 @@ CORE_SRCS = src/lsp/LspClient.cpp \
             src/json.cpp \
             src/storage/SessionStore.cpp \
             src/agent/Loop.cpp \
+            src/tokenizer.cpp \
             src/tools/Tool.cpp \
             src/tools/ReadFile.cpp \
             src/tools/WriteFile.cpp \
@@ -233,8 +234,14 @@ test_json: tests/test_json.cpp src/json.o
 
 test_loop: tests/test_loop.cpp \
 	src/agent/Loop.o src/json.o src/config.o src/util.o src/workspace.o src/tools/Tool.o \
-	src/tools/ReadFile.o src/tools/WriteFile.o src/tools/EditFile.o src/tools/Bash.o
-	$(CXX) $(CXXFLAGS) -o $@ $^ -lbe
+	src/tools/ReadFile.o src/tools/WriteFile.o src/tools/EditFile.o src/tools/Bash.o \
+	src/tokenizer.o src/systemone/SystemOneConfig.o src/systemone/DecisionModel.o \
+	src/systemone/RemoteDecisionModel.o src/systemone/LocalDecisionModel.o \
+	src/systemone/SystemOneClient.o src/systemone/TokenSaver.o \
+	src/haiku/Notifications.o src/rag.o src/oauth.o src/provider/Anthropic.o \
+	src/provider/OpenAICompat.o src/provider/Provider.o \
+	src/text_index.o src/mcp/builtin/builtin_servers.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDLIBS)
 
 test_expected: tests/test_expected.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $<

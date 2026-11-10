@@ -106,8 +106,9 @@ int main() {
         printf("PASS: Long output truncated with message\n");
     }
     
-    // Test 4: estimate_tokens rough calculation
+    // Test 4: estimate_tokens using provider
     {
+        MockProvider provider;
         std::vector<Message> msgs;
         Message m1;
         m1.role = "user";
@@ -125,14 +126,12 @@ int main() {
         m2.content.push_back(b2);
         msgs.push_back(m2);
         
-        size_t tokens = estimate_tokens(msgs);
-        // Roughly 4 chars per token
-        size_t expected = (11 + 11) / 4; // "Hello world" + "Hello there" = 22 chars / 4 = 5.5
+        int tokens = estimate_tokens(provider, msgs);
         if (tokens == 0) {
             printf("FAIL: estimate_tokens should return non-zero\n");
             return 1;
         }
-        printf("PASS: estimate_tokens returns %zu\n", tokens);
+        printf("PASS: estimate_tokens returns %d\n", tokens);
     }
     
     // Test 5: first_round_end finds clean boundary
@@ -203,6 +202,7 @@ int main() {
     
     // Test 7: prune_to_fit reduces messages
     {
+        MockProvider provider;
         std::vector<Message> msgs;
         // Create many messages
         for (int i = 0; i < 20; ++i) {
@@ -218,7 +218,7 @@ int main() {
         Config cfg;
         cfg.context_window = 100; // Very small to force pruning
         
-        int dropped = prune_to_fit(msgs, 50); // Target 50 tokens
+        int dropped = prune_to_fit(provider, msgs, 50); // Target 50 tokens
         if (dropped == 0) {
             printf("FAIL: prune_to_fit should drop messages when over limit\n");
             return 1;

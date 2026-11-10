@@ -39,6 +39,17 @@ struct UiCallbacks {
 	std::function<void(const std::vector<std::string>& topics)> on_rag_inject;
 };
 
+// Compaction result for telemetry
+struct CompactionResult {
+    bool performed = false;
+    int messages_before = 0;
+    int messages_after = 0;
+    int tokens_before = 0;
+    int tokens_after = 0;
+    int summary_tokens = 0;
+    std::string model_used;
+};
+
 // Run one user turn through the agent loop: sends messages, handles any
 // tool_use cycle, returns when stop_reason is end_turn or on error. The
 // messages vector is mutated with the full assistant turn and tool_result
@@ -57,14 +68,49 @@ void RunTurn(Provider& provider,
  // performed. `cumulative_input_tokens` is the running total reported by
  // the API (not the local estimate). Threshold default: 90% of
  // cfg.context_window.
- bool MaybeCompact(Provider& provider,
+bool MaybeCompact(Provider& provider,
                    const Config& cfg,
                    std::vector<Message>& messages,
                    int cumulative_input_tokens,
-                   const UiCallbacks& ui);
+                   const UiCallbacks& ui,
+                   CompactionResult* result = nullptr);
 
  // Internal helper functions for testing.
-inline size_t estimate_tokens(const std::vector<Message>& msgs) {
+ // Uses provider's estimate_tokens() for accurate counting (includes tools, images, etc.)
+inline int estimate_tokens(const Provider& provider, const std::vector<Message>& msgs) {
+    int total = 0;
+    for (const auto& m : msgs) {
+        total += provider.estimate_tokens(m.role);
+        for (const auto& b : m.content) {
+            switch (b.type) {
+                case ContentBlock::TEXT:
+                    total += provider.estimate_tokens(b.text);
+                    break;
+                case ContentBlock::TOOL_USE:
+                    total += provider.estimate_tokens(b.tool_name)
+                           + provider.estimate_tokens(b.tool_input)
+                           + 3;
+                    break;
+                case ContentBlock::TOOL_RESULT:
+                    total += provider.estimate_tokens(b.text) + 2;
+                    break;
+                case ContentBlock::IMAGE:
+                    total += 85;  // Fixed cost for image
+                    break;
+                case ContentBlock::DOCUMENT:
+                    total += provider.estimate_tokens(b.doc_data) / 4 + 10;
+                    break;
+                case ContentBlock::AUDIO:
+                    total += 50;
+                    break;
+            }
+        }
+    }
+    return total;
+}
+
+// Legacy estimate using rough 3.5 chars/token (for when provider unavailable)
+inline size_t estimate_tokens_rough(const std::vector<Message>& msgs) {
     size_t chars = 0;
     for (const auto& m : msgs) {
         chars += m.role.size();
@@ -73,7 +119,7 @@ inline size_t estimate_tokens(const std::vector<Message>& msgs) {
                    + b.tool_id.size() + b.tool_name.size() + 16;
         }
     }
-    return chars / 4;
+    return chars / 3;  // 3.5 chars/token ≈ 3 for integer math
 }
 
 inline size_t first_round_end(const std::vector<Message>& msgs) {
@@ -95,9 +141,9 @@ inline size_t first_round_end(const std::vector<Message>& msgs) {
     return 0;  // ran out of messages without finding a clean boundary
 }
 
-inline int prune_to_fit(std::vector<Message>& msgs, size_t target) {
+inline int prune_to_fit(Provider& provider, std::vector<Message>& msgs, size_t target) {
     int dropped = 0;
-    while (estimate_tokens(msgs) > target && msgs.size() > 2) {
+    while (static_cast<size_t>(estimate_tokens(provider, msgs)) > target && msgs.size() > 2) {
         size_t boundary = first_round_end(msgs);
         if (boundary == 0 || boundary >= msgs.size()) break;
         msgs.erase(msgs.begin(), msgs.begin() + boundary);
