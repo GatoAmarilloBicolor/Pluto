@@ -53,6 +53,7 @@ void NotificationCenter::NotificationLooper::MessageReceived(BMessage* msg) {
 }
 
 NotificationCenter::NotificationCenter() {
+    fLock = std::make_unique<BLocker>("notification-lock");
     fLooper.store(new NotificationLooper(), std::memory_order_release);
 }
 
@@ -80,8 +81,8 @@ void NotificationCenter::Post(const std::string& title,
 
     // Rate limiting + deduplication
     bigtime_t now = system_time();
-    {
-        BLocker locker(fLock);
+    if (fLock) {
+        BLocker locker(*fLock);
         if (locker.Lock()) {
             bigtime_t elapsed = now - fLastNotificationTime;
             if (elapsed < kMinInterval &&

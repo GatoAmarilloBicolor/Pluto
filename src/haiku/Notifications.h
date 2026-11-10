@@ -5,6 +5,7 @@
 #pragma once
 
 #include <string>
+#include <atomic>
 
 #ifdef __HAIKU__
 #include <Notification.h>
@@ -54,7 +55,7 @@ private:
     bigtime_t fLastNotificationTime = 0;
     std::string fLastTitle;
     std::string fLastBody;
-    BLocker fLock;
+    std::unique_ptr<BLocker> fLock;
 #endif
 };
 
