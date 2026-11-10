@@ -28,6 +28,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <algorithm>
 
 #include <openssl/evp.h>
 #include <openssl/rand.h>
@@ -361,8 +362,7 @@ static std::string URLEncode(const std::string& s) {
     }
     return out;
 }
-
-const char* kClientId = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
+ 
 const char* kAuthUrl  = "https://claude.com/cai/oauth/authorize";
 const char* kTokenUrl = "https://platform.claude.com/v1/oauth/token";
 const char* kProfileUrl = "https://api.anthropic.com/api/oauth/profile";

@@ -125,6 +125,10 @@ public:
     virtual void ConvertToScreen(BPoint* point) const { (void)point; }
     virtual BPoint ConvertToScreen(BPoint point) const { return point; }
     virtual void Sync() {}
+    virtual void DragMessage(const BMessage* message, BBitmap* dragBitmap,
+                              drawing_mode mode = B_OP_COPY, BPoint offset = BPoint()) {
+        (void)message; (void)dragBitmap; (void)mode; (void)offset;
+    }
 
     enum {
         B_FOLLOW_LEFT = 1,
