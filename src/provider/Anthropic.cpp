@@ -357,13 +357,11 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &st);
 
+    // Apply security with pinning (uses correct pins from curl_security.h)
+    // Apply security with pinning (uses correct pins from curl_security.h)
     ApplyCurlSecurityWithPinning(curl, url);
 
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 30L);
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 10L);
-    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
-    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);
+    // Override timeouts for long streaming responses
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 300L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
 

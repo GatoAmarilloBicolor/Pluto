@@ -52,31 +52,15 @@ public:
 private:
     std::unique_ptr<DecisionModel> fModel;
 
-    // Individual tool implementations
-    ToolResult tool_classify(const std::string& input_json);
-    ToolResult tool_classify_multi(const std::string& input_json);
-    ToolResult tool_classify_sentiment(const std::string& input_json);
-    ToolResult tool_classify_priority(const std::string& input_json);
-    ToolResult tool_classify_topic(const std::string& input_json);
-    ToolResult tool_classify_urgency(const std::string& input_json);
-    ToolResult tool_verify(const std::string& input_json);
-    ToolResult tool_guard(const std::string& input_json);
-    ToolResult tool_select_relevant(const std::string& input_json);
-    ToolResult tool_extract_key_points(const std::string& input_json);
-    ToolResult tool_summarize_text(const std::string& input_json);
-    ToolResult tool_extract_entities(const std::string& input_json);
-    ToolResult tool_rank_importance(const std::string& input_json);
-    ToolResult tool_compute_headroom(const std::string& input_json);
-    ToolResult tool_compact_messages(const std::string& input_json);
-    ToolResult tool_optimize_context(const std::string& input_json);
-    ToolResult tool_triage(const std::string& input_json);
-    ToolResult tool_triage_full(const std::string& input_json);
-    ToolResult tool_answerable(const std::string& input_json);
-    ToolResult tool_decide_route(const std::string& input_json);
-    ToolResult tool_decide_priority(const std::string& input_json);
-    ToolResult tool_decide_action(const std::string& input_json);
-    ToolResult tool_consult(const std::string& input_json);
-    ToolResult tool_decide_program(const std::string& input_json);
+    // Tool registration helper
+    struct ToolDef {
+        const char* name;
+        const char* description;
+        const char* schema;
+        std::string (*fn)(DecisionModel*, const std::string&);
+    };
+    
+    
 };
 
 // Convenience: create a SystemOneClient from config and register tools.
@@ -86,3 +70,4 @@ std::unique_ptr<SystemOneClient> CreateSystemOneClient(
 
 }  // namespace systemone
 }  // namespace pluto
+

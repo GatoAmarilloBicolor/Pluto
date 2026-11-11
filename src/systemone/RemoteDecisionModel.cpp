@@ -165,7 +165,7 @@ bool RemoteDecisionModel::init_curl() {
     fCurl = curl_easy_init();
     if (!fCurl) return false;
     curl_easy_setopt(fCurl, CURLOPT_TIMEOUT, fConfig.timeout_secs);
-    curl_easy_setopt(fCurl, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_easy_setopt(fCurl, CURLOPT_CONNECTTIMEOUT, 10);  // Increased from 5s
     curl_easy_setopt(fCurl, CURLOPT_USERAGENT, "pluto-systemone/1.0");
     curl_easy_setopt(fCurl, CURLOPT_FOLLOWLOCATION, 1L);
 

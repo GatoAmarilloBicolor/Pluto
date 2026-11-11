@@ -37,8 +37,8 @@ std::string http_get_json(const std::string& url) {
 	curl_easy_setopt(c, CURLOPT_URL, url.c_str());
 	curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, CurlStr::cb);
 	curl_easy_setopt(c, CURLOPT_WRITEDATA, &out);
-	curl_easy_setopt(c, CURLOPT_TIMEOUT, 8L);
-	curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, 3L);
+	curl_easy_setopt(c, CURLOPT_TIMEOUT, 15L);          // Increased from 8s
+	curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, 5L);    // Increased from 3s
 	curl_easy_setopt(c, CURLOPT_USERAGENT, "pluto/0.7.1 (Haiku)");
 	curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
 

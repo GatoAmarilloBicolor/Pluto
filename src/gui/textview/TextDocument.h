@@ -5,7 +5,8 @@
 #ifndef TEXT_DOCUMENT_H
 #define TEXT_DOCUMENT_H
 
-#include <Referenceable.h>
+#include <support/Referenceable.h>
+#include <support/Reference.h>
 
 #include "CharacterStyle.h"
 #include "List.h"

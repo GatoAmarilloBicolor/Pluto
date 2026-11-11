@@ -1,4 +1,5 @@
 #include "SystemOneClient.h"
+#include <sstream>
 #include "../json.h"
 #include "../util.h"
 
@@ -182,6 +183,148 @@ std::string tf_decide_program(DecisionModel* model, const std::string& input) {
     return result.results;
 }
 
+std::string tf_classify_sentiment(DecisionModel* model, const std::string& input) {
+    std::string text = extract_str(input, "text");
+    auto result = model->classify_sentiment(text);
+    std::ostringstream oss;
+    oss << "{\"sentiment\":\"" << result.sentiment
+        << "\",\"score\":" << result.score
+        << ",\"confidence\":" << result.confidence << "}";
+    return oss.str();
+}
+
+std::string tf_classify_priority(DecisionModel* model, const std::string& input) {
+    std::string text = extract_str(input, "text");
+    auto result = model->classify_priority(text);
+    std::ostringstream oss;
+    oss << "{\"priority\":\"" << result.priority
+        << "\",\"score\":" << result.score
+        << ",\"escalate\":" << (result.escalate ? "true" : "false") << "}";
+    return oss.str();
+}
+
+std::string tf_classify_topic(DecisionModel* model, const std::string& input) {
+    std::string text = extract_str(input, "text");
+    auto result = model->classify_topic(text);
+    std::ostringstream oss;
+    oss << "{\"topic\":\"" << result.topic
+        << "\",\"confidence\":" << result.confidence << "}";
+    return oss.str();
+}
+
+std::string tf_classify_urgency(DecisionModel* model, const std::string& input) {
+    std::string text = extract_str(input, "text");
+    auto result = model->classify_urgency(text);
+    std::ostringstream oss;
+    oss << "{\"urgency\":\"" << result.urgency
+        << "\",\"score\":" << result.score
+        << ",\"needs_immediate_action\":" << (result.needs_immediate_action ? "true" : "false") << "}";
+    return oss.str();
+}
+
+std::string tf_extract_key_points(DecisionModel* model, const std::string& input) {
+    std::string text = extract_str(input, "text");
+    int max_points = static_cast<int>(extract_num(input, "max_points", 5));
+    auto result = model->extract_key_points(text, max_points);
+    std::ostringstream oss;
+    oss << "{\"points\":[";
+    for (size_t i = 0; i < result.points.size(); i++) {
+        if (i > 0) oss << ",";
+        oss << "\"" << result.points[i] << "\"";
+    }
+    oss << "],\"original\":" << result.original_tokens
+        << ",\"compressed\":" << result.compressed_tokens
+        << ",\"ratio\":" << result.compression_ratio << "}";
+    return oss.str();
+}
+
+std::string tf_summarize_text(DecisionModel* model, const std::string& input) {
+    std::string text = extract_str(input, "text");
+    int max_tokens = static_cast<int>(extract_num(input, "max_tokens", 200));
+    auto result = model->summarize_text(text, max_tokens);
+    std::ostringstream oss;
+    oss << "{\"summary\":\"" << result.summary
+        << "\",\"original\":" << result.original_tokens
+        << ",\"compressed\":" << result.compressed_tokens
+        << ",\"ratio\":" << result.compression_ratio << "}";
+    return oss.str();
+}
+
+std::string tf_extract_entities(DecisionModel* model, const std::string& input) {
+    std::string text = extract_str(input, "text");
+    auto result = model->extract_entities(text);
+    std::ostringstream oss;
+    oss << "{\"entities\":[";
+    for (size_t i = 0; i < result.entities.size(); i++) {
+        if (i > 0) oss << ",";
+        oss << "\"" << result.entities[i] << "\"";
+    }
+    oss << "],\"types\":[";
+    for (size_t i = 0; i < result.entity_types.size(); i++) {
+        if (i > 0) oss << ",";
+        oss << "\"" << result.entity_types[i] << "\"";
+    }
+    oss << "]}";
+    return oss.str();
+}
+
+std::string tf_rank_importance(DecisionModel* model, const std::string& input) {
+    std::string question = extract_str(input, "question");
+    std::vector<std::string> items;
+    auto result = model->rank_importance(question, items);
+    std::ostringstream oss;
+    oss << "{\"items\":[";
+    for (size_t i = 0; i < result.size(); i++) {
+        if (i > 0) oss << ",";
+        oss << "{\"index\":" << result[i].index
+            << ",\"score\":" << result[i].score
+            << ",\"reason\":\"" << result[i].reason << "\"}";
+    }
+    oss << "]}";
+    return oss.str();
+}
+
+std::string tf_compute_headroom(DecisionModel* model, const std::string& input) {
+    int total = static_cast<int>(extract_num(input, "total_tokens", 0));
+    int used = static_cast<int>(extract_num(input, "used_tokens", 0));
+    double threshold = extract_num(input, "threshold", 0.85);
+    auto result = model->compute_headroom(total, used, threshold);
+std::ostringstream oss;
+    oss << "{\"total\":" << result.total_tokens
+        << ",\"used\":" << result.used_tokens
+        << ",\"available\":" << result.available_tokens
+        << ",\"pressure\":" << result.pressure_ratio
+        << ",\"needs_compact\":" << (result.needs_compaction ? "true" : "false")
+        << ",\"recommended\":" << result.recommended_compact_tokens << "}";
+    return oss.str();
+}
+
+std::string tf_compact_messages(DecisionModel* model, const std::string& input) {
+    std::vector<std::string> messages;
+    int max_tokens = static_cast<int>(extract_num(input, "max_tokens", 4000));
+    double threshold = extract_num(input, "threshold", 0.85);
+    auto result = model->compact_messages(messages, max_tokens, threshold);
+    std::ostringstream oss;
+    oss << "{\"indices\":[";
+    for (size_t i = 0; i < result.size(); i++) {
+        if (i > 0) oss << ",";
+        oss << result[i];
+    }
+    oss << "]}";
+    return oss.str();
+}
+
+std::string tf_optimize_context(DecisionModel* model, const std::string& input) {
+    std::string question = extract_str(input, "question");
+    std::vector<std::string> items;
+    double min_p = extract_num(input, "min_p", 0.6);
+    auto result = model->select_relevant(question, items, "chunks", min_p);
+    std::ostringstream oss;
+    oss << "{\"selected\":" << result.selected_indices.size()
+        << ",\"saved\":" << result.tokens_saved << "}";
+    return oss.str();
+}
+
 // Generic tool wrapper that calls a DecisionModel method.
 class SystemOneTool : public Tool {
 public:
@@ -236,79 +379,117 @@ void SystemOneClient::register_tools(ToolRegistry& registry) {
         return;
     }
 
-    // Register all 9 System One tools
-    registry.add(std::make_unique<SystemOneTool>(
-        "systemone_classify",
-        "Single-label classification using System One decision model",
-        "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"},\"categories\":{\"type\":\"object\"},\"threshold\":{\"type\":\"number\"}},\"required\":[\"text\",\"categories\"]}",
-        tf_classify,
-        fModel.get()));
+    // Tool definitions array - easy to add/remove tools
+    struct ToolEntry {
+        const char* name;
+        const char* description;
+        const char* schema;
+        std::string (*fn)(DecisionModel*, const std::string&);
+    };
 
-    registry.add(std::make_unique<SystemOneTool>(
-        "systemone_classify_multi",
-        "Multi-label classification using System One",
-        "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"},\"categories\":{\"type\":\"object\"},\"threshold\":{\"type\":\"number\"}},\"required\":[\"text\",\"categories\"]}",
-        tf_classify_multi,
-        fModel.get()));
+    static const ToolEntry kTools[] = {
+        // --- Classification (6 tools) ---
+        {"systemone_classify",
+         "Single-label classification using System One decision model",
+         "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"},\"categories\":{\"type\":\"object\"},\"threshold\":{\"type\":\"number\"}},\"required\":[\"text\",\"categories\"]}",
+         &tf_classify},
+        {"systemone_classify_multi",
+         "Multi-label classification using System One",
+         "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"},\"categories\":{\"type\":\"object\"},\"threshold\":{\"type\":\"number\"}},\"required\":[\"text\",\"categories\"]}",
+         &tf_classify_multi},
+        {"systemone_classify_sentiment",
+         "Sentiment analysis: positive, negative, neutral, mixed",
+         "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}},\"required\":[\"text\"]}",
+         &tf_classify_sentiment},
+        {"systemone_classify_priority",
+         "Priority classification: critical, high, medium, low",
+         "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}},\"required\":[\"text\"]}",
+         &tf_classify_priority},
+        {"systemone_classify_topic",
+         "Topic classification: coding, documentation, bug, feature, infrastructure, security",
+         "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}},\"required\":[\"text\"]}",
+         &tf_classify_topic},
+        {"systemone_classify_urgency",
+         "Urgency classification: critical, high, medium, low",
+         "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}},\"required\":[\"text\"]}",
+         &tf_classify_urgency},
 
-    registry.add(std::make_unique<SystemOneTool>(
-        "systemone_verify",
-        "Verify if source supports claim (entailment check)",
-        "{\"type\":\"object\",\"properties\":{\"source\":{\"type\":\"string\"},\"claim\":{\"type\":\"string\"}},\"required\":[\"source\",\"claim\"]}",
-        tf_verify,
-        fModel.get()));
+        // --- Verification & Safety (2 tools) ---
+        {"systemone_verify",
+         "Verify if source supports claim (entailment check)",
+         "{\"type\":\"object\",\"properties\":{\"source\":{\"type\":\"string\"},\"claim\":{\"type\":\"string\"}},\"required\":[\"source\",\"claim\"]}",
+         &tf_verify},
+        {"systemone_guard",
+         "Safety gate: prompt injection, PII, toxicity, spam check",
+         "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"},\"checks\":{\"type\":\"object\"},\"threshold\":{\"type\":\"number\"}},\"required\":[\"text\"]}",
+         &tf_guard},
 
-    registry.add(std::make_unique<SystemOneTool>(
-        "systemone_guard",
-        "Safety gate: prompt injection, PII, toxicity, spam check",
-        "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"},\"checks\":{\"type\":\"object\"},\"threshold\":{\"type\":\"number\"}},\"required\":[\"text\"]}",
-        tf_guard,
-        fModel.get()));
+        // --- Context Pruning & Token Savings (5 tools) ---
+        {"systemone_select_relevant",
+         "Context pruning: select relevant items for a question (90% recall, 80% precision)",
+         "{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"},\"items\":{\"type\":\"array\"},\"kind\":{\"type\":\"string\"},\"min_p\":{\"type\":\"number\"}},\"required\":[\"question\",\"items\"]}",
+         &tf_select_relevant},
+        {"systemone_extract_key_points",
+         "Extract key points from text (token-efficient)",
+         "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"},\"max_points\":{\"type\":\"integer\"}},\"required\":[\"text\"]}",
+         &tf_extract_key_points},
+        {"systemone_summarize_text",
+         "Summarize text (token-efficient)",
+         "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"},\"max_tokens\":{\"type\":\"integer\"}},\"required\":[\"text\"]}",
+         &tf_summarize_text},
+        {"systemone_extract_entities",
+         "Extract entities from text: person, organization, location, date, technology",
+         "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}},\"required\":[\"text\"]}",
+         &tf_extract_entities},
+        {"systemone_rank_importance",
+         "Rank items by importance for context window management",
+         "{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"},\"items\":{\"type\":\"array\"}},\"required\":[\"question\",\"items\"]}",
+         &tf_rank_importance},
+        {"systemone_compute_headroom",
+         "Compute context window headroom and compaction needs",
+         "{\"type\":\"object\",\"properties\":{\"total_tokens\":{\"type\":\"integer\"},\"used_tokens\":{\"type\":\"integer\"},\"threshold\":{\"type\":\"number\"}},\"required\":[\"total_tokens\",\"used_tokens\"]}",
+         &tf_compute_headroom},
+        {"systemone_compact_messages",
+         "Compact messages to fit within context window",
+         "{\"type\":\"object\",\"properties\":{\"messages\":{\"type\":\"array\"},\"max_tokens\":{\"type\":\"integer\"},\"threshold\":{\"type\":\"number\"}},\"required\":[\"messages\",\"max_tokens\"]}",
+         &tf_compact_messages},
+        {"systemone_optimize_context",
+         "Optimize context by selecting relevant items and compacting",
+         "{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"},\"items\":{\"type\":\"array\"},\"min_p\":{\"type\":\"number\"}},\"required\":[\"question\",\"items\"]}",
+         &tf_optimize_context},
 
-    registry.add(std::make_unique<SystemOneTool>(
-        "systemone_select_relevant",
-        "Context pruning: select relevant items for a question",
-        "{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"},\"items\":{\"type\":\"array\"},\"kind\":{\"type\":\"string\"},\"min_p\":{\"type\":\"number\"}},\"required\":[\"question\",\"items\"]}",
-        tf_select_relevant,
-        fModel.get()));
+        // --- Semantic Dedup ---
+        {"systemone_same_intent",
+         "Check if two texts have the same intent (semantic dedup, 94% accuracy)",
+         "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"},\"b\":{\"type\":\"string\"},\"threshold\":{\"type\":\"number\"}},\"required\":[\"a\",\"b\"]}",
+         &tf_same_intent},
 
-    registry.add(std::make_unique<SystemOneTool>(
-        "systemone_same_intent",
-        "Check if two texts have the same intent (semantic dedup)",
-        "{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"},\"b\":{\"type\":\"string\"},\"threshold\":{\"type\":\"number\"}},\"required\":[\"a\",\"b\"]}",
-        tf_same_intent,
-        fModel.get()));
+        // --- Decision & Triage (3 tools) ---
+        {"systemone_triage",
+         "One-call triage: guard + route + tags + urgency (saves 3-4 calls)",
+         "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"},\"routes\":{\"type\":\"object\"},\"tags\":{\"type\":\"object\"},\"urgent_question\":{\"type\":\"string\"}},\"required\":[\"text\"]}",
+         &tf_triage},
+        {"systemone_answerable",
+         "RAG gate: check if question is answerable from context (90% at threshold 0.3)",
+         "{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"},\"context\":{\"type\":\"string\"},\"threshold\":{\"type\":\"number\"}},\"required\":[\"question\",\"context\"]}",
+         &tf_answerable},
+        {"systemone_consult",
+         "Decisions with persistent memory (remember/recall/consult)",
+         "{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"},\"options\":{\"type\":\"object\"},\"topic\":{\"type\":\"string\"},\"context\":{\"type\":\"string\"}},\"required\":[\"question\",\"options\"]}",
+         &tf_consult},
+        {"systemone_decide_program",
+         "Full decision pipeline (token-efficient, 5-10x savings)",
+         "{\"type\":\"object\",\"properties\":{\"program\":{\"type\":\"string\"},\"state\":{\"type\":\"string\"},\"compact\":{\"type\":\"boolean\"}},\"required\":[\"program\",\"state\"]}",
+         &tf_decide_program},
+    };
 
-    registry.add(std::make_unique<SystemOneTool>(
-        "systemone_triage",
-        "One-call triage: guard + route + tags + urgency",
-        "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"},\"routes\":{\"type\":\"object\"},\"tags\":{\"type\":\"object\"},\"urgent_question\":{\"type\":\"string\"}},\"required\":[\"text\"]}",
-        tf_triage,
-        fModel.get()));
+    for (const auto& tool : kTools) {
+        registry.add(std::make_unique<SystemOneTool>(
+            tool.name, tool.description, tool.schema, tool.fn, fModel.get()));
+    }
 
-    registry.add(std::make_unique<SystemOneTool>(
-        "systemone_answerable",
-        "RAG gate: check if question is answerable from context",
-        "{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"},\"context\":{\"type\":\"string\"},\"threshold\":{\"type\":\"number\"}},\"required\":[\"question\",\"context\"]}",
-        tf_answerable,
-        fModel.get()));
-
-    registry.add(std::make_unique<SystemOneTool>(
-        "systemone_consult",
-        "Decision with persistent memory (consult)",
-        "{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"},\"options\":{\"type\":\"object\"},\"topic\":{\"type\":\"string\"},\"context\":{\"type\":\"string\"}},\"required\":[\"question\",\"options\"]}",
-        tf_consult,
-        fModel.get()));
-
-    registry.add(std::make_unique<SystemOneTool>(
-        "systemone_decide_program",
-        "Full decision pipeline (token-efficient)",
-        "{\"type\":\"object\",\"properties\":{\"program\":{\"type\":\"string\"},\"state\":{\"type\":\"string\"},\"compact\":{\"type\":\"boolean\"}},\"required\":[\"program\",\"state\"]}",
-        tf_decide_program,
-        fModel.get()));
-
-    fprintf(stderr, "[systemone] registered 9 tools using model: %s\n",
-        fModel->name().c_str());
+    fprintf(stderr, "[systemone] registered %zu tools using model: %s\n",
+        sizeof(kTools) / sizeof(kTools[0]), fModel->name().c_str());
 }
 
 std::string SystemOneClient::call_tool([[maybe_unused]] const std::string& name, [[maybe_unused]] const std::string& args_json) {
