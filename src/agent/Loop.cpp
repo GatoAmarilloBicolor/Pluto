@@ -1,6 +1,7 @@
 #include "Loop.h"
 #include "../rag.h"
 #include "../haiku/Notifications.h"
+#include "../systemone/SystemOneClient.h"
 
 #include <cctype>
 #include <cstdio>
@@ -8,6 +9,8 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <chrono>
+#include <unordered_set>
 
 #include <sys/wait.h>
 #include <unistd.h>
