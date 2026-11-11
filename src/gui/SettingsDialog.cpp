@@ -332,8 +332,8 @@ SettingsDialog::SettingsDialog(BMessenger target, const Config& current)
 	_BuildSystemOneBox();
 
 	BGroupView* root = new BGroupView(B_VERTICAL, B_USE_HALF_ITEM_SPACING);
-	root->SetExplicitMinSize(BSize(560, B_SIZE_UNSET));
-	root->SetExplicitMaxSize(BSize(560, B_SIZE_UNLIMITED));
+	root->SetExplicitMinSize(BSize(640, B_SIZE_UNSET));
+	root->SetExplicitMaxSize(BSize(800, B_SIZE_UNLIMITED));
 
 	BLayoutBuilder::Group<>(root)
 		.SetInsets(B_USE_WINDOW_SPACING)
@@ -350,8 +350,13 @@ SettingsDialog::SettingsDialog(BMessenger target, const Config& current)
 			.Add(ok)
 		.End();
 
+	// Wrap root in a ScrollView to handle content taller than window
+	BScrollView* scroll = new BScrollView("settingsScroll", root,
+		0, false, true, B_FANCY_BORDER);
+	scroll->SetExplicitMinSize(BSize(640, 400));
+
 	BLayoutBuilder::Group<>(this, B_VERTICAL)
-		.Add(root);
+		.Add(scroll);
 
 	// Load System One settings into controls.
 	_LoadSystemOne(current);
@@ -450,21 +455,16 @@ void SettingsDialog::_BuildSystemOneBox() {
 	fSystemOneFallbackLocal = new BCheckBox("sys1_fallback_local",
 		"Fallback to local if remote fails", nullptr);
 
-	// Layout
+	// Layout - stack URLs vertically for better fit
 	BLayoutBuilder::Group<>(fSystemOneBox, B_VERTICAL, B_USE_SMALL_SPACING)
 		.SetInsets(B_USE_DEFAULT_SPACING, B_USE_BIG_SPACING,
 		           B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING)
 		.Add(fSystemOneEnabled)
 		.Add(fSystemOneModel)
-		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
-			.Add(fSystemOneApiKey)
-			.AddGlue()
-		.End()
-		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
-			.Add(fSystemOneKevUrl)
-			.Add(fSystemOneLayaUrl)
-			.Add(fSystemOneJevUrl)
-		.End()
+		.Add(fSystemOneApiKey)
+		.Add(fSystemOneKevUrl)
+		.Add(fSystemOneLayaUrl)
+		.Add(fSystemOneJevUrl)
 		.Add(fSystemOneBaseUrl)
 		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
 			.Add(fSystemOneThreshold)
