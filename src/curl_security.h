@@ -35,7 +35,7 @@ inline bool ApplyCurlSecurity(CURL* curl, const std::string& url) {
     // Core TLS verification
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-    curl_easy_setopt(curl, CURLOPT_CAINFO, "/system/data/ssl/CARootCertificates.pem");
+    curl_easy_setopt(curl, CURLOPT_CAINFO, "/boot/system/data/ssl/CARootCertificates.pem");
 
     // OCSP Stapling verification
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
@@ -95,12 +95,16 @@ inline bool IsPrivateIP(const std::string& ip) {
     if (ip.rfind("10.", 0) == 0) return true;                    // 10.0.0.0/8
     if (ip.rfind("192.168.", 0) == 0) return true;              // 192.168.0.0/16
     if (ip.rfind("169.254.", 0) == 0) return true;              // 169.254.0.0/16 (link-local)
-    if (ip.rfind("172.16.", 0) == 0) return true;
-    if (ip.rfind("172.17.", 0) == 0) return true;
-    if (ip.rfind("172.18.", 0) == 0) return true;
-    if (ip.rfind("172.19.", 0) == 0) return true;
-    if (ip.rfind("172.2", 0) == 0) return true;                 // 172.20-23.x.x
-    if (ip.rfind("172.3", 0) == 0) return true;                 // 172.30-31.x.x
+    // 172.16.0.0/12 = 172.16.0.0 - 172.31.255.255
+    if (ip.rfind("172.", 0) == 0) {
+        size_t dot1 = ip.find('.', 4);
+        if (dot1 != std::string::npos) {
+            std::string second = ip.substr(4, dot1 - 4);
+            int octet = 0;
+            try { octet = std::stoi(second); } catch (...) {}
+            if (octet >= 16 && octet <= 31) return true;
+        }
+    }
     if (ip.rfind("fc00:", 0) == 0 || ip.rfind("fd00:", 0) == 0) return true; // ULA
     return false;
 }
