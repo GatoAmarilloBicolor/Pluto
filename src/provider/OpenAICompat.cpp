@@ -184,7 +184,7 @@ static void oai_emit_text(OaiStreamState& st, const std::string& text) {
         StreamEvent ev;
         ev.type = StreamEvent::TEXT_DELTA;
         ev.text = text;
-        st.cb(ev);
+        try { st.cb(ev); } catch (...) { st.cb_error = true; }
     }
 }
 
@@ -195,7 +195,7 @@ static void oai_emit_tool_start(OaiStreamState& st,
     ev.tool_id = id;
     ev.tool_name = name;
     ev.tool_index = index;
-    st.cb(ev);
+    try { st.cb(ev); } catch (...) { st.cb_error = true; }
 }
 
 static void oai_emit_tool_delta(OaiStreamState& st, const std::string& delta, int index) {
@@ -204,7 +204,7 @@ static void oai_emit_tool_delta(OaiStreamState& st, const std::string& delta, in
         ev.type = StreamEvent::TOOL_USE_INPUT_DELTA;
         ev.tool_input = delta;
         ev.tool_index = index;
-        st.cb(ev);
+        try { st.cb(ev); } catch (...) { st.cb_error = true; }
     }
 }
 
@@ -213,7 +213,7 @@ static void oai_emit_tool_end(OaiStreamState& st, const std::string& full_json, 
     ev.type = StreamEvent::TOOL_USE_END;
     ev.tool_input = full_json;
     ev.tool_index = index;
-    st.cb(ev);
+    try { st.cb(ev); } catch (...) { st.cb_error = true; }
 }
 
 static void oai_emit_message_end(OaiStreamState& st, const std::string& stop_reason) {
@@ -222,7 +222,7 @@ static void oai_emit_message_end(OaiStreamState& st, const std::string& stop_rea
     ev.stop_reason = stop_reason;
     ev.input_tokens = st.input_tokens;
     ev.output_tokens = st.output_tokens;
-    st.cb(ev);
+    try { st.cb(ev); } catch (...) { st.cb_error = true; }
 }
 
 static void oai_process_line(const std::string& line, OaiStreamState& st) {
@@ -323,7 +323,11 @@ static size_t oai_write_callback(char* ptr, size_t size, size_t nmemb, void* use
     if (!st || st->done) return 0;
     
     size_t total = size * nmemb;
-    st->buffer.append(ptr, total);
+    try {
+        st->buffer.append(ptr, total);
+    } catch (...) {
+        return 0;
+    }
     
     size_t pos = 0;
     while ((pos = st->buffer.find('\n')) != std::string::npos) {
@@ -331,7 +335,11 @@ static size_t oai_write_callback(char* ptr, size_t size, size_t nmemb, void* use
         st->buffer.erase(0, pos + 1);
         
         if (!line.empty() && line.back() == '\r') line.pop_back();
-        oai_process_line(line, *st);
+        try {
+            oai_process_line(line, *st);
+        } catch (...) {
+            st->cb_error = true;
+        }
         if (st->cb_error) return 0;
     }
     return total;
@@ -428,7 +436,7 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
             StreamEvent err;
             err.type = StreamEvent::ERROR;
             err.error = "Request cancelled";
-            cb(err);
+            try { cb(err); } catch (...) {}
             return;
         }
 
@@ -439,11 +447,11 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
             if (attempt < 4) {
                 err.type = StreamEvent::RETRY_INFO;
                 err.text = "Network error: " + std::string(curl_easy_strerror(res)) + ", retrying...";
-                cb(err);
+                try { cb(err); } catch (...) {}
                 sleep_ms(calc_backoff_ms(attempt), req.cancel);
                 continue;
             }
-            cb(err);
+            try { cb(err); } catch (...) {}
             return;
         }
 
@@ -451,7 +459,9 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
 
         if (http_code == 200) {
-            if (!st.done) oai_emit_message_end(st, "stop");
+            if (!st.done) {
+                try { oai_emit_message_end(st, "stop"); } catch (...) {}
+            }
             return;
         }
 
@@ -464,7 +474,7 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
                 StreamEvent err;
                 err.type = StreamEvent::ERROR;
                 err.error = std::string("rebuild request failed: ") + e.what();
-                cb(err);
+                try { cb(err); } catch (...) {}
                 return;
             }
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, current_body.c_str());
@@ -473,7 +483,7 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
             StreamEvent info;
             info.type = StreamEvent::RETRY_INFO;
             info.text = "model does not support tools — retrying without";
-            cb(info);
+            try { cb(info); } catch (...) {}
             continue;
         }
 
@@ -497,7 +507,7 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
             info.type = StreamEvent::RETRY_INFO;
             info.text = "HTTP " + std::to_string(http_code)
                 + ", retrying in " + std::to_string(retry_secs) + "s...";
-            cb(info);
+            try { cb(info); } catch (...) {}
             sleep_ms(retry_secs * 1000, req.cancel);
             continue;
         }
@@ -505,7 +515,7 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
         StreamEvent err;
         err.type = StreamEvent::ERROR;
         err.error = "HTTP " + std::to_string(http_code) + ": " + st.buffer;
-        cb(err);
+        try { cb(err); } catch (...) {}
         return;
     }
 }
