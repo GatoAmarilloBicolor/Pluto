@@ -5,6 +5,8 @@
 #include <Alert.h>
 #include <Menu.h>
 #include <MenuItem.h>
+#include <ScrollBar.h>
+#include <SplitView.h>
 #include <TabView.h>
 
 #include <fstream>
