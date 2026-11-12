@@ -20,7 +20,6 @@ struct CurlSecurityConfig {
         if (host == "api.openai.com") return "sha256/zgJl30S+m6z88y1sEqdP+1tyIuSuyEXkT1J6dAdEZXw=";
         if (host == "generativelanguage.googleapis.com") return "sha256/udzO2pA9ijQ04FhrbsPAtyxOJF/gGKyaFnGZHBIERu8=";
         if (host == "api.x.ai") return "sha256/5qFXq18qBWOnQeki85TW6rVzfkFFBH6Zgqzw4PJ6F/Y=";
-        if (host == "openrouter.ai") return "sha256/6qT9c3z2E3o6Dc6c+SWbcT83FBUY8jO0Eg7S7BA309A=";
         if (host == "api.brave.com") return "sha256/OpiUzqarJTOGR4tXR0aXXIbYiyXi1+aSHPq/o5Ol6dM=";
         if (host == "api.tavily.com") return "sha256/0lfaR8dbvRshBzvIOonl+CP49hbiDOP2I8wULXoGxus=";
         return std::nullopt;
