@@ -404,6 +404,9 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
     if (url.back() == '/') url.pop_back();
     url += "/v1/messages";
 
+    // Apply TLS security (peer + host verification, CA bundle)
+    ApplyCurlSecurity(curl, url);
+
     StreamState st;
     st.cb = std::move(cb);
 

@@ -3104,8 +3104,13 @@ void MainWindow::MessageReceived(BMessage* msg) {
 							fSideView->Select(it->second, it->second);
 						}
 					} else if (!lr.url.empty()) {
-						std::string cmd = "open \"" + lr.url + "\" &";
-						::system(cmd.c_str());
+						// Open URL without shell to prevent injection.
+						pid_t pid = fork();
+						if (pid == 0) {
+							char* args[] = {const_cast<char*>("open"), const_cast<char*>(lr.url.c_str()), nullptr};
+							execvp("open", args);
+							_exit(127);
+						}
 					}
 					break;
 				}

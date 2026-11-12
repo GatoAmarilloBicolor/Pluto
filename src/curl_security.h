@@ -197,4 +197,69 @@ inline SlistPtr AppendSlist(SlistPtr& list, const std::string& item) {
     return SlistPtr(new_list);
 }
 
+// RAII wrapper for CURL handle that applies security settings on init
+// and cleans up on destruction. Centralizes TLS configuration so all
+// providers use the same security baseline.
+class CurlHandle {
+    CURL* curl_ = nullptr;
+public:
+    CurlHandle() = default;
+
+    // Initialize with security settings applied for the given URL.
+    // Returns false if curl_easy_init() failed.
+    bool init(const std::string& url) {
+        curl_ = curl_easy_init();
+        if (!curl_) return false;
+        ApplyCurlSecurity(curl_, url);
+        return true;
+    }
+
+    // Initialize without security settings (for HTTP URLs or special cases).
+    bool init_raw() {
+        curl_ = curl_easy_init();
+        return curl_ != nullptr;
+    }
+
+    ~CurlHandle() {
+        if (curl_) curl_easy_cleanup(curl_);
+    }
+
+    CurlHandle(const CurlHandle&) = delete;
+    CurlHandle& operator=(const CurlHandle&) = delete;
+
+    CurlHandle(CurlHandle&& other) noexcept : curl_(other.curl_) {
+        other.curl_ = nullptr;
+    }
+    CurlHandle& operator=(CurlHandle&& other) noexcept {
+        if (this != &other) {
+            if (curl_) curl_easy_cleanup(curl_);
+            curl_ = other.curl_;
+            other.curl_ = nullptr;
+        }
+        return *this;
+    }
+
+    CURL* get() const { return curl_; }
+    operator CURL*() const { return curl_; }
+    explicit operator bool() const { return curl_ != nullptr; }
+
+    CURL* release() {
+        CURL* c = curl_;
+        curl_ = nullptr;
+        return c;
+    }
+
+    void reset(CURL* c = nullptr) {
+        if (curl_ && curl_ != c) curl_easy_cleanup(curl_);
+        curl_ = c;
+    }
+
+    // Convenience wrapper for curl_easy_setopt.
+    template <typename T>
+    bool setopt(CURLoption option, T value) {
+        if (!curl_) return false;
+        return curl_easy_setopt(curl_, option, value) == CURLE_OK;
+    }
+};
+
 } // namespace pluto
