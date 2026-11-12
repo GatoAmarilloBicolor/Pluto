@@ -171,7 +171,7 @@ PLUTO_RSRC_LINK =
 endif
 
 Pluto_cli: $(CORE_OBJS) $(CLI_OBJS) $(PLUTO_RSRC_DEP)
-	$(CXX) $(CXXFLAGS) -o $@ $(CORE_OBJS) $(CLI_OBJS) $(LDLIBS) $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -o $@ $(CORE_OBJS) $(CLI_OBJS) $(LDLIBS) -ltranslation $(LDFLAGS)
 	$(PLUTO_RSRC_LINK)
 
 # Compile md4c (C file) separately.
