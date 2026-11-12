@@ -8,12 +8,15 @@
 // Real Haiku implementation provides GetBitmapFile() and GetBitmap()
 // which load images using the translator roster.
 
+class BTranslatorRoster;
+
 class BTranslationUtils {
 public:
     // Get bitmap from file using translator roster
     // Returns nullptr on failure (mock always returns nullptr)
-    static BBitmap* GetBitmapFile(const char* path) {
+    static BBitmap* GetBitmapFile(const char* path, BTranslatorRoster* roster = nullptr) {
         (void)path;
+        (void)roster;
         return nullptr;
     }
 

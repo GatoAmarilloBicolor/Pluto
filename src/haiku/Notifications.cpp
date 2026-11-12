@@ -26,7 +26,7 @@ void Notify(const std::string& title, const std::string& body,
     
     // Load icon from file if provided
     if (!icon.empty()) {
-        BBitmap* bitmap = BTranslationUtils::GetBitmapFile(icon.c_str());
+        BBitmap* bitmap = BTranslationUtils::GetBitmapFile(icon.c_str(), nullptr);
         if (bitmap) {
             notification.SetIcon(bitmap);
             // notification takes ownership of bitmap, don't delete
@@ -56,7 +56,7 @@ void NotificationCenter::NotificationLooper::MessageReceived(BMessage* msg) {
         notification.SetContent(body);
         // Load icon from file if provided in message
         if (iconPath.Length() > 0) {
-            BBitmap* bitmap = BTranslationUtils::GetBitmapFile(iconPath.String());
+            BBitmap* bitmap = BTranslationUtils::GetBitmapFile(iconPath.String(), nullptr);
             if (bitmap) {
                 notification.SetIcon(bitmap);
                 // notification takes ownership of bitmap, don't delete
