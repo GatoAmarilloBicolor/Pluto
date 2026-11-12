@@ -35,6 +35,7 @@ namespace gui {
 
 class ImagePreviewView;
 class TokenGauge;
+class QuickTabSwitchDialog;
 
 class MainWindow : public BWindow, public ConversationDelegate {
 public:
@@ -54,6 +55,8 @@ public:
 	// Search all tabs for messages mentioning `topic`. Returns relevant
 	// text extracts (max ~2000 chars) for context sharing between peers.
 	std::string SearchContext(const std::string& topic) const;
+
+	friend class QuickTabSwitchDialog;
 
 private:
 	struct LinkRegion {

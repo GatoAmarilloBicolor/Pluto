@@ -62,6 +62,11 @@ struct ConversationDelegate {
 	virtual void OnImage(const std::string& base64_data,
 	                     const std::string& media_type) = 0;
 
+	// Document received (base64) — show in side panel preview.
+	virtual void OnDocument(const std::string& base64_data,
+	                        const std::string& media_type,
+	                        const std::string& filename) = 0;
+
 	// Turn completed — re-enable Send, trigger auto-save, notification.
 	// |preview| is the last assistant text for notification.
 	virtual void OnTurnDone(const std::string& preview) = 0;

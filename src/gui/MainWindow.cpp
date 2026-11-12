@@ -98,6 +98,8 @@
 namespace pluto {
 namespace gui {
 
+class QuickTabSwitchDialog;
+
 namespace {
 
 // Palette colors are now defined in ChatColors.cpp and declared in
