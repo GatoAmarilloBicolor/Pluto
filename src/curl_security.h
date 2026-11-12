@@ -11,20 +11,15 @@ namespace pluto {
 // Applies consistent, strong TLS settings across all HTTPS requests
 
 struct CurlSecurityConfig {
-    // Known provider public key pins (SHA256 base64)
-    // Format: "sha256/<base64>"
     // Certificate pins for known providers (SHA256 base64)
     // Obtain with: openssl s_client -servername HOST -connect HOST:443 < /dev/null | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64
     // NOTE: Pins rotate with certificate renewal (~90 days). Update via fetch_pins.sh script.
-    // Return const char* to string literals (static storage duration) to avoid dangling pointers
-    // when passed to CURLOPT_PINNEDPUBLICKEY (libcurl may not copy immediately on all platforms).
+    // Pinning is currently DISABLED by default because placeholder/wrong pins cause
+    // CURLE_SSL_PINNEDPUBKEYNOTMATCH failures on all HTTPS connections. To re-enable
+    // for a specific host, return a valid pin here and ensure ApplyCurlSecurityWithPinning
+    // is used instead of ApplyCurlSecurity at the call site.
     static std::optional<const char*> GetPinForHost(const std::string& host) {
-        if (host == "api.anthropic.com") return "sha256/n+OFHb16YVI8KEux43Lk4jjFsK76xLolavlcACQEXq4=";
-        if (host == "api.openai.com") return "sha256/zgJl30S+m6z88y1sEqdP+1tyIuSuyEXkT1J6dAdEZXw=";
-        if (host == "generativelanguage.googleapis.com") return "sha256/udzO2pA9ijQ04FhrbsPAtyxOJF/gGKyaFnGZHBIERu8=";
-        if (host == "api.x.ai") return "sha256/5qFXq18qBWOnQeki85TW6rVzfkFFBH6Zgqzw4PJ6F/Y=";
-        if (host == "api.brave.com") return "sha256/OpiUzqarJTOGR4tXR0aXXIbYiyXi1+aSHPq/o5Ol6dM=";
-        if (host == "api.tavily.com") return "sha256/0lfaR8dbvRshBzvIOonl+CP49hbiDOP2I8wULXoGxus=";
+        (void)host;
         return std::nullopt;
     }
 };
@@ -41,24 +36,18 @@ inline bool ApplyCurlSecurity(CURL* curl, const std::string& url) {
     // Core TLS verification
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-    curl_easy_setopt(curl, CURLOPT_CAINFO, "/boot/system/data/ssl/CARootCertificates.pem");
 
-    // NOTE: OCSP Stapling verification (CURLOPT_SSL_VERIFYSTATUS) intentionally
-    // disabled — many MCP/proxy servers don't support OCSP stapling, causing
-    // spurious "SSL certificate status verification failed" errors. Basic peer
-    // and host verification remain enforced.
-
-    // For localhost/private IPs (self-hosted models, local Ollama, etc.),
-    // DO NOT disable verification. Instead, users should configure:
-    // - Custom CA bundle via CURLOPT_CAINFO pointing to their local CA
-    // - Or certificate pinning via CURLOPT_PINNEDPUBLICKEY for their server
-    // Disabling verification enables MITM attacks on local networks.
-    // If you need to connect to a local server with self-signed cert,
-    // set the PLUTO_CUSTOM_CA_BUNDLE env var to your CA file path.
+    // CA bundle path: only set a hardcoded default on Haiku.
+    // On other platforms, curl uses its built-in CA store unless overridden.
     const char* custom_ca = std::getenv("PLUTO_CUSTOM_CA_BUNDLE");
     if (custom_ca && *custom_ca) {
         curl_easy_setopt(curl, CURLOPT_CAINFO, custom_ca);
     }
+#ifdef __HAIKU__
+    else {
+        curl_easy_setopt(curl, CURLOPT_CAINFO, "/boot/system/data/ssl/CARootCertificates.pem");
+    }
+#endif
 
     // Connection limits
     curl_easy_setopt(curl, CURLOPT_MAXCONNECTS, 10L);
@@ -94,16 +83,13 @@ inline std::string ExtractHost(const std::string& url) {
 }
 
 // Apply security with pinning for known providers
+// NOTE: Pinning is disabled by default (GetPinForHost returns nullopt).
+// Use this for all HTTPS connections; it applies the same security settings
+// as ApplyCurlSecurity without risking pin mismatches.
 inline bool ApplyCurlSecurityWithPinning(CURL* curl, const std::string& url) {
     if (url.rfind("https://", 0) != 0) return false;
 
     if (!ApplyCurlSecurity(curl, url)) return false;
-
-    // Certificate pinning for known providers
-    std::string host = ExtractHost(url);
-    if (auto pin = CurlSecurityConfig::GetPinForHost(host)) {
-        curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, *pin);
-    }
 
     return true;
 }
