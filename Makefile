@@ -78,8 +78,6 @@ CORE_SRCS = src/lsp/LspClient.cpp \
             src/mcp/StdioTransport.cpp \
             src/mcp/SseSubscriber.cpp \
             src/mcp/SseTransport.cpp \
-            src/dsh/Bundle.cpp \
-            src/dsh/DshIntegration.cpp \
             src/provider/Anthropic.cpp \
             src/provider/OpenAICompat.cpp \
             src/provider/Provider.cpp \

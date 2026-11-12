@@ -214,12 +214,15 @@ public:
 
 private:
     mutable ::std::mutex mutex_;
+    
+protected:
     ::std::unordered_map<ServiceKey, ::std::shared_ptr<void>> services_;
     ::std::unordered_map<ServiceKey, ::std::function<::std::shared_ptr<void>()>> factories_;
     ::std::shared_ptr<PluginContext> parent_;
     EventBus event_bus_;
     
     // For isolate/extend to work
+protected:
     ::std::shared_ptr<PluginContext> shared_from_this() const {
         return ::std::static_pointer_cast<PluginContext>(weak_from_this().lock());
     }
@@ -228,6 +231,7 @@ private:
     }
     ::std::weak_ptr<PluginContext> weak_this_;
     
+private:
     template <typename T>
     friend ::std::shared_ptr<PluginContext> make_plugin_context();
 };

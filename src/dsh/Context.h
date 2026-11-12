@@ -100,7 +100,6 @@ public:
         child->parent_ = plugin_child->parent_;
         child->services_ = plugin_child->services_;
         child->factories_ = plugin_child->factories_;
-        child->event_bus_ = plugin_child->event_bus_;
         return child;
     }
 
@@ -111,7 +110,6 @@ public:
         child->parent_ = plugin_child->parent_;
         child->services_ = plugin_child->services_;
         child->factories_ = plugin_child->factories_;
-        child->event_bus_ = plugin_child->event_bus_;
         return child;
     }
 

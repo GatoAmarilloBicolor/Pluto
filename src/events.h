@@ -225,6 +225,44 @@ struct EventBus {
     Event<ToolResultEvent> tool_result;
     Event<SessionEvent> session;
     Event<AgentTurnEvent> agent_turn;
+
+    // Generic named events for DSH contexts
+    using GenericCallback = std::function<void(const void*)>;
+    mutable std::mutex generic_mutex_;
+    std::unordered_map<std::string, std::vector<std::pair<size_t, GenericCallback>>> generic_events_;
+    std::atomic<size_t> generic_next_id_{1};
+
+    template <typename T>
+    size_t subscribe(const std::string& name, std::function<void(const T&)> cb) {
+        std::lock_guard<std::mutex> lock(generic_mutex_);
+        size_t id = generic_next_id_++;
+        generic_events_[name].push_back({id, [cb = std::move(cb)](const void* data) {
+            cb(*static_cast<const T*>(data));
+        }});
+        return id;
+    }
+
+    void unsubscribe(const std::string& name, size_t id) {
+        std::lock_guard<std::mutex> lock(generic_mutex_);
+        auto it = generic_events_.find(name);
+        if (it != generic_events_.end()) {
+            it->second.erase(
+                std::remove_if(it->second.begin(), it->second.end(),
+                              [id](const auto& entry) { return entry.first == id; }),
+                it->second.end());
+        }
+    }
+
+    template <typename T>
+    void publish(const std::string& name, const T& event) {
+        std::lock_guard<std::mutex> lock(generic_mutex_);
+        auto it = generic_events_.find(name);
+        if (it != generic_events_.end()) {
+            for (auto& entry : it->second) {
+                entry.second(&event);
+            }
+        }
+    }
 };
 
 } // namespace pluto
