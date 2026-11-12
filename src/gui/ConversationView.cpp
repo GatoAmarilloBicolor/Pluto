@@ -18,7 +18,7 @@
 #include <Roster.h>
 #include <Screen.h>
 #include <ScrollView.h>
-#include <Storage.h>
+#include <FindDirectory.h>
 #include <String.h>
 #include <TextView.h>
 #include <TranslatorRoster.h>
