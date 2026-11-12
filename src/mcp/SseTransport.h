@@ -34,7 +34,7 @@ public:
     
     SseTransport(std::string sse_url,
                  std::map<std::string, std::string> headers,
-                 Config config = {});
+                 Config config = Config{});
     ~SseTransport() override;
 
     bool start(std::string& err) override;
