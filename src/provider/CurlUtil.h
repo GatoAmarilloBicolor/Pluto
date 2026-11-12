@@ -65,8 +65,14 @@ struct HeadersGuard {
 	}
 	
 	void append(const std::string& header) {
-		headers = curl_slist_append(headers, header.c_str());
-	}
+        curl_slist* new_headers = curl_slist_append(headers, header.c_str());
+        if (!new_headers) {
+            // OOM: curl_slist_append returns NULL on allocation failure
+            // Keep existing headers list, log and continue
+            return;
+        }
+        headers = new_headers;
+    }
 	curl_slist* get() const { return headers; }
 };
 

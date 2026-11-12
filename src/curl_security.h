@@ -15,7 +15,9 @@ struct CurlSecurityConfig {
     // Certificate pins for known providers (SHA256 base64)
     // Obtain with: openssl s_client -servername HOST -connect HOST:443 < /dev/null | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64
     // NOTE: Pins rotate with certificate renewal (~90 days). Update via fetch_pins.sh script.
-    static std::optional<std::string> GetPinForHost(const std::string& host) {
+    // Return const char* to string literals (static storage duration) to avoid dangling pointers
+    // when passed to CURLOPT_PINNEDPUBLICKEY (libcurl may not copy immediately on all platforms).
+    static std::optional<const char*> GetPinForHost(const std::string& host) {
         if (host == "api.anthropic.com") return "sha256/n+OFHb16YVI8KEux43Lk4jjFsK76xLolavlcACQEXq4=";
         if (host == "api.openai.com") return "sha256/zgJl30S+m6z88y1sEqdP+1tyIuSuyEXkT1J6dAdEZXw=";
         if (host == "generativelanguage.googleapis.com") return "sha256/udzO2pA9ijQ04FhrbsPAtyxOJF/gGKyaFnGZHBIERu8=";
@@ -88,7 +90,7 @@ inline bool ApplyCurlSecurityWithPinning(CURL* curl, const std::string& url) {
     // Certificate pinning for known providers
     std::string host = ExtractHost(url);
     if (auto pin = CurlSecurityConfig::GetPinForHost(host)) {
-        curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, pin->c_str());
+        curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, *pin);
     }
 
     return true;
