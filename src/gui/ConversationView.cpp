@@ -18,6 +18,7 @@
 #include <Roster.h>
 #include <Screen.h>
 #include <ScrollView.h>
+#include <Storage.h>
 #include <String.h>
 #include <TextView.h>
 #include <TranslatorRoster.h>
@@ -1744,7 +1745,7 @@ private:
 				
 				// Show notification
 				if (Window()) {
-					BNotification n(B_INFO_NOTIFICATION);
+					BNotification n(B_INFORMATION_NOTIFICATION);
 					n.SetGroup("Pluto");
 					n.SetTitle("Image saved");
 					n.SetContent(filePath.Path());
@@ -1816,8 +1817,7 @@ private:
 		// Create a scroll view with the full-size image
 		BBitmap* fullBitmap = new BBitmap(fBitmap->Bounds(), fBitmap->ColorSpace(), true);
 		if (fullBitmap->Lock()) {
-			fullBitmap->ImportBits(fBitmap->Bits(), (int32)fBitmap->BitsLength(), fBitmap->BytesPerRow(),
-			                       fBitmap->ColorSpace());
+			fullBitmap->ImportBits(fBitmap);
 			fullBitmap->Unlock();
 		}
 		
@@ -2152,7 +2152,7 @@ private:
 			info.SetType(fMimeType.c_str());
 			
 			if (Window()) {
-				BNotification n(B_INFO_NOTIFICATION);
+				BNotification n(B_INFORMATION_NOTIFICATION);
 				n.SetGroup("Pluto");
 				n.SetTitle("Document saved");
 				n.SetContent(filePath.Path());
@@ -2197,7 +2197,7 @@ private:
 		// In a real implementation, extract text from PDF
 		// For now, show a notification
 		if (Window()) {
-			BNotification n(B_INFO_NOTIFICATION);
+			BNotification n(B_INFORMATION_NOTIFICATION);
 			n.SetGroup("Pluto");
 			n.SetTitle("Text extraction");
 			n.SetContent("Text extraction requires PDF parsing library (not yet implemented)");
