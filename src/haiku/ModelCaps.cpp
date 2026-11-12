@@ -111,51 +111,71 @@ int guess_context(const std::string& model) {
 }
 
 // Global cache keyed by "provider:model".
-std::map<std::string, ModelCaps> g_caps_cache;
+struct CachedCaps {
+    ModelCaps caps;
+    std::chrono::steady_clock::time_point fetched_at;
+};
+
+std::map<std::string, CachedCaps> g_caps_cache;
 std::mutex g_caps_mutex;
+constexpr std::chrono::minutes CACHE_TTL{30};  // 30-minute TTL
 
 }  // namespace
 
 ModelCaps LookupModelCaps(const std::string& provider,
                           const std::string& base_url,
                           const std::string& model) {
-	std::lock_guard<std::mutex> lk(g_caps_mutex);
-	std::string key = provider + ":" + model;
-	auto it = g_caps_cache.find(key);
-	if (it != g_caps_cache.end())
-		return it->second;
+    std::lock_guard<std::mutex> lk(g_caps_mutex);
+    std::string key = provider + ":" + model;
+    auto it = g_caps_cache.find(key);
+    if (it != g_caps_cache.end()) {
+        // Check TTL
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(now - it->second.fetched_at);
+        if (elapsed < CACHE_TTL) {
+            return it->second.caps;
+        }
+        // Expired - remove and refetch
+        g_caps_cache.erase(it);
+    }
 
-	ModelCaps caps;
-	caps.max_output_tokens = guess_max_output(model);
-	caps.context_window    = guess_context(model);
-	caps.known = true;
+    ModelCaps caps;
+    caps.max_output_tokens = guess_max_output(model);
+    caps.context_window    = guess_context(model);
+    caps.known = true;
 
-	// Try to fetch from provider endpoint.
-	std::string url = models_url(base_url);
-	if (!url.empty()) {
-		std::string body = http_get_json(url);
-		if (!body.empty()) {
-			try {
-				json::Value root = json::Value::parse(body);
-				const json::Value* arr = root.find("data");
-				if (!arr || !arr->is_arr())
-					arr = root.find("models");
-				if (arr && arr->is_arr()) {
-					for (const auto& m : arr->as_arr()) {
-						std::string mid = m.str("id");
-						if (mid == model) {
-							caps.max_output_tokens = extract_int(m, "max_output_tokens", caps.max_output_tokens);
-							caps.context_window    = extract_int(m, "context_window", caps.context_window);
-							break;
-						}
-					}
-				}
-			} catch (const std::exception&) {}
-		}
-	}
+    // Try to fetch from provider endpoint.
+    std::string url = models_url(base_url);
+    if (!url.empty()) {
+        std::string body = http_get_json(url);
+        if (!body.empty()) {
+            try {
+                json::Value root = json::Value::parse(body);
+                const json::Value* arr = root.find("data");
+                if (!arr || !arr->is_arr())
+                    arr = root.find("models");
+                if (!arr || !arr->is_arr())
+                    arr = root.find("object");  // Some providers return {object: "list", data: [...]}
+                if (arr && arr->is_str() && arr->as_str() == "list") {
+                    arr = root.find("data");
+                }
+                if (arr && arr->is_arr()) {
+                    for (const auto& m : arr->as_arr()) {
+                        std::string mid = m.str("id");
+                        if (mid == model) {
+                            caps.max_output_tokens = extract_int(m, "max_output_tokens", caps.max_output_tokens);
+                            caps.context_window    = extract_int(m, "context_window", caps.context_window);
+                            caps.max_output_tokens = extract_int(m, "max_tokens", caps.max_output_tokens);  // Alternative field name
+                            break;
+                        }
+                    }
+                }
+            } catch (const std::exception&) {}
+        }
+    }
 
-	g_caps_cache[key] = caps;
-	return caps;
+    g_caps_cache[key] = {caps, std::chrono::steady_clock::now()};
+    return caps;
 }
 
 void PrefetchModelCaps(const std::string& provider,

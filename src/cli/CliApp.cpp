@@ -229,11 +229,6 @@ CliApp::CliApp(int argc, char** argv) {
 CliApp::~CliApp() = default;
 
 void CliApp::parse_args(int argc, char** argv) {
-    if (argc < 2) {
-        options_.help = true;
-        return;
-    }
-
     // Check for subcommands first
     std::string first_arg = argv[1];
     

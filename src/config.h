@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -34,8 +35,38 @@ struct ModeEntry {
 	std::vector<std::string> disabled_tools;     // tools to hide in this mode
 };
 
+// A model entry from a .conf provider profile.
+struct ProviderConfModel {
+	std::string label;
+	std::string id;
+	int         max_tokens     = 4096;
+	int         context_window = 128000;
+};
+
+// A provider profile loaded from data/providers/*.conf or
+// ~/config/settings/pluto/providers/*.conf.
+struct ProviderConf {
+	std::string label;
+	std::string base_url;
+	std::string api_key_env;
+	std::vector<ProviderConfModel> models;
+};
+
+// Saved provider configuration in the main config file.
+// Allows multiple providers to be configured simultaneously.
+struct SavedProviderConfig {
+	std::string name;           // user-facing name (e.g., "anthropic", "ollama", "openrouter")
+	std::string provider_type;  // "anthropic" or "openai-compat"
+	std::string model;
+	std::string base_url;
+	std::string api_key_env;
+	int max_tokens = 4096;
+	int context_window = 0;
+	bool cache = true;
+};
+
 struct Config {
-	std::string provider = "anthropic";
+	std::string provider = "anthropic";  // active provider name (key into providers map)
 	std::string model = "claude-opus-4-5";
 	std::string base_url;          // optional, for openai-compat
 	std::string api_key_env = "ANTHROPIC_API_KEY";
@@ -46,7 +77,7 @@ struct Config {
 	bool cache = true;             // ephemeral cache_control on system+tools
 	int font_delta = 0;            // GUI font zoom delta, persisted
 	bool dry_run = false;          // skip API call, emit a preview of the request
-int max_iterations = 25; // max agent loop iterations per turn
+	int max_iterations = 25; // max agent loop iterations per turn
 	int max_tool_output = 48 * 1024; // max tool output bytes before truncation
 	int model_output_cap = 0; // 0 = auto-detect from model name
 
@@ -72,6 +103,10 @@ int max_iterations = 25; // max agent loop iterations per turn
 	// Triggered skills: loaded on demand when user message matches keywords.
 	std::vector<SkillEntry> triggered_skills;
 
+	// Saved provider configurations (multiple providers can be configured).
+	// Key is the provider name (e.g., "anthropic", "ollama", "my-custom").
+	std::map<std::string, SavedProviderConfig> providers;
+
 	// System One decision engine configuration.
 	bool systemone_enabled = true;
 	std::string systemone_model = "auto";  // kev, laya, jev, local, auto
@@ -92,23 +127,6 @@ int max_iterations = 25; // max agent loop iterations per turn
 
 	// MCP server configuration lives in its own files (.mcp.json etc);
 	// see src/mcp/Config.h.
-};
-
-// A model entry from a .conf provider profile.
-struct ProviderConfModel {
-	std::string label;
-	std::string id;
-	int         max_tokens     = 4096;
-	int         context_window = 128000;
-};
-
-// A provider profile loaded from data/providers/*.conf or
-// ~/config/settings/pluto/providers/*.conf.
-struct ProviderConf {
-	std::string label;
-	std::string base_url;
-	std::string api_key_env;
-	std::vector<ProviderConfModel> models;
 };
 
 // Parse a single .conf file into a ProviderConf. Returns false on failure.

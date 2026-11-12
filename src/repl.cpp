@@ -87,7 +87,7 @@ static const char* kSlashCommands[] = {
 	"/ask", "/commands", "/context", "/copy", "/cost", "/delegate",
 	"/delete", "/events", "/help", "/hotkeys", "/init", "/list", "/load",
 	"/map", "/mode", "/model", "/models", "/modes",
-	"/peers", "/plan", "/quit", "/reset", "/resume",
+	"/peers", "/plan", "/provider", "/quit", "/reset", "/resume",
 	"/routine", "/routines", "/save", "/share", "/tag", "/title",
 	"/tools", "/untag", "/unwatch", "/watch", "/systemone",
 	nullptr
@@ -660,6 +660,7 @@ int RunRepl(std::unique_ptr<Provider>& provider, Config& cfg,
 			std::printf("  /compact             summarize conversation to free context\n");
 			std::printf("  /tools               list registered tools\n");
 			std::printf("  /model ID            switch model for subsequent turns\n");
+			std::printf("  /provider [name]     list/switch/add/remove providers\n");
 			std::printf("  /models [URL]        list models on Ollama/OpenAI server\n");
 			std::printf("  /cost                show session token totals\n");
 			std::printf("  /copy                copy last assistant reply to clipboard\n");
@@ -1395,6 +1396,136 @@ if (line == "/cost") {
 				}
 				std::printf("  model: %s\n", cfg.model.c_str());
 				SaveConfig(cfg);
+			}
+			continue;
+		}
+		if (line.rfind("/provider", 0) == 0 && (line.size() == 9 || line[9] == ' ')) {
+			// /provider           — list configured providers
+			// /provider <name>    — switch to provider
+			// /provider add <name> [type] [model] [base_url] [api_key_env] — add provider
+			// /provider remove <name> — remove provider
+			if (line.size() <= 10) {
+				// List providers
+				std::printf("  Configured providers:\n");
+				for (const auto& [name, p] : cfg.providers) {
+					std::string marker = (name == cfg.provider) ? "* " : "  ";
+					std::printf("  %s%-15s  type=%-12s  model=%-30s  url=%s\n",
+						marker.c_str(), name.c_str(), p.provider_type.c_str(),
+						p.model.c_str(), p.base_url.c_str());
+				}
+				std::printf("\n  Use '/provider <name>' to switch.\n");
+			} else {
+				std::string args = line.substr(10);
+				while (!args.empty() && args.front() == ' ') args.erase(0, 1);
+				
+				// Parse subcommand
+				size_t sp = args.find(' ');
+				std::string subcmd = (sp == std::string::npos) ? args : args.substr(0, sp);
+				std::string rest = (sp == std::string::npos) ? "" : args.substr(sp + 1);
+				while (!rest.empty() && rest.front() == ' ') rest.erase(0, 1);
+				
+				if (subcmd == "add") {
+					// /provider add <name> [type] [model] [base_url] [api_key_env]
+					size_t p1 = rest.find(' ');
+					if (p1 == std::string::npos) {
+						std::printf("  usage: /provider add <name> [type] [model] [base_url] [api_key_env]\n");
+					} else {
+						std::string name = rest.substr(0, p1);
+						std::string remaining = rest.substr(p1 + 1);
+						while (!remaining.empty() && remaining.front() == ' ') remaining.erase(0, 1);
+						
+						std::string type = "openai-compat";
+						std::string model = "";
+						std::string base_url = "";
+						std::string api_key_env = "";
+						
+						size_t p2 = remaining.find(' ');
+						if (p2 != std::string::npos) {
+							type = remaining.substr(0, p2);
+							remaining = remaining.substr(p2 + 1);
+							while (!remaining.empty() && remaining.front() == ' ') remaining.erase(0, 1);
+							
+							p2 = remaining.find(' ');
+							if (p2 != std::string::npos) {
+								model = remaining.substr(0, p2);
+								remaining = remaining.substr(p2 + 1);
+								while (!remaining.empty() && remaining.front() == ' ') remaining.erase(0, 1);
+								
+								p2 = remaining.find(' ');
+								if (p2 != std::string::npos) {
+									base_url = remaining.substr(0, p2);
+									remaining = remaining.substr(p2 + 1);
+									while (!remaining.empty() && remaining.front() == ' ') remaining.erase(0, 1);
+									api_key_env = remaining;
+								} else {
+									base_url = remaining;
+								}
+							} else {
+								model = remaining;
+							}
+						}
+						
+						SavedProviderConfig p;
+						p.name = name;
+						p.provider_type = type;
+						p.model = model.empty() ? (type == "anthropic" ? "claude-sonnet-4-5" : "llama3.1") : model;
+						p.base_url = base_url;
+						p.api_key_env = api_key_env;
+						p.max_tokens = 4096;
+						p.context_window = (type == "anthropic") ? 200000 : 128000;
+						p.cache = true;
+						cfg.providers[name] = std::move(p);
+						cfg.provider = name;
+						cfg.model = cfg.providers[name].model;
+						cfg.base_url = cfg.providers[name].base_url;
+						cfg.api_key_env = cfg.providers[name].api_key_env;
+						cfg.max_tokens = cfg.providers[name].max_tokens;
+						cfg.context_window = cfg.providers[name].context_window;
+						cfg.cache = cfg.providers[name].cache;
+						
+						auto prov = CreateProvider(cfg);
+						if (prov) provider = std::move(prov);
+						
+						SaveConfig(cfg);
+						std::printf("  added provider '%s' (%s)\n", name.c_str(), type.c_str());
+					}
+				} else if (subcmd == "remove" || subcmd == "rm") {
+					if (rest.empty()) {
+						std::printf("  usage: /provider remove <name>\n");
+					} else {
+						if (cfg.providers.erase(rest)) {
+							if (cfg.provider == rest) {
+								cfg.provider = "anthropic";
+								cfg.providers["anthropic"] = SavedProviderConfig{"anthropic", "anthropic", "claude-sonnet-4-5", "", "ANTHROPIC_API_KEY", 4096, 200000, true};
+							}
+							SaveConfig(cfg);
+							std::printf("  removed provider '%s'\n", rest.c_str());
+						} else {
+							std::printf("  provider '%s' not found\n", rest.c_str());
+						}
+					}
+				} else {
+					// Switch provider
+					std::string name = subcmd;
+					auto it = cfg.providers.find(name);
+					if (it != cfg.providers.end()) {
+						cfg.provider = name;
+						cfg.model = it->second.model;
+						cfg.base_url = it->second.base_url;
+						cfg.api_key_env = it->second.api_key_env;
+						cfg.max_tokens = it->second.max_tokens;
+						cfg.context_window = it->second.context_window;
+						cfg.cache = it->second.cache;
+						
+						auto prov = CreateProvider(cfg);
+						if (prov) provider = std::move(prov);
+						
+						SaveConfig(cfg);
+						std::printf("  switched to provider '%s' (model: %s)\n", name.c_str(), cfg.model.c_str());
+					} else {
+						std::printf("  provider '%s' not found\n", name.c_str());
+					}
+				}
 			}
 			continue;
 		}

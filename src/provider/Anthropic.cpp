@@ -45,6 +45,9 @@ struct StreamState {
     int output_tokens = 0;
     int cache_read = 0;
     int cache_creation = 0;
+    
+    // For stop_reason from message_delta
+    std::string stop_reason;
 };
 
 json::Value ephemeral_cache_control() {
@@ -292,7 +295,7 @@ static void process_sse_line(const std::string& line, StreamState& st) {
                 const json::Value* sr_val = delta->find("stop_reason");
                 std::string sr = sr_val ? sr_val->as_str() : "";
                 if (!sr.empty()) {
-                    // store for message_end
+                    st.stop_reason = sr;  // Store for message_stop
                 }
             }
             if (delta && delta->find("usage")) {
@@ -304,10 +307,29 @@ static void process_sse_line(const std::string& line, StreamState& st) {
             }
         }
         else if (type == "message_stop") {
-            // Final usage may be here
+            // Final usage may be here; emit message end with stored stop_reason
+            if (!st.stop_reason.empty()) {
+                emit_message_end(st, st.stop_reason);
+                st.stop_reason.clear();
+            }
         }
+        else if (type == "error") {
+            // SSE error event from Anthropic API
+            const json::Value* error_obj = v.find("error");
+            if (error_obj) {
+                std::string err_type = error_obj->find("type") ? error_obj->find("type")->as_str() : "api_error";
+                std::string err_msg = error_obj->find("message") ? error_obj->find("message")->as_str() : "Unknown error";
+                StreamEvent err;
+                err.type = StreamEvent::ERROR;
+                err.error = err_type + ": " + err_msg;
+                st.cb(err);
+            }
+        }
+    } catch (const std::exception& e) {
+        // Log parse errors but continue streaming
+        log_request(LogLevel::WARN, "SSE parse error: " + std::string(e.what()));
     } catch (...) {
-        // Ignore parse errors in streaming
+        log_request(LogLevel::WARN, "SSE parse error: unknown exception");
     }
 }
 

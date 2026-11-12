@@ -72,13 +72,19 @@ inline bool ApplyCurlSecurity(CURL* curl, const std::string& url) {
     return true;
 }
 
-// Extract host from URL for pinning
+// Extract host from URL for pinning (strips port if present)
 inline std::string ExtractHost(const std::string& url) {
     size_t proto = url.find("://");
     if (proto == std::string::npos) return "";
     size_t start = proto + 3;
     size_t end = url.find_first_of("/?#", start);
-    return (end == std::string::npos) ? url.substr(start) : url.substr(start, end - start);
+    std::string host = (end == std::string::npos) ? url.substr(start) : url.substr(start, end - start);
+    // Strip port if present
+    size_t colon = host.find(':');
+    if (colon != std::string::npos) {
+        host = host.substr(0, colon);
+    }
+    return host;
 }
 
 // Apply security with pinning for known providers
@@ -125,10 +131,17 @@ inline bool IsPrivateIP(const std::string& ip) {
 
 // SSRF protection: check if a host is blocked (localhost or private IP)
 inline bool IsBlockedHost(const std::string& host) {
-    if (host == "localhost" || host == "localhost.localdomain") return true;
+    // Strip port if present
+    std::string h = host;
+    size_t colon = h.find(':');
+    if (colon != std::string::npos) {
+        h = h.substr(0, colon);
+    }
+    
+    if (h == "localhost" || h == "localhost.localdomain") return true;
     // Check if host is an IP address
-    if (!host.empty() && (std::isdigit(host[0]) || host[0] == '[')) {
-        std::string ip = host;
+    if (!h.empty() && (std::isdigit(h[0]) || h[0] == '[')) {
+        std::string ip = h;
         if (ip[0] == '[') { // IPv6 with brackets
             size_t end = ip.find(']');
             if (end != std::string::npos) ip = ip.substr(1, end - 1);

@@ -182,6 +182,8 @@ struct OaiStreamState {
     
     int input_tokens = 0;
     int output_tokens = 0;
+    int cache_read_tokens = 0;
+    int cache_creation_tokens = 0;
     
     enum { IDLE, IN_TEXT, IN_TOOL, IN_DOCUMENT } state = IDLE;
 };
@@ -238,6 +240,8 @@ static void oai_emit_message_end(OaiStreamState& st, const std::string& stop_rea
     ev.stop_reason = stop_reason;
     ev.input_tokens = st.input_tokens;
     ev.output_tokens = st.output_tokens;
+    ev.cache_read_tokens = st.cache_read_tokens;
+    ev.cache_creation_tokens = st.cache_creation_tokens;
     try { st.cb(ev); } catch (...) { st.cb_error = true; }
 }
 
@@ -263,6 +267,10 @@ static void oai_process_line(const std::string& line, OaiStreamState& st) {
             const json::Value* completion_tokens = u->find("completion_tokens");
             if (prompt_tokens) st.input_tokens = static_cast<int>(prompt_tokens->as_num());
             if (completion_tokens) st.output_tokens = static_cast<int>(completion_tokens->as_num());
+            const json::Value* cache_read = u->find("cache_read_input_tokens");
+            if (cache_read) st.cache_read_tokens = static_cast<int>(cache_read->as_num());
+            const json::Value* cache_creation = u->find("cache_creation_input_tokens");
+            if (cache_creation) st.cache_creation_tokens = static_cast<int>(cache_creation->as_num());
         }
         
         const json::Value* delta = choice.find("delta");
@@ -362,7 +370,7 @@ static void oai_process_line(const std::string& line, OaiStreamState& st) {
         const json::Value* fr_val = choice.find("finish_reason");
         if (fr_val && !fr_val->is_null()) {
             std::string fr = fr_val->as_str();
-            if (fr != "null") {
+            if (!fr.empty() && fr != "null") {
                 if (st.state == OaiStreamState::IN_TOOL) {
                     oai_emit_tool_end(st, st.current_tool_args, st.current_tool_index);
                 } else if (st.state == OaiStreamState::IN_DOCUMENT) {
@@ -383,7 +391,17 @@ static size_t oai_write_callback(char* ptr, size_t size, size_t nmemb, void* use
     size_t total = size * nmemb;
     try {
         st->buffer.append(ptr, total);
+    } catch (const std::exception& e) {
+        StreamEvent err;
+        err.type = StreamEvent::ERROR;
+        err.error = std::string("buffer append failed: ") + e.what();
+        try { st->cb(err); } catch (...) {}
+        return 0;
     } catch (...) {
+        StreamEvent err;
+        err.type = StreamEvent::ERROR;
+        err.error = "buffer append failed: unknown exception";
+        try { st->cb(err); } catch (...) {}
         return 0;
     }
     
@@ -395,8 +413,18 @@ static size_t oai_write_callback(char* ptr, size_t size, size_t nmemb, void* use
         if (!line.empty() && line.back() == '\r') line.pop_back();
         try {
             oai_process_line(line, *st);
+        } catch (const std::exception& e) {
+            StreamEvent err;
+            err.type = StreamEvent::ERROR;
+            err.error = std::string("stream parse error: ") + e.what();
+            try { st->cb(err); } catch (...) {}
+            return 0;
         } catch (...) {
-            st->cb_error = true;
+            StreamEvent err;
+            err.type = StreamEvent::ERROR;
+            err.error = "stream parse error: unknown exception";
+            try { st->cb(err); } catch (...) {}
+            return 0;
         }
         if (st->cb_error) return 0;
     }
@@ -480,9 +508,24 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
     // Log request
     log_request(LogLevel::INFO, "POST " + base_url + " (attempt 1/" + std::to_string(fRetryPolicy.max_attempts) + ")");
 
-    bool tools_stripped = false;
+    // Check if this model is known to not support tools
+    bool model_tools_unsupported = fToolsUnsupportedModels.count(req.model) > 0;
     CompletionRequest current_req = req;
     std::string current_body = body;
+    if (model_tools_unsupported) {
+        current_req.tools.clear();
+        try {
+            current_body = build_oai_body(current_req);
+        } catch (const std::exception& e) {
+            StreamEvent err;
+            err.type = StreamEvent::ERROR;
+            err.error = std::string("rebuild request failed: ") + e.what();
+            try { cb(err); } catch (...) {}
+            return;
+        }
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, current_body.c_str());
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(current_body.size()));
+    }
 
     for (int attempt = 1; attempt <= fRetryPolicy.max_attempts; ++attempt) {
         // Check circuit breaker before each attempt
@@ -537,9 +580,9 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
             fCircuitBreaker.record_success();
             log_request(LogLevel::DEBUG, "Request succeeded (HTTP 200)");
             return;
-        } else if (http_code == 400 && !tools_stripped && !current_req.tools.empty()) {
+        } else if (http_code == 400 && !current_req.tools.empty()) {
             // Special case: model doesn't support tools
-            tools_stripped = true;
+            fToolsUnsupportedModels.insert(req.model);
             current_req.tools.clear();
             try {
                 current_body = build_oai_body(current_req);

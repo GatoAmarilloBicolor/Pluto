@@ -9,6 +9,7 @@ else
     # On macOS/Linux, use mock headers for cross-compilation
     CXXFLAGS = -D__HAIKU__ -std=c++17 -Wall -Wextra -O2 -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include -Imock_headers/override -idirafter mock_headers/haiku -Isrc -I/opt/homebrew/include -MMD -MP
     LDLIBS   = -lcurl -lcrypto -ledit -Lmock_libs -lbe -lnetwork -ltranslation -ltracker -lmock_archivable -L/opt/homebrew/lib
+    LDFLAGS  = -Wl,-rpath,@loader_path/mock_libs
 endif
 
 PKG_NAME    = pluto
@@ -170,7 +171,7 @@ PLUTO_RSRC_LINK =
 endif
 
 Pluto_cli: $(CORE_OBJS) $(CLI_OBJS) $(PLUTO_RSRC_DEP)
-	$(CXX) $(CXXFLAGS) -o $@ $(CORE_OBJS) $(CLI_OBJS) $(LDLIBS)
+	$(CXX) $(CXXFLAGS) -o $@ $(CORE_OBJS) $(CLI_OBJS) $(LDLIBS) $(LDFLAGS)
 	$(PLUTO_RSRC_LINK)
 
 # Compile md4c (C file) separately.

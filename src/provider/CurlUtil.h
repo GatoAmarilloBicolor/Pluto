@@ -126,15 +126,20 @@ struct CircuitBreaker {
     int failure_threshold = 5;      // Open after N consecutive failures
     int success_threshold = 2;      // Close after N consecutive successes
     long reset_timeout_ms = 60000;  // Time before allowing test request (1 min)
+    // Track test request in half-open state to prevent thundering herd
+    int half_open_requests = 0;
+    const int max_half_open = 1;    // Allow only 1 test request at a time
     
     // Record a successful request
     void record_success() {
         std::lock_guard<std::mutex> lock(mutex);
         if (!open) { failures = 0; successes = 0; return; }
         failures = 0;
+        last_failure = {};  // Clear last_failure when recovering
         if (++successes >= success_threshold) {
             open = false;
             successes = 0;
+            half_open_requests = 0;
         }
     }
     
@@ -143,6 +148,9 @@ struct CircuitBreaker {
         std::lock_guard<std::mutex> lock(mutex);
         successes = 0;
         last_failure = std::chrono::steady_clock::now();
+        if (open) {
+            half_open_requests = 0;  // Reset half-open counter on failure
+        }
         if (++failures >= failure_threshold) {
             open = true;
         }
@@ -156,8 +164,12 @@ struct CircuitBreaker {
         auto now = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_failure).count();
         if (elapsed >= reset_timeout_ms) {
-            // Half-open: allow one test request
-            return true;
+            // Half-open: allow one test request at a time
+            if (half_open_requests < max_half_open) {
+                ++half_open_requests;
+                return true;
+            }
+            return false;
         }
         return false;
     }

@@ -4,6 +4,8 @@
 #include "CurlUtil.h"
 #include "../token_estimator.h"
 
+#include <unordered_set>
+
 namespace pluto {
 
 // OpenAI-compatible chat/completions provider. Works with:
@@ -46,6 +48,8 @@ private:
     std::string fModel;
     RetryPolicy fRetryPolicy;
     CircuitBreaker fCircuitBreaker;
+    // Track models that don't support tools (persists across turns)
+    std::unordered_set<std::string> fToolsUnsupportedModels;
 };
 
 }  // namespace pluto

@@ -188,6 +188,135 @@ bool MainWindow::_HandleSlashCommand(const std::string& text) {
 		return true;
 	}
 
+	if (text.rfind("/provider", 0) == 0) {
+		if (text.size() <= 10) {
+			// List providers
+			_Append("Configured providers:\n", ui_color(B_DOCUMENT_TEXT_COLOR), B_BOLD_FACE);
+			for (const auto& [name, p] : fConfig->providers) {
+				std::string marker = (name == fConfig->provider) ? "* " : "  ";
+				_Append("  " + marker + name + "  (type=" + p.provider_type + ", model=" + p.model + ", url=" + p.base_url + ")\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+			}
+			_Append("\nUse '/provider <name>' to switch. Use '/provider add <name> [type] [model] [base_url] [api_key_env]' to add.\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		} else {
+			std::string args = text.substr(10);
+			while (!args.empty() && args.front() == ' ') args.erase(0, 1);
+			
+			// Parse subcommand
+			size_t sp = args.find(' ');
+			std::string subcmd = (sp == std::string::npos) ? args : args.substr(0, sp);
+			std::string rest = (sp == std::string::npos) ? "" : args.substr(sp + 1);
+			while (!rest.empty() && rest.front() == ' ') rest.erase(0, 1);
+			
+			if (subcmd == "add") {
+				// /provider add <name> [type] [model] [base_url] [api_key_env]
+				size_t p1 = rest.find(' ');
+				if (p1 == std::string::npos) {
+					_Append("usage: /provider add <name> [type] [model] [base_url] [api_key_env]\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+				} else {
+					std::string name = rest.substr(0, p1);
+					std::string remaining = rest.substr(p1 + 1);
+					while (!remaining.empty() && remaining.front() == ' ') remaining.erase(0, 1);
+					
+					std::string type = "openai-compat";
+					std::string model = "";
+					std::string base_url = "";
+					std::string api_key_env = "";
+					
+					size_t p2 = remaining.find(' ');
+					if (p2 != std::string::npos) {
+						type = remaining.substr(0, p2);
+						remaining = remaining.substr(p2 + 1);
+						while (!remaining.empty() && remaining.front() == ' ') remaining.erase(0, 1);
+						
+						p2 = remaining.find(' ');
+						if (p2 != std::string::npos) {
+							model = remaining.substr(0, p2);
+							remaining = remaining.substr(p2 + 1);
+							while (!remaining.empty() && remaining.front() == ' ') remaining.erase(0, 1);
+							
+							p2 = remaining.find(' ');
+							if (p2 != std::string::npos) {
+								base_url = remaining.substr(0, p2);
+								remaining = remaining.substr(p2 + 1);
+								while (!remaining.empty() && remaining.front() == ' ') remaining.erase(0, 1);
+								api_key_env = remaining;
+							} else {
+								base_url = remaining;
+							}
+						} else {
+							model = remaining;
+						}
+					}
+					
+					pluto::SavedProviderConfig p;
+					p.name = name;
+					p.provider_type = type;
+					p.model = model.empty() ? (type == "anthropic" ? "claude-sonnet-4-5" : "llama3.1") : model;
+					p.base_url = base_url;
+					p.api_key_env = api_key_env;
+					p.max_tokens = 4096;
+					p.context_window = (type == "anthropic") ? 200000 : 128000;
+					p.cache = true;
+					fConfig->providers[name] = std::move(p);
+					fConfig->provider = name;
+					fConfig->model = fConfig->providers[name].model;
+					fConfig->base_url = fConfig->providers[name].base_url;
+					fConfig->api_key_env = fConfig->providers[name].api_key_env;
+					fConfig->max_tokens = fConfig->providers[name].max_tokens;
+					fConfig->context_window = fConfig->providers[name].context_window;
+					fConfig->cache = fConfig->providers[name].cache;
+					
+					if (_ActiveConv()) {
+						auto prov = pluto::CreateProvider(*fConfig);
+						if (prov) _ActiveConv()->SetProvider(std::move(prov));
+					}
+					
+					pluto::SaveConfig(*fConfig);
+					_Append("Added provider '" + name + "' (" + type + ")\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+				}
+			} else if (subcmd == "remove" || subcmd == "rm") {
+				if (rest.empty()) {
+					_Append("usage: /provider remove <name>\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+				} else {
+					if (fConfig->providers.erase(rest)) {
+						if (fConfig->provider == rest) {
+							fConfig->provider = "anthropic";
+							fConfig->providers["anthropic"] = pluto::SavedProviderConfig{"anthropic", "anthropic", "claude-sonnet-4-5", "", "ANTHROPIC_API_KEY", 4096, 200000, true};
+						}
+						pluto::SaveConfig(*fConfig);
+						_Append("Removed provider '" + rest + "'\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+					} else {
+						_Append("Provider '" + rest + "' not found\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+					}
+				}
+			} else {
+				// Switch provider
+				std::string name = subcmd;
+				auto it = fConfig->providers.find(name);
+				if (it != fConfig->providers.end()) {
+					fConfig->provider = name;
+					fConfig->model = it->second.model;
+					fConfig->base_url = it->second.base_url;
+					fConfig->api_key_env = it->second.api_key_env;
+					fConfig->max_tokens = it->second.max_tokens;
+					fConfig->context_window = it->second.context_window;
+					fConfig->cache = it->second.cache;
+					
+					if (_ActiveConv()) {
+						auto prov = pluto::CreateProvider(*fConfig);
+						if (prov) _ActiveConv()->SetProvider(std::move(prov));
+					}
+					
+					pluto::SaveConfig(*fConfig);
+					_Append("Switched to provider '" + name + "' (model: " + fConfig->model + ")\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+				} else {
+					_Append("Provider '" + name + "' not found\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+				}
+			}
+		}
+		return true;
+	}
+
 	if (text == "/plan") {
 		if (fConfig->active_mode == "plan")
 			fConfig->active_mode.clear();
@@ -704,6 +833,7 @@ std::thread([messenger, input_arg]() {
 			"GUI commands:\n"
 			"  /tools             list registered tools\n"
 			"  /model [ID]        show or switch model\n"
+			"  /provider [name]   list/switch/add/remove providers\n"
 			"  /cost              show session token totals\n"
 			"  /compact           summarize conversation to free context\n"
 			"  /copy              copy last assistant reply to clipboard\n"

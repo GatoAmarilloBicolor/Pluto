@@ -318,18 +318,20 @@ void RunTurn(Provider& provider,
 		if (!rag_block.empty()) {
 			req.system += "\n\n" + rag_block;
 		}
-		req.messages = messages;
-		// Skip tools for models known not to support tool use,
-		// or if a previous turn in this session failed with tool_use error.
-		// Reset if the model changes (e.g. via /model switch).
-		static thread_local bool tools_disabled = false;
-		static thread_local std::string tools_disabled_model;
-		if (tools_disabled && tools_disabled_model != cfg.model) {
-			tools_disabled = false;
-			tools_disabled_model.clear();
-		}
-		bool skip_tools = tools_disabled;
-		req.tools = skip_tools ? std::vector<ToolDef>{} : tool_defs;
+req.messages = messages;
+    // Skip tools for models known not to support tool use,
+    // or if a previous turn in this session failed with tool_use error.
+    // Reset if the model changes (e.g. via /model switch).
+    // Use a thread-safe map to track per-model tool support across sessions.
+    static std::mutex tools_disabled_mutex;
+    static std::unordered_set<std::string> tools_disabled_models;
+    
+    bool skip_tools = false;
+    {
+        std::lock_guard<std::mutex> lock(tools_disabled_mutex);
+        skip_tools = tools_disabled_models.count(cfg.model) > 0;
+    }
+    req.tools = skip_tools ? std::vector<ToolDef>{} : tool_defs;
 		req.max_tokens = cfg.max_tokens;
 
 		// Clamp max_tokens to known per-model output limits to avoid
@@ -477,27 +479,34 @@ void RunTurn(Provider& provider,
 						            ev.cache_creation_tokens);
 					}
 					break;
-				case StreamEvent::ERROR:
-					had_error = true;
-					// Detect "no tool use support" errors from providers.
-					// Use more specific patterns to avoid false positives
-					// (e.g. "invalid tools schema", network errors mentioning tools).
-					{
-						std::string err = ev.error;
-						std::transform(err.begin(), err.end(), err.begin(),
-							[](unsigned char c){ return std::tolower(c); });
-						if (err.find("tool use not supported") != std::string::npos
-						    || err.find("tools not supported") != std::string::npos
-						    || err.find("tool use is not available") != std::string::npos
-						    || err.find("does not support tool") != std::string::npos
-						    || err.find("tool use disabled") != std::string::npos
-						    || err.find("tool calling not supported") != std::string::npos
-						    || err.find("function calling not supported") != std::string::npos) {
-							tool_use_unsupported = true;
-						}
-					}
-					if (ui.on_error) ui.on_error(ev.error);
-					break;
+case StreamEvent::ERROR:
+                    had_error = true;
+                    // Detect "no tool use support" errors from providers.
+                    // Use specific patterns to avoid false positives
+                    // (e.g. "invalid tools schema", network errors mentioning tools).
+                    {
+                        std::string err = ev.error;
+                        std::transform(err.begin(), err.end(), err.begin(),
+                            [](unsigned char c){ return std::tolower(c); });
+                        // Check for explicit tool support errors (not just "tool" in error)
+                        // Must contain "tool" AND one of the specific unsupported phrases
+                        bool has_tool_word = err.find("tool") != std::string::npos || 
+                                             err.find("function") != std::string::npos;
+                        if (has_tool_word && (
+                            err.find("tool use not supported") != std::string::npos
+                            || err.find("tools not supported") != std::string::npos
+                            || err.find("tool use is not available") != std::string::npos
+                            || err.find("does not support tool") != std::string::npos
+                            || err.find("tool use disabled") != std::string::npos
+                            || err.find("tool calling not supported") != std::string::npos
+                            || err.find("function calling not supported") != std::string::npos
+                            || err.find("tool use not implemented") != std::string::npos
+                            || err.find("model does not support") != std::string::npos)) {
+                            tool_use_unsupported = true;
+                        }
+                    }
+                    if (ui.on_error) ui.on_error(ev.error);
+                    break;
 				case StreamEvent::RETRY_INFO:
 					if (ui.on_status) ui.on_status(ev.text);
 					break;
@@ -510,21 +519,23 @@ void RunTurn(Provider& provider,
 			}
 		});
 
-		if (had_error) {
-			if (tool_use_unsupported && !req.tools.empty()) {
-				// Retry without tools — the model doesn't support them.
-				// Remember for subsequent turns until model changes.
-				tools_disabled = true;
-				tools_disabled_model = cfg.model;
-				if (ui.on_status)
-					ui.on_status("Retrying without tools…");
-				req.tools.clear();
-				had_error = false;
-				tool_use_unsupported = false;
-				stop_reason.clear();
-				assistant = Message{};
-				assistant.role = "assistant";
-				active_text_idx = -1;
+if (had_error) {
+            if (tool_use_unsupported && !req.tools.empty()) {
+                // Retry without tools — the model doesn't support them.
+                // Remember for subsequent turns.
+                {
+                    std::lock_guard<std::mutex> lock(tools_disabled_mutex);
+                    tools_disabled_models.insert(cfg.model);
+                }
+                if (ui.on_status)
+                    ui.on_status("Retrying without tools…");
+                req.tools.clear();
+                had_error = false;
+                tool_use_unsupported = false;
+                stop_reason.clear();
+                assistant = Message{};
+                assistant.role = "assistant";
+                active_text_idx = -1;
 
 				provider.stream(req, [&](const StreamEvent& ev) {
 					switch (ev.type) {

@@ -222,8 +222,8 @@ bool RunFirstRunWizard(Config& cfg) {
 
 	int choice = std::atoi(buf);
 
-	auto apply_conf = [&](const ProviderConf& p) {
-		cfg.provider = "openai-compat";
+	auto apply_conf = [&](const ProviderConf& p, const std::string& provider_type) {
+		cfg.provider = provider_type;
 		cfg.base_url = p.base_url;
 		cfg.api_key_env = p.api_key_env;
 		if (!p.models.empty()) {
@@ -231,6 +231,18 @@ bool RunFirstRunWizard(Config& cfg) {
 			cfg.max_tokens = p.models[0].max_tokens;
 			cfg.context_window = p.models[0].context_window;
 		}
+		// Save to providers map
+		SavedProviderConfig sp;
+		sp.name = provider_type;
+		sp.provider_type = provider_type;
+		sp.model = cfg.model;
+		sp.base_url = cfg.base_url;
+		sp.api_key_env = cfg.api_key_env;
+		sp.max_tokens = cfg.max_tokens;
+		sp.context_window = cfg.context_window;
+		sp.cache = cfg.cache;
+		cfg.providers[provider_type] = std::move(sp);
+		
 		std::printf("\n  Provider: %s\n", p.label.c_str());
 		std::printf("  Model:    %s\n", cfg.model.c_str());
 		if (!p.base_url.empty())
@@ -244,13 +256,25 @@ bool RunFirstRunWizard(Config& cfg) {
 
 	if (choice == choice_ollama) {
 		if (ollama_idx >= 0) {
-			apply_conf(confs[ollama_idx]);
+			apply_conf(confs[ollama_idx], "ollama");
 		} else {
-			cfg.provider = "openai-compat";
+			cfg.provider = "ollama";
 			cfg.base_url = "http://localhost:11434";
 			cfg.model = "llama3.1";
 			cfg.api_key_env.clear();
 			cfg.context_window = 128000;
+			// Save to providers map
+			SavedProviderConfig sp;
+			sp.name = "ollama";
+			sp.provider_type = "openai-compat";
+			sp.model = cfg.model;
+			sp.base_url = cfg.base_url;
+			sp.api_key_env = cfg.api_key_env;
+			sp.max_tokens = cfg.max_tokens;
+			sp.context_window = cfg.context_window;
+			sp.cache = cfg.cache;
+			cfg.providers["ollama"] = std::move(sp);
+			
 			std::printf("\n  Provider: Ollama (local)\n");
 			std::printf("  Model:    llama3.1\n");
 			std::printf("\n  No API key required.\n");
@@ -258,13 +282,25 @@ bool RunFirstRunWizard(Config& cfg) {
 		}
 	} else if (choice == choice_openrouter) {
 		if (openrouter_idx >= 0) {
-			apply_conf(confs[openrouter_idx]);
+			apply_conf(confs[openrouter_idx], "openrouter");
 		} else {
-			cfg.provider = "openai-compat";
+			cfg.provider = "openrouter";
 			cfg.base_url = "https://openrouter.ai/api";
 			cfg.model = "google/gemma-4-31b-it:free";
 			cfg.api_key_env = "OPENROUTER_API_KEY";
 			cfg.context_window = 131072;
+			// Save to providers map
+			SavedProviderConfig sp;
+			sp.name = "openrouter";
+			sp.provider_type = "openai-compat";
+			sp.model = cfg.model;
+			sp.base_url = cfg.base_url;
+			sp.api_key_env = cfg.api_key_env;
+			sp.max_tokens = cfg.max_tokens;
+			sp.context_window = cfg.context_window;
+			sp.cache = cfg.cache;
+			cfg.providers["openrouter"] = std::move(sp);
+			
 			std::printf("\n  Provider: OpenRouter\n");
 			std::printf("  Model:    google/gemma-4-31b-it:free\n");
 			std::printf("\n  Get a free key: https://openrouter.ai/keys\n");
@@ -275,6 +311,18 @@ bool RunFirstRunWizard(Config& cfg) {
 		cfg.model = "claude-sonnet-4-5";
 		cfg.api_key_env = "ANTHROPIC_API_KEY";
 		cfg.base_url.clear();
+		// Save to providers map
+		SavedProviderConfig sp;
+		sp.name = "anthropic";
+		sp.provider_type = "anthropic";
+		sp.model = cfg.model;
+		sp.base_url = cfg.base_url;
+		sp.api_key_env = cfg.api_key_env;
+		sp.max_tokens = cfg.max_tokens;
+		sp.context_window = cfg.context_window;
+		sp.cache = cfg.cache;
+		cfg.providers["anthropic"] = std::move(sp);
+		
 		std::printf("\n  Provider: Anthropic\n");
 		std::printf("  Model:    claude-sonnet-4-5\n");
 		std::printf("\n  To authenticate:\n");
@@ -283,7 +331,7 @@ bool RunFirstRunWizard(Config& cfg) {
 	} else {
 		int idx_in_map = choice - (choice_anthropic + 1);
 		if (idx_in_map >= 0 && idx_in_map < (int)conf_map.size()) {
-			apply_conf(confs[conf_map[idx_in_map]]);
+			apply_conf(confs[conf_map[idx_in_map]], confs[conf_map[idx_in_map]].label);
 		} else {
 			std::printf("\n  Invalid choice. Using default (Anthropic).\n");
 			return false;
@@ -297,56 +345,92 @@ bool RunFirstRunWizard(Config& cfg) {
 }
 
 Config LoadConfig() {
-	maybe_migrate_settings();
-	Config cfg;
-	std::ifstream f(config_path());
-	if (!f) return cfg;
-	std::string line;
-	while (std::getline(f, line)) {
-		std::string s = Trim(line);
-		if (s.empty() || s[0] == '#') continue;
-		size_t eq = s.find('=');
-		if (eq == std::string::npos) continue;
-		std::string k = Trim(s.substr(0, eq));
-		std::string v = Trim(s.substr(eq + 1));
-		if      (k == "provider")              cfg.provider = v;
-		else if (k == "model")                 cfg.model = v;
-		else if (k == "base_url")              cfg.base_url = v;
-		else if (k == "api_key_env")           cfg.api_key_env = v;
-		else if (k == "system") {
-			cfg.system_prompt = v;
-			cfg.user_system_prompt = v;
-		}
-		else if (k == "max_tokens") {
-			try { cfg.max_tokens = std::stoi(v); } catch (...) {}
-		}
-		else if (k == "context_window") {
-			try { cfg.context_window = std::stoi(v); } catch (...) {}
-		}
-		else if (k == "cache")                 cfg.cache = (v == "true" || v == "1" || v == "yes");
-		else if (k == "font_delta") {
-			try { cfg.font_delta = std::stoi(v); } catch (...) {}
-		}
-		else if (k == "max_iterations") {
-			try { cfg.max_iterations = std::stoi(v); } catch (...) {}
-		}
-		else if (k == "color_scheme")          cfg.color_scheme = v;
-		else if (k == "context_soft_limit") {
-			try { cfg.context_soft_limit = std::stod(v); } catch (...) {}
-		}
-		else if (k == "context_compact_threshold") {
-			try { cfg.context_compact_threshold = std::stod(v); } catch (...) {}
-		}
-		else if (k == "summary_max_tokens") {
-			try { cfg.summary_max_tokens = std::stoi(v); } catch (...) {}
-		}
-		else if (k == "summary_model")         cfg.summary_model = v;
-		else if (k == "summary_prompt")        cfg.summary_prompt = v;
-		else if (k == "hook_pre_tool")         cfg.hooks_pre_tool.push_back(v);
-		else if (k == "hook_post_tool")        cfg.hooks_post_tool.push_back(v);
-		else if (k == "hook_user_prompt")      cfg.hooks_user_prompt.push_back(v);
-	}
-	return cfg;
+    maybe_migrate_settings();
+    Config cfg;
+    std::ifstream f(config_path());
+    if (!f) return cfg;
+    std::string line;
+    while (std::getline(f, line)) {
+        std::string s = Trim(line);
+        if (s.empty() || s[0] == '#') continue;
+        size_t eq = s.find('=');
+        if (eq == std::string::npos) continue;
+        std::string k = Trim(s.substr(0, eq));
+        std::string v = Trim(s.substr(eq + 1));
+        if      (k == "provider")              cfg.provider = v;
+        else if (k == "model")                 cfg.model = v;
+        else if (k == "base_url")              cfg.base_url = v;
+        else if (k == "api_key_env")           cfg.api_key_env = v;
+        else if (k == "system") {
+            cfg.system_prompt = v;
+            cfg.user_system_prompt = v;
+        }
+        else if (k == "max_tokens") {
+            try { cfg.max_tokens = std::stoi(v); } catch (...) {}
+        }
+        else if (k == "context_window") {
+            try { cfg.context_window = std::stoi(v); } catch (...) {}
+        }
+        else if (k == "cache")                 cfg.cache = (v == "true" || v == "1" || v == "yes");
+        else if (k == "font_delta") {
+            try { cfg.font_delta = std::stoi(v); } catch (...) {}
+        }
+        else if (k == "max_iterations") {
+            try { cfg.max_iterations = std::stoi(v); } catch (...) {}
+        }
+        else if (k == "color_scheme")          cfg.color_scheme = v;
+        else if (k == "context_soft_limit") {
+            try { cfg.context_soft_limit = std::stod(v); } catch (...) {}
+        }
+        else if (k == "context_compact_threshold") {
+            try { cfg.context_compact_threshold = std::stod(v); } catch (...) {}
+        }
+        else if (k == "summary_max_tokens") {
+            try { cfg.summary_max_tokens = std::stoi(v); } catch (...) {}
+        }
+        else if (k == "summary_model")         cfg.summary_model = v;
+        else if (k == "summary_prompt")        cfg.summary_prompt = v;
+        else if (k == "hook_pre_tool")         cfg.hooks_pre_tool.push_back(v);
+        else if (k == "hook_post_tool")        cfg.hooks_post_tool.push_back(v);
+        else if (k == "hook_user_prompt")      cfg.hooks_user_prompt.push_back(v);
+        // Parse provider.* keys
+        else if (k.rfind("provider.", 0) == 0) {
+            // Format: provider.<name>.<field> = value
+            std::string rest = k.substr(9); // skip "provider."
+            size_t dot = rest.find('.');
+            if (dot != std::string::npos) {
+                std::string name = rest.substr(0, dot);
+                std::string field = rest.substr(dot + 1);
+                auto& p = cfg.providers[name];
+                p.name = name;
+                if (field == "type")           p.provider_type = v;
+                else if (field == "model")     p.model = v;
+                else if (field == "base_url")  p.base_url = v;
+                else if (field == "api_key_env") p.api_key_env = v;
+                else if (field == "max_tokens") {
+                    try { p.max_tokens = std::stoi(v); } catch (...) {}
+                }
+                else if (field == "context_window") {
+                    try { p.context_window = std::stoi(v); } catch (...) {}
+                }
+                else if (field == "cache")     p.cache = (v == "true" || v == "1" || v == "yes");
+            }
+        }
+    }
+    // If no providers saved yet, migrate legacy config to providers map
+    if (cfg.providers.empty() && !cfg.provider.empty()) {
+        SavedProviderConfig p;
+        p.name = cfg.provider;
+        p.provider_type = cfg.provider;
+        p.model = cfg.model;
+        p.base_url = cfg.base_url;
+        p.api_key_env = cfg.api_key_env;
+        p.max_tokens = cfg.max_tokens;
+        p.context_window = cfg.context_window;
+        p.cache = cfg.cache;
+        cfg.providers[cfg.provider] = std::move(p);
+    }
+    return cfg;
 }
 
 // Unified provider detection based on model name.
@@ -404,22 +488,67 @@ void AutoDetectProvider(Config& cfg) {
 	cfg.provider = provider;
 	cfg.base_url = base_url;
 	cfg.api_key_env = api_key_env;
+	
+	// Also save to providers map for persistence
+	SavedProviderConfig p;
+	p.name = provider;
+	p.provider_type = provider;
+	p.model = cfg.model;
+	p.base_url = base_url;
+	p.api_key_env = api_key_env;
+	p.max_tokens = cfg.max_tokens;
+	p.context_window = cfg.context_window;
+	p.cache = cfg.cache;
+	cfg.providers[provider] = std::move(p);
 }
 
 std::unique_ptr<Provider> CreateProvider(const Config& cfg) {
+	// Use the active provider from the providers map if available
+	std::string provider_name = cfg.provider;
+	std::string provider_type;
+	std::string model = cfg.model;
+	std::string base_url = cfg.base_url;
+	std::string api_key_env = cfg.api_key_env;
+	int max_tokens = cfg.max_tokens;
+	bool cache = cfg.cache;
+	int context_window = cfg.context_window;
+
+	auto it = cfg.providers.find(provider_name);
+	if (it != cfg.providers.end()) {
+		const auto& p = it->second;
+		provider_type = p.provider_type;
+		model = p.model;
+		base_url = p.base_url;
+		api_key_env = p.api_key_env;
+		max_tokens = p.max_tokens;
+		cache = p.cache;
+		if (p.context_window > 0) context_window = p.context_window;
+	} else {
+		// Fallback to legacy flat config
+		provider_type = cfg.provider;
+		// Auto-detect if provider_type doesn't match
+		if (provider_type != "anthropic" && provider_type != "openai-compat") {
+			std::string detected_provider, detected_base_url, detected_api_key_env;
+			DetectProviderFromModel(model, detected_provider, detected_base_url, detected_api_key_env);
+			provider_type = detected_provider;
+			if (base_url.empty()) base_url = detected_base_url;
+			if (api_key_env == "ANTHROPIC_API_KEY") api_key_env = detected_api_key_env;
+		}
+	}
+
 	std::string key = ResolveApiKey(cfg);
 
 	ProviderConfig pconfig;
-	if (cfg.provider == "openai-compat") {
+	if (provider_type == "openai-compat") {
 		pconfig.type = ProviderType::OPENAI_COMPAT;
 	} else {
 		pconfig.type = ProviderType::ANTHROPIC;
 	}
 	pconfig.api_key = key;
-	pconfig.base_url = cfg.base_url;
-	pconfig.model = cfg.model;
-	pconfig.max_tokens = cfg.max_tokens;
-	pconfig.use_cache = cfg.cache;
+	pconfig.base_url = base_url;
+	pconfig.model = model;
+	pconfig.max_tokens = max_tokens;
+	pconfig.use_cache = cache;
 
 	// For Anthropic with OAuth, we need special handling
 	if (pconfig.type == ProviderType::ANTHROPIC) {
@@ -433,15 +562,15 @@ std::unique_ptr<Provider> CreateProvider(const Config& cfg) {
 		}
 		if (pconfig.auth_type == ProviderConfig::AuthType::API_KEY && key.empty()) {
 			std::fprintf(stderr, "[error] Anthropic provider requires API key. "
-				"Set %s env var or run 'pluto login' for OAuth.\n", cfg.api_key_env.c_str());
+				"Set %s env var or run 'pluto login' for OAuth.\n", api_key_env.c_str());
 		}
 	}
 
-	if (pconfig.type == ProviderType::OPENAI_COMPAT && !cfg.base_url.empty()) {
-		if (key.empty() && cfg.base_url.find("localhost") == std::string::npos
-			&& cfg.base_url.find("127.0.0.1") == std::string::npos) {
+	if (pconfig.type == ProviderType::OPENAI_COMPAT && !base_url.empty()) {
+		if (key.empty() && base_url.find("localhost") == std::string::npos
+			&& base_url.find("127.0.0.1") == std::string::npos) {
 			std::fprintf(stderr, "[warn] %s set but no key found (env or ~/config/settings/pluto/keys/%s)\n",
-				cfg.api_key_env.c_str(), cfg.api_key_env.c_str());
+				api_key_env.c_str(), api_key_env.c_str());
 		}
 	}
 
@@ -463,60 +592,74 @@ int GuessContextWindow(const std::string& provider,
 }
 
 bool SaveConfig(const Config& cfg) {
-	std::string path = config_path();
-	ScopedFileLock lock(path + ".lock");
-	if (!lock.locked()) return false;
+    std::string path = config_path();
+    ScopedFileLock lock(path + ".lock");
+    if (!lock.locked()) return false;
 
-	auto sanitize = [](const std::string& s) -> std::string {
-		std::string out;
-		out.reserve(s.size());
-		for (char c : s) {
-			if (c != '\n' && c != '\r') out += c;
-		}
-		return out;
-	};
+    auto sanitize = [](const std::string& s) -> std::string {
+        std::string out;
+        out.reserve(s.size());
+        for (char c : s) {
+            if (c != '\n' && c != '\r') out += c;
+        }
+        return out;
+    };
 
-	std::string tmp = path + ".tmp." + std::to_string(getpid());
-	{
-		std::ofstream f(tmp, std::ios::trunc);
-		if (!f) return false;
-		f << "provider = "              << sanitize(cfg.provider)       << "\n";
-		f << "model = "                 << sanitize(cfg.model)          << "\n";
-		if (!cfg.base_url.empty())
-			f << "base_url = "          << sanitize(cfg.base_url)       << "\n";
-		f << "api_key_env = "           << sanitize(cfg.api_key_env)    << "\n";
-		if (!cfg.user_system_prompt.empty())
-			f << "system = "            << sanitize(cfg.user_system_prompt) << "\n";
-		f << "max_tokens = "            << cfg.max_tokens               << "\n";
-		f << "context_window = "        << cfg.context_window           << "\n";
-		f << "cache = "                 << (cfg.cache ? "true" : "false") << "\n";
-		if (cfg.font_delta != 0)
-			f << "font_delta = "        << cfg.font_delta               << "\n";
-		if (cfg.color_scheme != "auto")
-			f << "color_scheme = "      << sanitize(cfg.color_scheme)   << "\n";
-		if (cfg.context_soft_limit > 0 && cfg.context_soft_limit != 0.80)
-			f << "context_soft_limit = "  << cfg.context_soft_limit     << "\n";
-		if (cfg.context_compact_threshold > 0 && cfg.context_compact_threshold != 0.90)
-			f << "context_compact_threshold = " << cfg.context_compact_threshold << "\n";
-		if (cfg.summary_max_tokens > 0 && cfg.summary_max_tokens != 2048)
-			f << "summary_max_tokens = "   << cfg.summary_max_tokens     << "\n";
-		if (!cfg.summary_model.empty())
-			f << "summary_model = "      << sanitize(cfg.summary_model)  << "\n";
-		if (!cfg.summary_prompt.empty())
-			f << "summary_prompt = "     << sanitize(cfg.summary_prompt) << "\n";
-		for (const auto& h : cfg.hooks_pre_tool)
-			f << "hook_pre_tool = "     << sanitize(h) << "\n";
-		for (const auto& h : cfg.hooks_post_tool)
-			f << "hook_post_tool = "    << sanitize(h) << "\n";
-		for (const auto& h : cfg.hooks_user_prompt)
-			f << "hook_user_prompt = "  << sanitize(h) << "\n";
-		if (!f.good()) { std::remove(tmp.c_str()); return false; }
-	}
-	if (::rename(tmp.c_str(), path.c_str()) != 0) {
-		std::remove(tmp.c_str());
-		return false;
-	}
-	return true;
+    std::string tmp = path + ".tmp." + std::to_string(getpid());
+    {
+        std::ofstream f(tmp, std::ios::trunc);
+        if (!f) return false;
+        f << "provider = "              << sanitize(cfg.provider)       << "\n";
+        f << "model = "                 << sanitize(cfg.model)          << "\n";
+        if (!cfg.base_url.empty())
+            f << "base_url = "          << sanitize(cfg.base_url)       << "\n";
+        f << "api_key_env = "           << sanitize(cfg.api_key_env)    << "\n";
+        if (!cfg.user_system_prompt.empty())
+            f << "system = "            << sanitize(cfg.user_system_prompt) << "\n";
+        f << "max_tokens = "            << cfg.max_tokens               << "\n";
+        f << "context_window = "        << cfg.context_window           << "\n";
+        f << "cache = "                 << (cfg.cache ? "true" : "false") << "\n";
+        if (cfg.font_delta != 0)
+            f << "font_delta = "        << cfg.font_delta               << "\n";
+        if (cfg.color_scheme != "auto")
+            f << "color_scheme = "      << sanitize(cfg.color_scheme)   << "\n";
+        if (cfg.context_soft_limit > 0 && cfg.context_soft_limit != 0.80)
+            f << "context_soft_limit = "  << cfg.context_soft_limit     << "\n";
+        if (cfg.context_compact_threshold > 0 && cfg.context_compact_threshold != 0.90)
+            f << "context_compact_threshold = " << cfg.context_compact_threshold << "\n";
+        if (cfg.summary_max_tokens > 0 && cfg.summary_max_tokens != 2048)
+            f << "summary_max_tokens = "   << cfg.summary_max_tokens     << "\n";
+        if (!cfg.summary_model.empty())
+            f << "summary_model = "      << sanitize(cfg.summary_model)  << "\n";
+        if (!cfg.summary_prompt.empty())
+            f << "summary_prompt = "     << sanitize(cfg.summary_prompt) << "\n";
+        for (const auto& h : cfg.hooks_pre_tool)
+            f << "hook_pre_tool = "     << sanitize(h) << "\n";
+        for (const auto& h : cfg.hooks_post_tool)
+            f << "hook_post_tool = "    << sanitize(h) << "\n";
+        for (const auto& h : cfg.hooks_user_prompt)
+            f << "hook_user_prompt = "  << sanitize(h) << "\n";
+        
+        // Save provider configurations
+        for (const auto& [name, p] : cfg.providers) {
+            f << "provider." << sanitize(name) << ".type = " << sanitize(p.provider_type) << "\n";
+            f << "provider." << sanitize(name) << ".model = " << sanitize(p.model) << "\n";
+            if (!p.base_url.empty())
+                f << "provider." << sanitize(name) << ".base_url = " << sanitize(p.base_url) << "\n";
+            f << "provider." << sanitize(name) << ".api_key_env = " << sanitize(p.api_key_env) << "\n";
+            f << "provider." << sanitize(name) << ".max_tokens = " << p.max_tokens << "\n";
+            if (p.context_window > 0)
+                f << "provider." << sanitize(name) << ".context_window = " << p.context_window << "\n";
+            f << "provider." << sanitize(name) << ".cache = " << (p.cache ? "true" : "false") << "\n";
+        }
+        
+        if (!f.good()) { std::remove(tmp.c_str()); return false; }
+    }
+    if (::rename(tmp.c_str(), path.c_str()) != 0) {
+        std::remove(tmp.c_str());
+        return false;
+    }
+    return true;
 }
 
 #ifdef __HAIKU__
