@@ -98,7 +98,126 @@
 namespace pluto {
 namespace gui {
 
-class QuickTabSwitchDialog;
+class QuickTabSwitchDialog : public BWindow {
+public:
+	QuickTabSwitchDialog(BRect frame, MainWindow* window)
+		: BWindow(frame, "Quick tab switch", B_MODAL_WINDOW_LOOK,
+		          B_MODAL_APP_WINDOW_FEEL,
+		          B_NOT_RESIZABLE | B_NOT_ZOOMABLE | B_AUTO_UPDATE_SIZE_LIMITS),
+		  fWindow(window), fSem(create_sem(0, "quick-tab-switch")), fSelected(-1) {
+		fFilter = new BTextControl("filter", "", "", new BMessage('fltr'));
+		fFilter->SetModificationMessage(new BMessage('fltr'));
+		fList = new BListView("tabList");
+		fList->SetSelectionMessage(new BMessage('slSe'));
+		fList->SetInvocationMessage(new BMessage('slIn'));
+		auto* scroll = new BScrollView("tabScroll", fList,
+		                              0, false, true, B_FANCY_BORDER);
+		scroll->SetExplicitMinSize(BSize(400, 300));
+
+		BLayoutBuilder::Group<>(this, B_VERTICAL, 8)
+			.SetInsets(12)
+			.Add(fFilter)
+			.Add(scroll)
+			.End();
+
+		_BuildList("");
+		fFilter->MakeFocus(true);
+		CenterOnScreen();
+	}
+	~QuickTabSwitchDialog() override { delete_sem(fSem); }
+
+	void MessageReceived(BMessage* msg) override {
+		if (msg->what == 'fltr') {
+			std::string filter = fFilter->Text();
+			_BuildList(filter);
+		} else if (msg->what == 'slIn') {
+			// Double-click or Enter - select and close
+			int32 sel = fList->CurrentSelection();
+			if (sel >= 0) {
+				fSelected = sel;
+				PostMessage(B_QUIT_REQUESTED);
+			}
+		} else if (msg->what == 'okBt') {
+			int32 sel = fList->CurrentSelection();
+			if (sel >= 0) {
+				fSelected = sel;
+				PostMessage(B_QUIT_REQUESTED);
+			}
+		} else if (msg->what == 'caBt') {
+			fSelected = -1;
+			PostMessage(B_QUIT_REQUESTED);
+		} else {
+			BWindow::MessageReceived(msg);
+		}
+	}
+	bool QuitRequested() override { release_sem(fSem); return true; }
+
+	// Returns the selected tab index, or -1 if cancelled.
+	int32 WaitForResult() {
+		Show();
+		while (acquire_sem(fSem) == B_INTERRUPTED) {}
+		return fSelected;
+	}
+
+private:
+	void _BuildList(const std::string& filter) {
+		if (!LockLooper()) return;
+		while (fList->CountItems() > 0)
+			delete fList->RemoveItem((int32)0);
+
+		std::string f = filter;
+		std::transform(f.begin(), f.end(), f.begin(), ::tolower);
+
+		if (!fWindow || !fWindow->fTabView) {
+			UnlockLooper();
+			return;
+		}
+
+		for (int32 i = 0; i < fWindow->fTabView->CountTabs(); ++i) {
+			BView* v = fWindow->fTabView->ViewForTab(i);
+			if (!v) continue;
+			auto* conv = static_cast<ConversationView*>(v);
+			if (!conv) continue;
+
+			std::string title = conv->GetSessionTitle();
+			if (title.empty()) title = "New conversation";
+			
+			std::string model = conv->GetModel();
+			if (model.rfind("claude-", 0) == 0) model = model.substr(7);
+			auto slash = model.rfind('/');
+			if (slash != std::string::npos) model = model.substr(slash + 1);
+			
+			std::string label = title + "  (" + model + ")";
+			if (conv->IsPinned()) label = "📍 " + label;
+			if (conv->IsBusy()) label += "  ⏳";
+
+			// Filter
+			std::string labelLower = label;
+			std::transform(labelLower.begin(), labelLower.end(), labelLower.begin(), ::tolower);
+			if (!f.empty() && labelLower.find(f) == std::string::npos)
+				continue;
+
+			fList->AddItem(new BStringItem(label.c_str()));
+		}
+
+		// Select current tab by default
+		if (fWindow->fTabView && fWindow->fTabView->Selection() >= 0 &&
+		    fWindow->fTabView->Selection() < fList->CountItems()) {
+			fList->Select(fWindow->fTabView->Selection());
+			fList->ScrollToSelection();
+		} else if (fList->CountItems() > 0) {
+			fList->Select(0);
+		}
+
+		UnlockLooper();
+	}
+
+	MainWindow* fWindow;
+	BTextControl* fFilter;
+	BListView* fList;
+	sem_id fSem;
+	int32 fSelected;
+};
 
 namespace {
 
@@ -3778,126 +3897,6 @@ private:
 };
 
 // Quick tab switch dialog: shows a list of tabs with filtering.
-class QuickTabSwitchDialog : public BWindow {
-public:
-	QuickTabSwitchDialog(BRect frame, MainWindow* window)
-		: BWindow(frame, "Quick tab switch", B_MODAL_WINDOW_LOOK,
-		          B_MODAL_APP_WINDOW_FEEL,
-		          B_NOT_RESIZABLE | B_NOT_ZOOMABLE | B_AUTO_UPDATE_SIZE_LIMITS),
-		  fWindow(window), fSem(create_sem(0, "quick-tab-switch")), fSelected(-1) {
-		fFilter = new BTextControl("filter", "", "", new BMessage('fltr'));
-		fFilter->SetModificationMessage(new BMessage('fltr'));
-		fList = new BListView("tabList");
-		fList->SetSelectionMessage(new BMessage('slSe'));
-		fList->SetInvocationMessage(new BMessage('slIn'));
-		auto* scroll = new BScrollView("tabScroll", fList,
-		                              0, false, true, B_FANCY_BORDER);
-		scroll->SetExplicitMinSize(BSize(400, 300));
-
-		BLayoutBuilder::Group<>(this, B_VERTICAL, 8)
-			.SetInsets(12)
-			.Add(fFilter)
-			.Add(scroll)
-			.End();
-
-		_BuildList("");
-		fFilter->MakeFocus(true);
-		CenterOnScreen();
-	}
-	~QuickTabSwitchDialog() override { delete_sem(fSem); }
-
-	void MessageReceived(BMessage* msg) override {
-		if (msg->what == 'fltr') {
-			std::string filter = fFilter->Text();
-			_BuildList(filter);
-		} else if (msg->what == 'slIn') {
-			// Double-click or Enter - select and close
-			int32 sel = fList->CurrentSelection();
-			if (sel >= 0) {
-				fSelected = sel;
-				PostMessage(B_QUIT_REQUESTED);
-			}
-		} else if (msg->what == 'okBt') {
-			int32 sel = fList->CurrentSelection();
-			if (sel >= 0) {
-				fSelected = sel;
-				PostMessage(B_QUIT_REQUESTED);
-			}
-		} else if (msg->what == 'caBt') {
-			fSelected = -1;
-			PostMessage(B_QUIT_REQUESTED);
-		} else {
-			BWindow::MessageReceived(msg);
-		}
-	}
-	bool QuitRequested() override { release_sem(fSem); return true; }
-
-	// Returns the selected tab index, or -1 if cancelled.
-	int32 WaitForResult() {
-		Show();
-		while (acquire_sem(fSem) == B_INTERRUPTED) {}
-		return fSelected;
-	}
-
-private:
-	void _BuildList(const std::string& filter) {
-		if (!LockLooper()) return;
-		while (fList->CountItems() > 0)
-			delete fList->RemoveItem((int32)0);
-
-		std::string f = filter;
-		std::transform(f.begin(), f.end(), f.begin(), ::tolower);
-
-		if (!fWindow || !fWindow->fTabView) {
-			UnlockLooper();
-			return;
-		}
-
-		for (int32 i = 0; i < fWindow->fTabView->CountTabs(); ++i) {
-			BView* v = fWindow->fTabView->ViewForTab(i);
-			if (!v) continue;
-			auto* conv = static_cast<ConversationView*>(v);
-			if (!conv) continue;
-
-			std::string title = conv->GetSessionTitle();
-			if (title.empty()) title = "New conversation";
-			
-			std::string model = conv->GetModel();
-			if (model.rfind("claude-", 0) == 0) model = model.substr(7);
-			auto slash = model.rfind('/');
-			if (slash != std::string::npos) model = model.substr(slash + 1);
-			
-			std::string label = title + "  (" + model + ")";
-			if (conv->IsPinned()) label = "📍 " + label;
-			if (conv->IsBusy()) label += "  ⏳";
-
-			// Filter
-			std::string labelLower = label;
-			std::transform(labelLower.begin(), labelLower.end(), labelLower.begin(), ::tolower);
-			if (!f.empty() && labelLower.find(f) == std::string::npos)
-				continue;
-
-			fList->AddItem(new BStringItem(label.c_str()));
-		}
-
-		// Select current tab by default
-		if (fWindow->fTabView && fWindow->fTabView->Selection() >= 0 &&
-		    fWindow->fTabView->Selection() < fList->CountItems()) {
-			fList->Select(fWindow->fTabView->Selection());
-			fList->ScrollToSelection();
-		} else if (fList->CountItems() > 0) {
-			fList->Select(0);
-		}
-
-		UnlockLooper();
-	}
-
-	MainWindow* fWindow;
-	BTextControl* fFilter;
-	BListView* fList;
-	sem_id fSem;
-	int32 fSelected;
-};
 
 void MainWindow::_RenameTab(int32 idx) {
 	if (!fTabView || idx < 0 || idx >= fTabView->CountTabs()) return;
