@@ -12,7 +12,7 @@ std::unique_ptr<Transport> MakeTransport(const McpServerSpec& spec, std::string&
 		return std::make_unique<HttpTransport>(spec.url, spec.headers);
 	}
 	if (spec.type == "sse") {
-		return std::make_unique<SseTransport>(spec.url, spec.headers);
+		return std::make_unique<SseTransport>(spec.url, spec.headers, SseTransport::Config{});
 	}
 	if (spec.type == "stdio" || spec.type.empty()) {
 		return std::make_unique<StdioTransport>(spec.command, spec.args, spec.env);
