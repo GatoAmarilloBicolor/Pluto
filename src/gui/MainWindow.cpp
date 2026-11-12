@@ -1988,7 +1988,7 @@ void MainWindow::OnTurnDone(const std::string& preview) {
 		? system_time() - conv->GetTurnStartedAt() : 0;
 	if (!IsActive() && elapsed > 3000000LL) {
 		std::string text = preview;
-		BNotification n(B_INFO_NOTIFICATION);
+		BNotification n(B_INFORMATION_NOTIFICATION);
 		n.SetGroup("Pluto");
 		std::string nTitle = "Pluto";
 		if (conv && !conv->GetSessionTitle().empty())

@@ -517,7 +517,7 @@ static int32 _RoutineWorkerEntry(void* data) {
 		ctx->config->model = orig_model;
 
 	if (ctx->notify) {
-		BNotification n(B_INFO_NOTIFICATION);
+		BNotification n(B_INFORMATION_NOTIFICATION);
 		n.SetTitle("Pluto routine");
 		BString content;
 		content.SetToFormat("Routine \"%s\" completed.", ctx->name.c_str());

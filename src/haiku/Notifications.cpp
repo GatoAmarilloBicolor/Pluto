@@ -20,7 +20,7 @@ namespace pluto {
 
 void Notify(const std::string& title, const std::string& body,
             const std::string& icon) {
-    BNotification notification(B_INFO_NOTIFICATION);
+    BNotification notification(B_INFORMATION_NOTIFICATION);
     notification.SetTitle(title.c_str());
     notification.SetContent(body.c_str());
     
@@ -51,7 +51,7 @@ void NotificationCenter::NotificationLooper::MessageReceived(BMessage* msg) {
         msg->FindString("body", &body);
         msg->FindString("icon", &iconPath);
 
-        BNotification notification(B_INFO_NOTIFICATION);
+        BNotification notification(B_INFORMATION_NOTIFICATION);
         notification.SetTitle(title);
         notification.SetContent(body);
         // Load icon from file if provided in message

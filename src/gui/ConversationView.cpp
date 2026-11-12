@@ -1746,7 +1746,7 @@ private:
 				
 				// Show notification
 				if (Window()) {
-					BNotification n(B_INFO_NOTIFICATION);
+					BNotification n(B_INFORMATION_NOTIFICATION);
 					n.SetGroup("Pluto");
 					n.SetTitle("Image saved");
 					n.SetContent(filePath.Path());
@@ -2156,7 +2156,7 @@ private:
 			info.SetType(fMimeType.c_str());
 			
 			if (Window()) {
-				BNotification n(B_INFO_NOTIFICATION);
+				BNotification n(B_INFORMATION_NOTIFICATION);
 				n.SetGroup("Pluto");
 				n.SetTitle("Document saved");
 				n.SetContent(filePath.Path());
@@ -2201,7 +2201,7 @@ private:
 		// In a real implementation, extract text from PDF
 		// For now, show a notification
 		if (Window()) {
-			BNotification n(B_INFO_NOTIFICATION);
+			BNotification n(B_INFORMATION_NOTIFICATION);
 			n.SetGroup("Pluto");
 			n.SetTitle("Text extraction");
 			n.SetContent("Text extraction requires PDF parsing library (not yet implemented)");
