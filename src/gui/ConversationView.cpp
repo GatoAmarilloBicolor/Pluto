@@ -2249,15 +2249,27 @@ void ConversationView::_InsertInlineImage(const std::string& base64_data,
 			float viewW = fDocView->Bounds().Width() - 20;
 			if (viewW > 50 && viewW < maxW) maxW = viewW;
 		}
+		float scale = (iw > maxW) ? maxW / iw : 1.0f;
+		float dw = iw * scale;
+		float dh = ih * scale;
+		if (dh > 400) { dh = 400; dw = iw * (400.0f / ih); }
 
-		// Create InlineImageView with the original image data
-		InlineImageView* imgView = new InlineImageView(bitmap, maxW, raw, mimeType, filename);
-		
+		BBitmap* scaled = new BBitmap(BRect(0, 0, dw - 1, dh - 1),
+		                              B_RGBA32, true);
+		if (scaled->Lock()) {
+			BView canvas(scaled->Bounds(), "", 0, 0);
+			scaled->AddChild(&canvas);
+			canvas.SetDrawingMode(B_OP_ALPHA);
+			canvas.DrawBitmap(bitmap, bitmap->Bounds(), canvas.Bounds());
+			canvas.Sync();
+			scaled->RemoveChild(&canvas);
+			scaled->Unlock();
+		}
+
 		if (fTextDoc) {
 			Paragraph imgPara;
 			TextSpan imgSpan;
-			// We use a custom span type for the image view
-			imgSpan.SetImage(imgView, BString("image"));
+			imgSpan.SetImage(scaled, BString("image"));
 			imgPara.Append(imgSpan);
 			fTextDoc->Append(imgPara);
 
@@ -2267,8 +2279,9 @@ void ConversationView::_InsertInlineImage(const std::string& base64_data,
 
 			if (fDocView) fDocView->Relayout();
 		} else {
-			delete imgView;
+			delete scaled;
 		}
+		delete bitmap;
 	} else {
 		_Append("\xf0\x9f\x96\xbc [image \xe2\x80\x94 could not render]\n", fDocTextColor);
 	}
@@ -2286,28 +2299,61 @@ void ConversationView::_InsertInlineDocument(const std::string& base64_data,
 		return;
 	}
 
-	float maxW = 500.0f;
-	if (fDocView) {
-		float viewW = fDocView->Bounds().Width() - 20;
-		if (viewW > 50 && viewW < maxW) maxW = viewW;
+	BMemoryIO memIO(raw.data(), raw.size());
+	BBitmap* bitmap = NULL;
+	{
+		BTranslatorRoster* roster = BTranslatorRoster::Default();
+		BBitmapStream stream;
+		if (roster->Translate(&memIO, NULL, NULL, &stream,
+				B_TRANSLATOR_BITMAP) == B_OK) {
+			stream.DetachBitmap(&bitmap);
+		}
 	}
 
-	InlineDocumentView* docView = new InlineDocumentView(raw, mimeType, filename, maxW);
-	
-	if (fTextDoc) {
-		Paragraph docPara;
-		TextSpan docSpan;
-		docSpan.SetImage(docView, BString("document"));
-		docPara.Append(docSpan);
-		fTextDoc->Append(docPara);
+	if (bitmap != NULL) {
+		BRect bounds = bitmap->Bounds();
+		float iw = bounds.Width() + 1;
+		float ih = bounds.Height() + 1;
+		float maxW = 500.0f;
+		if (fDocView) {
+			float viewW = fDocView->Bounds().Width() - 20;
+			if (viewW > 50 && viewW < maxW) maxW = viewW;
+		}
+		float scale = (iw > maxW) ? maxW / iw : 1.0f;
+		float dw = iw * scale;
+		float dh = ih * scale;
+		if (dh > 400) { dh = 400; dw = iw * (400.0f / ih); }
 
-		Paragraph spacer;
-		spacer.Append(TextSpan(" ", CharacterStyle()));
-		fTextDoc->Append(spacer);
+		BBitmap* scaled = new BBitmap(BRect(0, 0, dw - 1, dh - 1),
+		                              B_RGBA32, true);
+		if (scaled->Lock()) {
+			BView canvas(scaled->Bounds(), "", 0, 0);
+			scaled->AddChild(&canvas);
+			canvas.SetDrawingMode(B_OP_ALPHA);
+			canvas.DrawBitmap(bitmap, bitmap->Bounds(), canvas.Bounds());
+			canvas.Sync();
+			scaled->RemoveChild(&canvas);
+			scaled->Unlock();
+		}
 
-		if (fDocView) fDocView->Relayout();
+		if (fTextDoc) {
+			Paragraph docPara;
+			TextSpan docSpan;
+			docSpan.SetImage(scaled, BString(filename.empty() ? "document" : filename.c_str()));
+			docPara.Append(docSpan);
+			fTextDoc->Append(docPara);
+
+			Paragraph spacer;
+			spacer.Append(TextSpan(" ", CharacterStyle()));
+			fTextDoc->Append(spacer);
+
+			if (fDocView) fDocView->Relayout();
+		} else {
+			delete scaled;
+		}
+		delete bitmap;
 	} else {
-		delete docView;
+		_Append("\xf0\x9f\x93\x84 [document \xe2\x80\x94 could not render]\n", fDocTextColor);
 	}
 }
 

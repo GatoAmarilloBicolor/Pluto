@@ -175,10 +175,15 @@ struct OaiStreamState {
     std::string current_tool_args;
     int current_tool_index = -1;
     
+    // For document streaming
+    std::string current_document_data;
+    std::string current_document_media_type;
+    std::string current_document_filename;
+    
     int input_tokens = 0;
     int output_tokens = 0;
     
-    enum { IDLE, IN_TEXT, IN_TOOL } state = IDLE;
+    enum { IDLE, IN_TEXT, IN_TOOL, IN_DOCUMENT } state = IDLE;
 };
 
 static void oai_emit_text(OaiStreamState& st, const std::string& text) {
@@ -218,6 +223,15 @@ static void oai_emit_tool_end(OaiStreamState& st, const std::string& full_json, 
     try { st.cb(ev); } catch (...) { st.cb_error = true; }
 }
 
+static void oai_emit_document(OaiStreamState& st, int index) {
+    StreamEvent ev;
+    ev.type = StreamEvent::DOCUMENT_BLOCK;
+    ev.document_data = st.current_document_data;
+    ev.document_media_type = st.current_document_media_type;
+    ev.document_filename = st.current_document_filename;
+    try { st.cb(ev); } catch (...) { st.cb_error = true; }
+}
+
 static void oai_emit_message_end(OaiStreamState& st, const std::string& stop_reason) {
     StreamEvent ev;
     ev.type = StreamEvent::MESSAGE_END;
@@ -253,14 +267,49 @@ static void oai_process_line(const std::string& line, OaiStreamState& st) {
         
         const json::Value* delta = choice.find("delta");
         if (delta) {
+            // Check for document block (OpenAI-compatible: content can be an array with type="document")
             const json::Value* content = delta->find("content");
-            if (content && !content->is_null()) {
+            if (content && content->is_arr()) {
+                const json::Array& content_arr = content->as_arr();
+                for (const auto& item : content_arr) {
+                    const json::Value* type_val = item.find("type");
+                    if (type_val && type_val->as_str() == "document") {
+                        // Handle document block
+                        const json::Value* doc_data = item.find("data");
+                        const json::Value* doc_media = item.find("media_type");
+                        const json::Value* doc_filename = item.find("filename");
+                        
+                        if (st.state != OaiStreamState::IN_DOCUMENT) {
+                            if (st.state == OaiStreamState::IN_TOOL) {
+                                oai_emit_tool_end(st, st.current_tool_args, st.current_tool_index);
+                                st.current_tool_args.clear();
+                            } else if (st.state == OaiStreamState::IN_TEXT) {
+                                // Text block ends before document
+                            }
+                            st.state = OaiStreamState::IN_DOCUMENT;
+                            st.current_document_data.clear();
+                            st.current_document_media_type = doc_media ? doc_media->as_str() : "";
+                            st.current_document_filename = doc_filename ? doc_filename->as_str() : "";
+                        }
+                        
+                        if (doc_data && !doc_data->is_null()) {
+                            st.current_document_data += doc_data->as_str();
+                        }
+                    }
+                }
+            } else if (content && !content->is_null()) {
+                // Regular text content
                 std::string text = content->as_str();
                 if (!text.empty()) {
                     if (st.state != OaiStreamState::IN_TEXT) {
                         if (st.state == OaiStreamState::IN_TOOL) {
                             oai_emit_tool_end(st, st.current_tool_args, st.current_tool_index);
                             st.current_tool_args.clear();
+                        } else if (st.state == OaiStreamState::IN_DOCUMENT) {
+                            oai_emit_document(st, st.current_tool_index);
+                            st.current_document_data.clear();
+                            st.current_document_media_type.clear();
+                            st.current_document_filename.clear();
                         }
                         st.state = OaiStreamState::IN_TEXT;
                     }
@@ -279,6 +328,11 @@ static void oai_process_line(const std::string& line, OaiStreamState& st) {
                     if (id_val && !id_val->is_null()) {
                         if (st.state == OaiStreamState::IN_TOOL) {
                             oai_emit_tool_end(st, st.current_tool_args, st.current_tool_index);
+                        } else if (st.state == OaiStreamState::IN_DOCUMENT) {
+                            oai_emit_document(st, st.current_tool_index);
+                            st.current_document_data.clear();
+                            st.current_document_media_type.clear();
+                            st.current_document_filename.clear();
                         }
                         st.current_tool_id = id_val->as_str();
                         st.current_tool_args.clear();
@@ -311,6 +365,8 @@ static void oai_process_line(const std::string& line, OaiStreamState& st) {
             if (fr != "null") {
                 if (st.state == OaiStreamState::IN_TOOL) {
                     oai_emit_tool_end(st, st.current_tool_args, st.current_tool_index);
+                } else if (st.state == OaiStreamState::IN_DOCUMENT) {
+                    oai_emit_document(st, st.current_tool_index);
                 }
                 oai_emit_message_end(st, fr);
             }

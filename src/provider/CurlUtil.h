@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <ctime>
+#include <random>
 
 namespace pluto {
 
@@ -68,6 +69,17 @@ struct HeadersGuard {
 	}
 	curl_slist* get() const { return headers; }
 };
+
+// Thread-local random number generator for backoff jitter
+inline std::mt19937& get_thread_rng() {
+    thread_local std::mt19937 rng([](){
+        std::random_device rd;
+        std::seed_seq seq{rd(), static_cast<unsigned>(std::chrono::steady_clock::now().time_since_epoch().count()),
+                          static_cast<unsigned>(std::hash<std::thread::id>{}(std::this_thread::get_id()))};
+        return std::mt19937(seq);
+    }());
+    return rng;
+}
 
 // Retry policy configuration.
 struct RetryPolicy {
@@ -160,7 +172,8 @@ inline long calc_backoff_ms(int attempt, long base_ms = 1000, long max_ms = 3000
     long backoff = base_ms * (1L << (attempt - 1));
     if (backoff > max_ms) backoff = max_ms;
     long jitter = static_cast<long>(backoff * jitter_factor);
-    backoff += (std::rand() % (jitter * 2 + 1)) - jitter;
+    std::uniform_int_distribution<long> dist(-jitter, jitter);
+    backoff += dist(get_thread_rng());
     if (backoff < 0) backoff = 0;
     return backoff;
 }
@@ -194,23 +207,42 @@ inline long parse_retry_after(const std::string& value) {
 // Log level for request/response logging
 enum class LogLevel { NONE, ERROR, WARN, INFO, DEBUG };
 
-// Global log callback for request/response debugging
-using LogCallback = std::function<void(LogLevel, const std::string&)>;
-inline LogCallback g_log_callback = nullptr;
+// Thread-safe log callback
+class LogCallbackManager {
+public:
+    using Callback = std::function<void(LogLevel, const std::string&)>;
+    
+    static void set_callback(Callback cb) {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        s_callback = std::move(cb);
+    }
+    
+    static void log(LogLevel level, const std::string& msg) {
+        Callback cb;
+        {
+            std::lock_guard<std::mutex> lock(s_mutex);
+            cb = s_callback;
+        }
+        if (cb) {
+            cb(level, msg);
+        } else if (level <= LogLevel::WARN) {
+            // Default to stderr for warnings/errors
+            std::fprintf(stderr, "[pluto-http] %s\n", msg.c_str());
+        }
+    }
+    
+private:
+    static inline std::mutex s_mutex;
+    static inline Callback s_callback;
+};
 
-// Set global log callback
-inline void set_log_callback(LogCallback cb) {
-    g_log_callback = std::move(cb);
+// Convenience functions
+inline void set_log_callback(LogCallbackManager::Callback cb) {
+    LogCallbackManager::set_callback(std::move(cb));
 }
 
-// Internal logging helper
 inline void log_request(LogLevel level, const std::string& msg) {
-    if (g_log_callback) {
-        g_log_callback(level, msg);
-    } else if (level <= LogLevel::WARN) {
-        // Default to stderr for warnings/errors
-        std::fprintf(stderr, "[pluto-http] %s\n", msg.c_str());
-    }
+    LogCallbackManager::log(level, msg);
 }
 
 }  // namespace pluto

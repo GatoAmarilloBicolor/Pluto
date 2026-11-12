@@ -110,6 +110,31 @@ static bool resolve_host(const std::string& host, std::vector<std::string>& ips)
     return !ips.empty();
 }
 
+// Check if an IP is private/internal (RFC 1918, RFC 4193, loopback, link-local, etc.)
+// This is a duplicate of the check in curl_security.h to avoid circular deps.
+static bool is_private_ip(const std::string& ip) {
+    // Simple check for common private ranges
+    if (ip.rfind("10.", 0) == 0) return true;
+    if (ip.rfind("192.168.", 0) == 0) return true;
+    if (ip.rfind("172.", 0) == 0) {
+        // 172.16.0.0 - 172.31.255.255
+        size_t first_dot = ip.find('.');
+        size_t second_dot = ip.find('.', first_dot + 1);
+        if (second_dot != std::string::npos) {
+            std::string second_octet_str = ip.substr(first_dot + 1, second_dot - first_dot - 1);
+            try {
+                int second_octet = std::stoi(second_octet_str);
+                if (second_octet >= 16 && second_octet <= 31) return true;
+            } catch (...) {}
+        }
+    }
+    if (ip.rfind("127.", 0) == 0) return true;  // loopback
+    if (ip.rfind("169.254.", 0) == 0) return true;  // link-local
+    if (ip.rfind("fc", 0) == 0 || ip.rfind("fd", 0) == 0) return true;  // ULA
+    if (ip == "::1" || ip == "::") return true;  // IPv6 loopback/unspecified
+    return false;
+}
+
 // If `url` is relative, resolve it against `base_url`.
 // If `url` is absolute, it must share the same origin as `base_url`
 // to prevent server-supplied endpoint redirects (SSRF).
@@ -137,7 +162,7 @@ std::string resolve_url(const std::string& base_url, const std::string& url,
         
         // Validate first IP is allowed (public, not private/internal)
         for (const auto& ip : ips) {
-            if (pluto::IsPrivateIP(ip)) {
+            if (is_private_ip(ip)) {
                 origin_ok = false;
                 return {};
             }
@@ -215,6 +240,7 @@ bool SseTransport::start(std::string& err) {
 bool SseTransport::do_handshake(std::string& err) {
     CURL* curl = curl_easy_init();
     if (!curl) { err = "curl_easy_init failed"; return false; }
+    CurlGuard curl_guard(curl);
 
     // Pre-resolve and pin IP to prevent DNS rebinding
     std::string pinned_ip;
@@ -222,13 +248,11 @@ bool SseTransport::do_handshake(std::string& err) {
         std::string host = url_host(fSseUrl);
         std::vector<std::string> ips;
         if (!resolve_host(host, ips) || ips.empty()) {
-            curl_easy_cleanup(curl);
             err = "Failed to resolve host: " + host;
             return false;
         }
         for (const auto& ip : ips) {
-            if (pluto::IsPrivateIP(ip)) {
-                curl_easy_cleanup(curl);
+            if (is_private_ip(ip)) {
                 err = "Resolved IP not allowed: " + ip;
                 return false;
             }
@@ -238,6 +262,10 @@ bool SseTransport::do_handshake(std::string& err) {
         std::string resolve_entry = host + ":443:" + pinned_ip;
         struct curl_slist* resolve_list = nullptr;
         resolve_list = curl_slist_append(resolve_list, resolve_entry.c_str());
+        if (!resolve_list) {
+            err = "OOM: curl_slist_append failed";
+            return false;
+        }
         curl_easy_setopt(curl, CURLOPT_RESOLVE, resolve_list);
     }
 
@@ -246,7 +274,6 @@ bool SseTransport::do_handshake(std::string& err) {
     struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, "accept: text/event-stream");
     if (!headers) {
-        curl_easy_cleanup(curl);
         err = "OOM: curl_slist_append failed";
         return false;
     }
@@ -254,7 +281,7 @@ bool SseTransport::do_handshake(std::string& err) {
         std::string line = k + ": " + v;
         headers = curl_slist_append(headers, line.c_str());
         if (!headers) {
-            curl_easy_cleanup(curl);
+            curl_slist_free_all(headers);
             err = "OOM: curl_slist_append failed";
             return false;
         }
@@ -271,7 +298,6 @@ bool SseTransport::do_handshake(std::string& err) {
 
     CURLcode rc = curl_easy_perform(curl);
     curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
 
     // CURLE_WRITE_ERROR is expected — the write callback returns 0 to abort
     // once the endpoint event is found.
@@ -320,15 +346,20 @@ std::string SseTransport::request(const std::string& body, std::string& err) {
             return {};
         }
         
-        if (do_post(body, err)) {
+        std::string response;
+        if (do_post(body, response, err)) {
             fCircuitBreaker.record_success();
-            return err;  // err contains response body on success
+            err.clear();  // Clear error on success
+            return response;
         }
         
         fCircuitBreaker.record_failure();
         
         // On failure, mark connection as potentially dead and try to reconnect
-        fConnected = false;
+        {
+            std::lock_guard<std::mutex> lock(fConnectionMutex);
+            fConnected = false;
+        }
         stop_heartbeat();
         
         if (attempt < fConfig.max_reconnect_attempts) {
@@ -344,31 +375,22 @@ std::string SseTransport::request(const std::string& body, std::string& err) {
     return {};
 }
 
-bool SseTransport::do_post(const std::string& body, std::string& err) {
+bool SseTransport::do_post(const std::string& body, std::string& response, std::string& err) {
     CURL* curl = curl_easy_init();
     if (!curl) { err = "curl_easy_init failed"; return false; }
+    CurlGuard curl_guard(curl);
 
-    // Pre-resolve and pin IP for message URL to prevent DNS rebinding
-    std::string message_host = url_host(fMessageUrl);
-    std::vector<std::string> message_ips;
-    if (!resolve_host(message_host, message_ips) || message_ips.empty()) {
-        curl_easy_cleanup(curl);
-        err = "Failed to resolve message host: " + message_host;
+    // Use pinned IP from handshake to prevent DNS rebinding
+    if (fPinnedIp.empty()) {
+        err = "No pinned IP available";
         return false;
     }
-    for (const auto& ip : message_ips) {
-        if (pluto::IsPrivateIP(ip)) {
-            curl_easy_cleanup(curl);
-            err = "Message host IP not allowed (private): " + ip;
-            return false;
-        }
-    }
     
-    std::string resolve_entry = message_host + ":443:" + message_ips[0];
+    std::string message_host = url_host(fMessageUrl);
+    std::string resolve_entry = message_host + ":443:" + fPinnedIp;
     struct curl_slist* resolve_list = nullptr;
     resolve_list = curl_slist_append(resolve_list, resolve_entry.c_str());
     if (!resolve_list) {
-        curl_easy_cleanup(curl);
         err = "OOM: curl_slist_append failed";
         return false;
     }
@@ -378,13 +400,13 @@ bool SseTransport::do_post(const std::string& body, std::string& err) {
     struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, "content-type: application/json");
     if (!headers) {
-        curl_easy_cleanup(curl);
+        curl_slist_free_all(resolve_list);
         err = "OOM: curl_slist_append failed";
         return false;
     }
     headers = curl_slist_append(headers, "accept: application/json");
     if (!headers) {
-        curl_easy_cleanup(curl);
+        curl_slist_free_all(resolve_list);
         err = "OOM: curl_slist_append failed";
         return false;
     }
@@ -392,7 +414,7 @@ bool SseTransport::do_post(const std::string& body, std::string& err) {
         std::string line = k + ": " + v;
         headers = curl_slist_append(headers, line.c_str());
         if (!headers) {
-            curl_easy_cleanup(curl);
+            curl_slist_free_all(resolve_list);
             err = "OOM: curl_slist_append failed";
             return false;
         }
@@ -413,7 +435,7 @@ bool SseTransport::do_post(const std::string& body, std::string& err) {
     long http_code = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
     curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
+    curl_slist_free_all(resolve_list);
 
     if (rc != CURLE_OK) {
         err = std::string("curl: ") + curl_easy_strerror(rc);
@@ -423,7 +445,7 @@ bool SseTransport::do_post(const std::string& body, std::string& err) {
         err = "HTTP " + std::to_string(http_code) + ": " + out;
         return false;
     }
-    err = std::move(out);  // Use err to return response body on success
+    response = std::move(out);
     return true;
 }
 
@@ -451,56 +473,87 @@ void SseTransport::heartbeat_thread_func(SseTransport* self) {
         
         if (self->fStopHeartbeat.load()) break;
         
+        // Check connection state without holding mutex during network I/O
+        bool connected = self->fConnected.load();
+        if (!connected) break;
+        
         // Send a simple ping request to keep connection alive
         // Use a minimal JSON-RPC notification
         std::string ping = R"({"jsonrpc":"2.0","method":"ping","params":{}})";
         std::string err;
+        std::string response;
         
-        std::lock_guard<std::mutex> lock(self->fConnectionMutex);
-        if (!self->fConnected.load()) break;
-        
-        // Try a lightweight request to check connection
-        CURL* curl = curl_easy_init();
-        if (!curl) continue;
-        
-        std::string message_host = url_host(self->fMessageUrl);
-        std::vector<std::string> message_ips;
-        if (!resolve_host(message_host, message_ips) || message_ips.empty()) {
-            curl_easy_cleanup(curl);
-            continue;
+        // Do the network request WITHOUT holding the mutex
+        // Use a local copy of the pinned IP and message URL
+        std::string pinned_ip;
+        std::string message_url;
+        {
+            std::lock_guard<std::mutex> lock(self->fConnectionMutex);
+            if (!self->fConnected.load()) break;
+            pinned_ip = self->fPinnedIp;
+            message_url = self->fMessageUrl;
         }
         
-        std::string resolve_entry = message_host + ":443:" + message_ips[0];
+        if (pinned_ip.empty() || message_url.empty()) {
+            std::lock_guard<std::mutex> lock(self->fConnectionMutex);
+            self->fConnected = false;
+            break;
+        }
+        
+        CURL* curl = curl_easy_init();
+        if (!curl) continue;
+        CurlGuard curl_guard(curl);
+        
+        std::string message_host = url_host(message_url);
+        std::string resolve_entry = message_host + ":443:" + pinned_ip;
         struct curl_slist* resolve_list = nullptr;
         resolve_list = curl_slist_append(resolve_list, resolve_entry.c_str());
+        if (!resolve_list) {
+            continue;
+        }
         curl_easy_setopt(curl, CURLOPT_RESOLVE, resolve_list);
         
         struct curl_slist* headers = nullptr;
         headers = curl_slist_append(headers, "content-type: application/json");
+        if (!headers) {
+            curl_slist_free_all(resolve_list);
+            continue;
+        }
         headers = curl_slist_append(headers, "accept: application/json");
+        if (!headers) {
+            curl_slist_free_all(resolve_list);
+            curl_slist_free_all(headers);
+            continue;
+        }
         for (const auto& [k, v] : self->fHeaders) {
             std::string line = k + ": " + v;
             headers = curl_slist_append(headers, line.c_str());
+            if (!headers) {
+                curl_slist_free_all(resolve_list);
+                curl_slist_free_all(headers);
+                continue;
+            }
         }
         
-        curl_easy_setopt(curl, CURLOPT_URL, self->fMessageUrl.c_str());
+        curl_easy_setopt(curl, CURLOPT_URL, message_url.c_str());
         curl_easy_setopt(curl, CURLOPT_POST, 1L);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, ping.c_str());
         curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)ping.size());
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
         curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
         curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
-        ApplyCurlSecurityWithPinning(curl, self->fMessageUrl);
+        ApplyCurlSecurityWithPinning(curl, message_url);
         
         // We don't care about the response, just that the connection works
         CURLcode rc = curl_easy_perform(curl);
         long http_code = 0;
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
         curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
+        curl_slist_free_all(resolve_list);
         
         if (rc != CURLE_OK || http_code < 200 || http_code >= 400) {
             std::fprintf(stderr, "[mcp/sse] Heartbeat failed (rc=%d, http=%ld), marking disconnected\n", rc, http_code);
+            std::lock_guard<std::mutex> lock(self->fConnectionMutex);
             self->fConnected = false;
             break;
         }
