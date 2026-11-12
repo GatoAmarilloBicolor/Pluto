@@ -112,7 +112,7 @@ struct RetryPolicy {
 
 // Circuit breaker state for a host.
 struct CircuitBreaker {
-    std::mutex mutex;
+    mutable std::mutex mutex;
     int failures = 0;
     int successes = 0;
     std::chrono::steady_clock::time_point last_failure;

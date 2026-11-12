@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Transport.h"
-#include "CurlUtil.h"
+#include "../provider/CurlUtil.h"
 
 #include <map>
 #include <string>
@@ -34,7 +34,7 @@ public:
     
     SseTransport(std::string sse_url,
                  std::map<std::string, std::string> headers,
-                 Config config = {});
+                 Config config);
     ~SseTransport() override;
 
     bool start(std::string& err) override;
@@ -49,7 +49,7 @@ public:
 
 private:
     bool do_handshake(std::string& err);
-    bool do_post(const std::string& body, std::string& err);
+    bool do_post(const std::string& body, std::string& response, std::string& err);
     void ensure_connection(std::string& err);
     void start_heartbeat();
     void stop_heartbeat();
