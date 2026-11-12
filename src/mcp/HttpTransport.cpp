@@ -6,6 +6,7 @@
 
 #include <string>
 #include <utility>
+#include <cstdio>
 
 namespace pluto {
 
@@ -25,13 +26,17 @@ HttpTransport::HttpTransport(std::string url, std::map<std::string, std::string>
 std::string HttpTransport::post(const std::string& body, std::string& err) {
 	CURL* curl = curl_easy_init();
 	if (!curl) { err = "curl_easy_init failed"; return {}; }
+	CurlGuard curl_guard(curl);
 	std::string out;
 	struct curl_slist* headers = nullptr;
 	headers = curl_slist_append(headers, "content-type: application/json");
+	if (!headers) { err = "OOM: curl_slist_append failed"; return {}; }
 	headers = curl_slist_append(headers, "accept: application/json");
+	if (!headers) { curl_slist_free_all(headers); err = "OOM: curl_slist_append failed"; return {}; }
 	for (const auto& [k, v] : fHeaders) {
 		std::string line = k + ": " + v;
 		headers = curl_slist_append(headers, line.c_str());
+		if (!headers) { curl_slist_free_all(headers); err = "OOM: curl_slist_append failed"; return {}; }
 	}
 
 	curl_easy_setopt(curl, CURLOPT_URL, fUrl.c_str());
@@ -50,7 +55,6 @@ std::string HttpTransport::post(const std::string& body, std::string& err) {
 	long http_code = 0;
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
 	curl_slist_free_all(headers);
-	curl_easy_cleanup(curl);
 
 	if (rc != CURLE_OK) { err = std::string("curl: ") + curl_easy_strerror(rc); return {}; }
 	if (http_code != 200 && http_code != 202) {
@@ -61,12 +65,57 @@ std::string HttpTransport::post(const std::string& body, std::string& err) {
 }
 
 std::string HttpTransport::request(const std::string& body, std::string& err) {
-	return post(body, err);
+	if (!fCircuitBreaker.allow_request()) {
+		err = "Circuit breaker open for " + fUrl;
+		return {};
+	}
+
+	for (int attempt = 1; attempt <= fRetryPolicy.max_attempts; ++attempt) {
+		if (attempt > 1) {
+			long delay = calc_backoff_ms(attempt - 1, fRetryPolicy.base_backoff_ms, fRetryPolicy.max_backoff_ms, fRetryPolicy.jitter_factor);
+			std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+		}
+
+		std::string response = post(body, err);
+		if (!response.empty()) {
+			fCircuitBreaker.record_success();
+			return response;
+		}
+
+		// Only retry on transient errors
+		bool retryable_curl = false;
+		if (err.rfind("curl:", 0) == 0) {
+			// Extract curl code from err string — not directly available,
+			// but we can check HTTP-level retryability
+			retryable_curl = true;
+		}
+		bool retryable_http = false;
+		if (err.rfind("HTTP 429", 0) == 0 ||
+		    err.rfind("HTTP 500", 0) == 0 ||
+		    err.rfind("HTTP 502", 0) == 0 ||
+		    err.rfind("HTTP 503", 0) == 0 ||
+		    err.rfind("HTTP 504", 0) == 0) {
+			retryable_http = true;
+		}
+
+		if (!retryable_curl && !retryable_http) {
+			fCircuitBreaker.record_failure();
+			return {};
+		}
+
+		if (attempt < fRetryPolicy.max_attempts) {
+			std::fprintf(stderr, "[mcp/http] Request failed (attempt %d): %s, retrying...\n",
+				attempt, err.c_str());
+		}
+	}
+
+	fCircuitBreaker.record_failure();
+	return {};
 }
 
 void HttpTransport::notify(const std::string& body) {
 	std::string err;
-	(void)post(body, err);
+	(void)request(body, err);
 }
 
 }  // namespace pluto

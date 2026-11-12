@@ -353,9 +353,26 @@ std::string SseTransport::request(const std::string& body, std::string& err) {
             return response;
         }
         
+        // Only reconnect on transient errors (curl errors, 429, 5xx).
+        // Client errors (400, 401, 403, 404) should not trigger reconnect.
+        bool retryable = false;
+        if (err.rfind("curl:", 0) == 0) retryable = true;
+        if (err.rfind("HTTP 429", 0) == 0 ||
+            err.rfind("HTTP 500", 0) == 0 ||
+            err.rfind("HTTP 502", 0) == 0 ||
+            err.rfind("HTTP 503", 0) == 0 ||
+            err.rfind("HTTP 504", 0) == 0) {
+            retryable = true;
+        }
+        
+        if (!retryable) {
+            fCircuitBreaker.record_failure();
+            return {};
+        }
+        
         fCircuitBreaker.record_failure();
         
-        // On failure, mark connection as potentially dead and try to reconnect
+        // On transient failure, mark connection as potentially dead and try to reconnect
         {
             std::lock_guard<std::mutex> lock(fConnectionMutex);
             fConnected = false;

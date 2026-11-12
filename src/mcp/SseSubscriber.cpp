@@ -108,34 +108,68 @@ void SseSubscriber::dispatch() {
 }
 
 void SseSubscriber::run() {
-	CURL* curl = curl_easy_init();
-	if (!curl) { fRunning.store(false); return; }
+	int reconnect_attempt = 0;
+	while (!fStop.load()) {
+		CURL* curl = curl_easy_init();
+		if (!curl) {
+			fRunning.store(false);
+			return;
+		}
 
-	struct curl_slist* headers = nullptr;
-	headers = curl_slist_append(headers, "accept: text/event-stream");
-	headers = curl_slist_append(headers, "cache-control: no-cache");
+		struct curl_slist* headers = nullptr;
+		headers = curl_slist_append(headers, "accept: text/event-stream");
+		headers = curl_slist_append(headers, "cache-control: no-cache");
 
-curl_easy_setopt(curl, CURLOPT_URL, fUrl.c_str());
-	curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
-	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, this);
-	curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, xferinfo_cb);
-	curl_easy_setopt(curl, CURLOPT_XFERINFODATA, this);
-	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
-	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 0L);        // no overall deadline
-	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
-	curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
-	ApplyCurlSecurityWithPinning(curl, fUrl);
+		curl_easy_setopt(curl, CURLOPT_URL, fUrl.c_str());
+		curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, this);
+		curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, xferinfo_cb);
+		curl_easy_setopt(curl, CURLOPT_XFERINFODATA, this);
+		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 0L);        // no overall deadline
+		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
+		curl_easy_setopt(curl, CURLOPT_USERAGENT, PLUTO_USER_AGENT);
+		ApplyCurlSecurityWithPinning(curl, fUrl);
 
-	CURLcode rc = curl_easy_perform(curl);
-	if (rc != CURLE_OK && rc != CURLE_ABORTED_BY_CALLBACK) {
-		std::fprintf(stderr, "[sse] %s: %s\n",
-			fUrl.c_str(), curl_easy_strerror(rc));
+		CURLcode rc = curl_easy_perform(curl);
+
+		curl_slist_free_all(headers);
+		curl_easy_cleanup(curl);
+
+		if (fStop.load()) {
+			fRunning.store(false);
+			return;
+		}
+
+		if (rc != CURLE_OK && rc != CURLE_ABORTED_BY_CALLBACK) {
+			++reconnect_attempt;
+			if (reconnect_attempt > 10) {
+				std::fprintf(stderr, "[sse] %s: %s, giving up reconnect\n",
+					fUrl.c_str(), curl_easy_strerror(rc));
+				break;
+			}
+			long delay = 1000L * (1L << (reconnect_attempt - 1));
+			if (delay > 30000L) delay = 30000L;
+			std::fprintf(stderr, "[sse] %s: %s, reconnecting in %ldms\n",
+				fUrl.c_str(), curl_easy_strerror(rc), delay);
+			std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+			continue;
+		}
+
+		// Clean disconnect (not an error), but we may want to reconnect
+		// if not explicitly stopped
+		if (!fStop.load()) {
+			++reconnect_attempt;
+			if (reconnect_attempt > 10) break;
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+			continue;
+		}
+
+		break;
 	}
 
-	curl_slist_free_all(headers);
-	curl_easy_cleanup(curl);
 	fRunning.store(false);
 }
 

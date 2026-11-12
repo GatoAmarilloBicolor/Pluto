@@ -124,9 +124,11 @@ struct CircuitBreaker {
     // Record a successful request
     void record_success() {
         std::lock_guard<std::mutex> lock(mutex);
+        if (!open) { failures = 0; successes = 0; return; }
         failures = 0;
         if (++successes >= success_threshold) {
             open = false;
+            successes = 0;
         }
     }
     
