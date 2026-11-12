@@ -26,6 +26,10 @@ struct CurlSecurityConfig {
     }
 };
 
+// Forward declarations — defined below.
+inline std::string ExtractHost(const std::string& url);
+inline bool IsBlockedHost(const std::string& host);
+
 // Apply all security settings to a curl handle for HTTPS URLs
 // Returns true if settings applied (HTTPS), false if HTTP (no SSL)
 inline bool ApplyCurlSecurity(CURL* curl, const std::string& url) {
@@ -40,6 +44,13 @@ inline bool ApplyCurlSecurity(CURL* curl, const std::string& url) {
     // disabled — many MCP/proxy servers don't support OCSP stapling, causing
     // spurious "SSL certificate status verification failed" errors. Basic peer
     // and host verification remain enforced.
+
+    // For localhost/private IPs (self-hosted models, local Ollama, etc.),
+    // allow self-signed certificates — the CA bundle won't have them.
+    if (IsBlockedHost(ExtractHost(url))) {
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    }
 
     // Connection limits
     curl_easy_setopt(curl, CURLOPT_MAXCONNECTS, 10L);
