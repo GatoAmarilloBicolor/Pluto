@@ -30,8 +30,6 @@ public:
         long request_timeout_ms = 60000;
         long connect_timeout_ms = 5000;
         long handshake_timeout_ms = 30000;
-
-        Config() = default;
     };
     
     SseTransport(std::string sse_url,
