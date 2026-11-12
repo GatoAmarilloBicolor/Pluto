@@ -37,8 +37,10 @@ inline bool ApplyCurlSecurity(CURL* curl, const std::string& url) {
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
     curl_easy_setopt(curl, CURLOPT_CAINFO, "/boot/system/data/ssl/CARootCertificates.pem");
 
-    // OCSP Stapling verification
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
+    // NOTE: OCSP Stapling verification (CURLOPT_SSL_VERIFYSTATUS) intentionally
+    // disabled — many MCP/proxy servers don't support OCSP stapling, causing
+    // spurious "SSL certificate status verification failed" errors. Basic peer
+    // and host verification remain enforced.
 
     // Connection limits
     curl_easy_setopt(curl, CURLOPT_MAXCONNECTS, 10L);
