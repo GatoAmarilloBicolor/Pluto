@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <mutex>
 
 namespace pluto {
 
@@ -33,8 +34,15 @@ public:
 private:
 	std::string fServerName;
 	std::unique_ptr<Transport> fTransport;
+	mutable std::mutex fIdMutex;
 	int fNextId = 1;
 	std::vector<McpToolInfo> fTools;
+	
+	int nextRequestId() {
+		std::lock_guard<std::mutex> lock(fIdMutex);
+		if (fNextId >= INT_MAX) fNextId = 1;
+		return fNextId++;
+	}
 };
 
 // Register every tool from client into registry, prefixed "<server>__<tool>".

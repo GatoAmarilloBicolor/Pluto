@@ -99,8 +99,10 @@ std::string build_oai_body(const CompletionRequest& req) {
                     tc.set("type", std::string("function"));
                     Value fn;
                     fn.set("name", b.tool_name);
-                    fn.set("arguments", b.tool_input.empty()
-                        ? std::string("{}") : b.tool_input);
+                    // Validate tool_input is valid JSON
+                    std::string args = b.tool_input.empty() ? std::string("{}") : b.tool_input;
+                    try { json::Value::parse(args); } catch (...) { args = "{}"; }
+                    fn.set("arguments", args);
                     tc.set("function", fn);
                     tcs.push_back(tc);
                 }

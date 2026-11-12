@@ -609,15 +609,21 @@ int main() {
     setvbuf(stdout, nullptr, _IONBF, 0);
     setvbuf(stderr, nullptr, _IONBF, 0);
 
-    char line[65536];
+    std::string line;
+    line.reserve(65536);
     
-    while (fgets(line, sizeof(line), stdin)) {
+    constexpr size_t MAX_LINE_SIZE = 65536; // 64KB limit
+    
+    while (std::getline(std::cin, line)) {
         // Remove trailing newline
-        size_t len = strlen(line);
-        while (len > 0 && (line[len-1] == '\n' || line[len-1] == '\r')) {
-            line[--len] = '\0';
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty()) continue;
+        
+        // Protect against oversized requests
+        if (line.size() > MAX_LINE_SIZE) {
+            mcp::send_error_response(-1, -32600, "Request too large (max 64KB)");
+            continue;
         }
-        if (len == 0) continue;
 
         // Parse JSON-RPC request using pluto::json
         Value req = Value::parse(line);

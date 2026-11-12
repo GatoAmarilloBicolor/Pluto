@@ -263,14 +263,31 @@ bool try_custom_command(const std::vector<CustomCommand>& cmds,
 		? std::string::npos : end - 1);
 	std::string args = end == std::string::npos
 		? std::string() : line.substr(end + 1);
+	
+	// Sanitize args: escape backslashes and prevent template injection
+	// by replacing {{ and }} sequences
+	std::string safe_args;
+	safe_args.reserve(args.size() * 2);
+	for (char c : args) {
+		if (c == '\\') {
+			safe_args += "\\\\";
+		} else if (c == '{') {
+			safe_args += "{{";
+		} else if (c == '}') {
+			safe_args += "}}";
+		} else {
+			safe_args += c;
+		}
+	}
+	
 	for (const auto& c : cmds) {
 		if (c.name != name) continue;
 		expanded = c.body;
-		// Substitute {{args}} → args
+		// Substitute {{args}} → safe_args
 		size_t pos = 0;
 		while ((pos = expanded.find("{{args}}", pos)) != std::string::npos) {
-			expanded.replace(pos, 8, args);
-			pos += args.size();
+			expanded.replace(pos, 8, safe_args);
+			pos += safe_args.size();
 		}
 		return true;
 	}

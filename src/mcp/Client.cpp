@@ -1,6 +1,7 @@
 #include "Client.h"
 
 #include <cstdio>
+#include <climits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -60,7 +61,7 @@ bool McpClient::connect() {
 	{
 		Value req;
 		req.set("jsonrpc", std::string("2.0"));
-		req.set("id", Value(fNextId++));
+		req.set("id", Value(nextRequestId()));
 		req.set("method", std::string("initialize"));
 		Value params;
 		params.set("protocolVersion", std::string("2024-11-05"));
@@ -105,7 +106,7 @@ bool McpClient::connect() {
 	{
 		Value req;
 		req.set("jsonrpc", std::string("2.0"));
-		req.set("id", Value(fNextId++));
+		req.set("id", Value(nextRequestId()));
 		req.set("method", std::string("tools/list"));
 		req.set("params", Value(Object{}));
 
@@ -156,7 +157,7 @@ ToolResult McpClient::call_tool(const std::string& name, const std::string& argu
 
 	Value req;
 	req.set("jsonrpc", std::string("2.0"));
-	req.set("id", Value(fNextId++));
+	req.set("id", Value(nextRequestId()));
 	req.set("method", std::string("tools/call"));
 
 	Value params;

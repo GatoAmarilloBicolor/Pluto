@@ -18,6 +18,7 @@
 #include <fstream>
 #include <random>
 #include <vector>
+#include <cinttypes>
 
 #include "../json.h"
 #include "../util.h"
@@ -252,8 +253,9 @@ std::string SessionStore::save(std::string path,
 		// 4-hex random suffix to avoid collision between concurrent instances.
 		static thread_local std::mt19937 rng(std::random_device{}());
 		char buf[80];
-		std::snprintf(buf, sizeof(buf), "%lld-%s-%04x",
-			(long long)now, slug.c_str(),
+		// Use PRIu64 for portable 64-bit integer formatting
+		std::snprintf(buf, sizeof(buf), "%" PRIu64 "-%s-%04x",
+			(uint64_t)now, slug.c_str(),
 			(unsigned)(rng() & 0xffff));
 		path = sessions_dir() + "/" + buf + ".jsonl";
 		created_ts = now;
@@ -291,22 +293,23 @@ bool SessionStore::load(const std::string& path,
                        std::vector<Message>& out,
                        SessionMetadata& meta,
                        std::string& error) {
-	std::ifstream f(path);
-	if (!f) {
-		error = "cannot open: " + path;
-		return false;
-	}
-	out.clear();
-	std::string line;
-	while (std::getline(f, line)) {
-		if (line.empty()) continue;
-		try {
-			auto v = json::Value::parse(line);
-			out.push_back(message_from_json(v));
-		} catch (const std::exception&) {
-			// skip malformed
-		}
-	}
+    std::ifstream f(path);
+    if (!f) {
+        error = "cannot open: " + path;
+        return false;
+    }
+    out.clear();
+    std::string line;
+    while (std::getline(f, line)) {
+        if (line.empty()) continue;
+        try {
+            auto v = json::Value::parse(line);
+            out.push_back(message_from_json(v));
+        } catch (const std::exception& e) {
+            // Log the error but continue loading other messages
+            std::fprintf(stderr, "[pluto/session] parse error in %s: %s\n", path.c_str(), e.what());
+        }
+    }
 
 	BNode node(path.c_str());
 	meta = SessionMetadata{};

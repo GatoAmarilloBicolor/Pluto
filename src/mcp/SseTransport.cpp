@@ -197,9 +197,19 @@ bool SseTransport::start(std::string& err) {
 
 	struct curl_slist* headers = nullptr;
 	headers = curl_slist_append(headers, "accept: text/event-stream");
+	if (!headers) {
+		curl_easy_cleanup(curl);
+		err = "OOM: curl_slist_append failed";
+		return false;
+	}
 	for (const auto& [k, v] : fHeaders) {
 		std::string line = k + ": " + v;
 		headers = curl_slist_append(headers, line.c_str());
+		if (!headers) {
+			curl_easy_cleanup(curl);
+			err = "OOM: curl_slist_append failed";
+			return false;
+		}
 	}
 
 	curl_easy_setopt(curl, CURLOPT_URL, fSseUrl.c_str());
@@ -252,9 +262,9 @@ std::string SseTransport::post(const std::string& body, std::string& err) {
 		return {};
 	}
 	for (const auto& ip : message_ips) {
-		if (!pluto::IsPrivateIP(ip)) {
+		if (pluto::IsPrivateIP(ip)) {
 			curl_easy_cleanup(curl);
-			err = "Message host IP not allowed: " + ip;
+			err = "Message host IP not allowed (private): " + ip;
 			return {};
 		}
 	}
@@ -262,15 +272,35 @@ std::string SseTransport::post(const std::string& body, std::string& err) {
 	std::string resolve_entry = message_host + ":443:" + message_ips[0];
 	struct curl_slist* resolve_list = nullptr;
 	resolve_list = curl_slist_append(resolve_list, resolve_entry.c_str());
+	if (!resolve_list) {
+		curl_easy_cleanup(curl);
+		err = "OOM: curl_slist_append failed";
+		return {};
+	}
 	curl_easy_setopt(curl, CURLOPT_RESOLVE, resolve_list);
 
 	std::string out;
 	struct curl_slist* headers = nullptr;
 	headers = curl_slist_append(headers, "content-type: application/json");
+	if (!headers) {
+		curl_easy_cleanup(curl);
+		err = "OOM: curl_slist_append failed";
+		return {};
+	}
 	headers = curl_slist_append(headers, "accept: application/json");
+	if (!headers) {
+		curl_easy_cleanup(curl);
+		err = "OOM: curl_slist_append failed";
+		return {};
+	}
 	for (const auto& [k, v] : fHeaders) {
 		std::string line = k + ": " + v;
 		headers = curl_slist_append(headers, line.c_str());
+		if (!headers) {
+			curl_easy_cleanup(curl);
+			err = "OOM: curl_slist_append failed";
+			return {};
+		}
 	}
 
 	curl_easy_setopt(curl, CURLOPT_URL, fMessageUrl.c_str());

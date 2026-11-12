@@ -29,6 +29,7 @@
 #include <sstream>
 #include <string>
 #include <algorithm>
+#include <mutex>
 
 #include <openssl/evp.h>
 #include <openssl/rand.h>
@@ -40,6 +41,8 @@ namespace pluto {
 
 namespace oauth_internal {
 const char* kClientId = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
+
+static std::mutex g_oauth_mutex;
 
 // =============================================================================
 // Token Encryption (AES-256-GCM)
@@ -760,6 +763,8 @@ bool OAuthLogin() {
 // ---- Token refresh ----
 
 std::string OAuthEnsureValidToken(OAuthTokens& tokens) {
+    std::lock_guard<std::mutex> lock(g_oauth_mutex);
+    
     if (tokens.empty()) return {};
     if (!tokens.expired()) return tokens.access_token;
 
@@ -794,7 +799,7 @@ std::string OAuthEnsureValidToken(OAuthTokens& tokens) {
         tokens.access_token = at;
         if (!rt.empty()) tokens.refresh_token = rt;
         tokens.expires_at = std::time(nullptr) + expires_in;
-pluto::SaveOAuthTokens(tokens);
+        pluto::SaveOAuthTokens(tokens);
         return tokens.access_token;
     } catch (...) {
         std::fprintf(stderr, "oauth: failed to parse refresh response\n");

@@ -54,10 +54,13 @@ bool StdioTransport::start(std::string& err) {
 		for (const auto& [k, v] : fEnv) setenv(k.c_str(), v.c_str(), 1);
 
 		std::vector<char*> argv;
+		argv.reserve(fArgs.size() + 2);
 		argv.push_back(strdup(fCommand.c_str()));
 		for (const auto& a : fArgs) argv.push_back(strdup(a.c_str()));
 		argv.push_back(nullptr);
 		execvp(fCommand.c_str(), argv.data());
+		// If execvp returns, it failed - free allocated memory
+		for (char* p : argv) if (p) free(p);
 		std::fprintf(stderr, "[mcp/stdio] execvp %s: %s\n",
 			fCommand.c_str(), std::strerror(errno));
 		_exit(127);
@@ -160,7 +163,10 @@ std::string StdioTransport::request(const std::string& body, std::string& err) {
 			const json::Value* id = v.find("id");
 			if (!id || !id->is_num()) continue;
 			if (my_id >= 0 && static_cast<int>(id->as_num()) != my_id) continue;
-		} catch (const std::exception&) { continue; }
+		} catch (const std::exception& e) {
+			std::fprintf(stderr, "[mcp/stdio] parse error: %s\n", e.what());
+			continue;
+		}
 		return line;
 	}
 }
