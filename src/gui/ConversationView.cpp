@@ -998,7 +998,7 @@ int32 ConversationView::_WorkerEntry(void* data) {
 	};
 
 	RunTurn(*ctx->provider, *ctx->cfg, *ctx->tools,
-	         *ctx->messages, gui_permission, ui, ctx->cancel);
+	         *ctx->messages, gui_permission, ui, ctx->cancel, nullptr);
 
 	BMessage done(kMsgWorkerDone);
 	target.SendMessage(&done);

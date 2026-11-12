@@ -3,6 +3,7 @@
 #include "../config.h"
 #include "../provider/Provider.h"
 #include "../tools/Tool.h"
+#include "../events.h"
 
 #include <functional>
 #include <string>
@@ -65,7 +66,8 @@ void RunTurn(Provider& provider,
               std::vector<Message>& messages,
               PermissionFn permission,
               const UiCallbacks& ui,
-              std::atomic<bool>* cancel = nullptr);
+              std::atomic<bool>* cancel = nullptr,
+              EventBus* event_bus = nullptr);
 
 // Auto-compact messages when cumulative token usage exceeds a threshold.
 // Replaces earlier conversation rounds with an LLM-generated summary,

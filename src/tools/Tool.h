@@ -28,27 +28,28 @@ public:
 
 class ToolRegistry {
 public:
-	void add(std::unique_ptr<Tool> t);
-	Tool* find(const std::string& name);
-	std::vector<const Tool*> list() const;
-	
-	ToolRegistry() = default;
-	ToolRegistry(ToolRegistry&& other) noexcept 
-		: fTools(std::move(other.fTools)) {}
-	ToolRegistry& operator=(ToolRegistry&& other) noexcept {
-		if (this != &other) {
-			std::lock_guard<std::mutex> lock(fMutex);
-			std::lock_guard<std::mutex> lock_other(other.fMutex);
-			fTools = std::move(other.fTools);
-		}
-		return *this;
-	}
-	ToolRegistry(const ToolRegistry&) = delete;
-	ToolRegistry& operator=(const ToolRegistry&) = delete;
+    void add(std::unique_ptr<Tool> t);
+    virtual Tool* find(const std::string& name);
+    virtual std::vector<const Tool*> list() const;
+    
+    ToolRegistry() = default;
+    ToolRegistry(ToolRegistry&& other) noexcept 
+        : fTools(std::move(other.fTools)) {}
+    ToolRegistry& operator=(ToolRegistry&& other) noexcept {
+        if (this != &other) {
+            std::lock_guard<std::mutex> lock(fMutex);
+            std::lock_guard<std::mutex> lock_other(other.fMutex);
+            fTools = std::move(other.fTools);
+        }
+        return *this;
+    }
+    ToolRegistry(const ToolRegistry&) = delete;
+    ToolRegistry& operator=(const ToolRegistry&) = delete;
+    virtual ~ToolRegistry() = default;
 
 private:
-	mutable std::mutex fMutex;
-	std::map<std::string, std::unique_ptr<Tool>> fTools;
+    mutable std::mutex fMutex;
+    std::map<std::string, std::unique_ptr<Tool>> fTools;
 };
 
 }  // namespace pluto

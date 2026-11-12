@@ -139,7 +139,7 @@ int headless(pluto::Provider& p, const pluto::Config& cfg,
         out_tokens += out_t;
     };
 
-    pluto::RunTurn(p, cfg, tools, messages, pluto::AutoAllow(), ui);
+    pluto::RunTurn(p, cfg, tools, messages, pluto::AutoAllow(), ui, nullptr, nullptr);
     
     if (format == "json") {
         using namespace pluto::json;
@@ -186,7 +186,7 @@ int one_shot(pluto::Provider& p, const pluto::Config& cfg,
         rc = 1;
     };
     
-    pluto::RunTurn(p, cfg, tools, messages, pluto::AutoAllow(), ui);
+    pluto::RunTurn(p, cfg, tools, messages, pluto::AutoAllow(), ui, nullptr, nullptr);
     std::printf("\n");
     return rc;
 }

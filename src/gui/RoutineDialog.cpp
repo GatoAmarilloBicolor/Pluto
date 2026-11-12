@@ -510,7 +510,7 @@ static int32 _RoutineWorkerEntry(void* data) {
 	};
 
 	pluto::RunTurn(*provider, *ctx->config, *ctx->tools,
-	                messages, pluto::AutoAllow(), ui);
+	                messages, pluto::AutoAllow(), ui, nullptr, nullptr);
 
 	// Restore model.
 	if (!orig_model.empty())

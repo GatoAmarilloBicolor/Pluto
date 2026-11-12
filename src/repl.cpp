@@ -1691,7 +1691,7 @@ if (line == "/cost") {
 
 		ClearCancel();
 		md.Reset();
-		RunTurn(*provider, cfg, tools, messages, perm, ui);
+		RunTurn(*provider, cfg, tools, messages, perm, ui, nullptr, nullptr);
 		// Flush any remaining buffered markdown (partial last line).
 		std::string tail = md.Flush();
 		if (!tail.empty()) {

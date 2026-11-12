@@ -595,7 +595,7 @@ int RunWikiCli(int argc, char** argv) {
 		};
 
 		ToolRegistry empty_tools;
-		RunTurn(*provider, cfg, empty_tools, messages, AutoAllow(), ui);
+		RunTurn(*provider, cfg, empty_tools, messages, AutoAllow(), ui, nullptr, nullptr);
 		if (rc != 0) {
 			std::fprintf(stderr, "LLM analysis failed.\n");
 			return 1;

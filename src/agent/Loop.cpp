@@ -147,7 +147,8 @@ void RunTurn(Provider& provider,
               std::vector<Message>& messages,
               PermissionFn permission,
               const UiCallbacks& ui,
-              std::atomic<bool>* cancel) {
+              std::atomic<bool>* cancel,
+              EventBus* event_bus) {
 	// Repair ALL orphaned tool_use blocks in the conversation history.
 	// The API requires every assistant message with tool_use to be
 	// immediately followed by a user message containing matching
@@ -623,10 +624,40 @@ if (had_error) {
 				continue;
 			}
 
-			std::string preview = tool->preview(block.tool_input);
-			if (ui.on_tool_start) ui.on_tool_start(block.tool_name, preview);
+std::string preview = tool->preview(block.tool_input);
+		if (ui.on_tool_start) ui.on_tool_start(block.tool_name, preview);
 
-			Permission p = permission(*tool, preview);
+		// Waterfall permission system: tools/pre-execute
+		// Listeners can: allow (return true), deny (set allow=false, return false), ask (prompt user)
+		Permission p = Permission::Allow;
+		if (event_bus) {
+			bool allow = true;
+			std::string deny_reason;
+			ToolPreExecuteEvent evt{tool, &block.tool_input, &preview, &allow, &deny_reason};
+			if (!event_bus->tool_pre_execute.waterfall(evt)) {
+				// Waterfall was short-circuited (denied)
+				p = Permission::Deny;
+			} else if (!allow) {
+				p = Permission::Deny;
+			}
+			if (p == Permission::Deny) {
+				result.is_error = true;
+				result.text = deny_reason.empty() ? "user denied tool execution" : deny_reason;
+				ToolResult denied;
+				denied.is_error = true;
+				denied.output = result.text;
+				if (ui.on_tool_result)
+					ui.on_tool_result(block.tool_name, block.tool_input, denied);
+				if (event_bus) {
+					ToolResultEvent result_evt{tool, &block.tool_input, &denied};
+					event_bus->tool_result.emit(result_evt);
+				}
+				user_results.content.push_back(result);
+				continue;
+			}
+		} else {
+			// Legacy permission function
+			p = permission(*tool, preview);
 			if (p == Permission::Deny) {
 				result.is_error = true;
 				result.text = "user denied tool execution";
@@ -638,16 +669,44 @@ if (had_error) {
 				user_results.content.push_back(result);
 				continue;
 			}
+		}
 
-			run_hooks(cfg.hooks_pre_tool, "pre", block.tool_name);
-			ToolResult tr = tool->execute(block.tool_input);
-			run_hooks(cfg.hooks_post_tool, "post", block.tool_name);
-			cap_tool_output(tr.output, cfg);
-			result.is_error = tr.is_error;
-			result.text = tr.output;
-			if (ui.on_tool_result)
-				ui.on_tool_result(block.tool_name, block.tool_input, tr);
-			user_results.content.push_back(result);
+		// Legacy hooks (for backward compatibility)
+		run_hooks(cfg.hooks_pre_tool, "pre", block.tool_name);
+
+		// Waterfall: tools/execute - can skip default execution
+		ToolResult tr;
+		bool skip_execution = false;
+		if (event_bus) {
+			ToolExecuteEvent exec_evt{tool, &block.tool_input, &tr, &skip_execution};
+			event_bus->tool_execute.waterfall(exec_evt);
+		}
+		if (!skip_execution) {
+			tr = tool->execute(block.tool_input);
+		}
+
+		// Legacy hooks
+		run_hooks(cfg.hooks_post_tool, "post", block.tool_name);
+
+		// Waterfall: tools/post-execute - can modify result
+		if (event_bus) {
+			ToolPostExecuteEvent post_evt{tool, &block.tool_input, &tr};
+			event_bus->tool_post_execute.waterfall(post_evt);
+		}
+
+		cap_tool_output(tr.output, cfg);
+		result.is_error = tr.is_error;
+		result.text = tr.output;
+		if (ui.on_tool_result)
+			ui.on_tool_result(block.tool_name, block.tool_input, tr);
+
+		// Waterfall: tools/result - observe final result
+		if (event_bus) {
+			ToolResultEvent result_evt{tool, &block.tool_input, &tr};
+			event_bus->tool_result.emit(result_evt);
+		}
+
+		user_results.content.push_back(result);
 		}
 
 		messages.push_back(user_results);
