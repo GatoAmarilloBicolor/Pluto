@@ -2,15 +2,21 @@
 
 #include <Bitmap.h>
 #include <BitmapStream.h>
+#include <Clipboard.h>
+#include <DataIO.h>
 #include <Directory.h>
 #include <File.h>
+#include <FilePanel.h>
 #include <LayoutBuilder.h>
-#include <DataIO.h>
+#include <Menu.h>
 #include <MessageRunner.h>
 #include <Messenger.h>
 #include <NodeInfo.h>
+#include <Notification.h>
 #include <OS.h>
+#include <Path.h>
 #include <Roster.h>
+#include <Screen.h>
 #include <ScrollView.h>
 #include <String.h>
 #include <TextView.h>
@@ -1404,9 +1410,7 @@ void ConversationView::RestoreScrollPosition(float position) {
 	BScrollBar* sb = fOutputScroll->ScrollBar(B_VERTICAL);
 	if (sb) {
 		// Clamp to valid range
-		float max = sb->MaxValue();
 		if (position < 0) position = 0;
-		if (position > max) position = max;
 		sb->SetValue(position);
 	}
 }
@@ -1801,8 +1805,8 @@ private:
 		}
 		
 		BRect winFrame(0, 0, 
-		               std::min(fOriginalWidth, screenFrame.Width() * 0.9),
-		               std::min(fOriginalHeight, screenFrame.Height() * 0.9));
+		               std::min(fOriginalWidth, (float)(screenFrame.Width() * 0.9)),
+		               std::min(fOriginalHeight, (float)(screenFrame.Height() * 0.9)));
 		winFrame.OffsetTo((screenFrame.Width() - winFrame.Width()) / 2,
 		                  (screenFrame.Height() - winFrame.Height()) / 2);
 		
@@ -1812,7 +1816,7 @@ private:
 		// Create a scroll view with the full-size image
 		BBitmap* fullBitmap = new BBitmap(fBitmap->Bounds(), fBitmap->ColorSpace(), true);
 		if (fullBitmap->Lock()) {
-			fullBitmap->ImportBits(fBitmap->Bits(), fBitmap->BitsLength(), fBitmap->BytesPerRow(),
+			fullBitmap->ImportBits(fBitmap->Bits(), (int32)fBitmap->BitsLength(), fBitmap->BytesPerRow(),
 			                       fBitmap->ColorSpace());
 			fullBitmap->Unlock();
 		}
@@ -2220,9 +2224,9 @@ void ConversationView::_ClearInlineImages() {
 	fImageOffsets.clear();
 }
 
-void ConversationView::_InsertInlineImage(const std::string& base64_data, 
-                                         const std::string& mimeType = "image/png",
-                                         const std::string& filename = "") {
+void ConversationView::_InsertInlineImage(const std::string& base64_data,
+                                         const std::string& mimeType,
+                                         const std::string& filename) {
 	std::string raw = base64_decode(base64_data);
 	if (raw.empty()) {
 		_Append("\xf0\x9f\x96\xbc [image decode failed]\n", fDocTextColor);

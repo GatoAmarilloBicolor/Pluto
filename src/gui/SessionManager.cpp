@@ -108,7 +108,7 @@ void MainWindow::_SaveWorkspace() {
 	
 	// Save global split weight
 	if (fSplitView) {
-		root.set("split_weight", (double)fSplitView->ItemWeightAt(0));
+		root.set("split_weight", (double)fSplitView->ItemWeight(0));
 	}
 
 	std::ofstream f(path, std::ios::trunc);
@@ -176,7 +176,7 @@ bool MainWindow::_RestoreWorkspace() {
 		if (root.find("split_weight") && fSplitView) {
 			float weight = (float)root.find("split_weight")->as_num();
 			if (weight > 0.1f && weight < 10.0f) {
-				fSplitView->SetItemWeightAt(0, weight);
+				fSplitView->SetItemWeight(0, weight);
 			}
 		}
 
