@@ -1,95 +1,156 @@
----
-Language: Cpp
+# .clang-format for Pluto — Haiku-native C++ codebase
+# Based on existing style observed across the codebase.
+
 BasedOnStyle: LLVM
 
-# Indentation — Haiku uses tabs
+# Indentation
 IndentWidth: 4
+UseTab: Always
 TabWidth: 4
-UseTab: ForIndentation
-AccessModifierOffset: -4
-IndentCaseLabels: true
-NamespaceIndentation: None
 
-# Braces — Haiku style: functions on new line, control on same line
-BreakBeforeBraces: Custom
-BraceWrapping:
-  AfterFunction: true
-  AfterClass: true
-  AfterStruct: true
-  AfterEnum: true
-  AfterNamespace: false
-  AfterControlStatement: Never
-  BeforeElse: true
-  BeforeCatch: true
-  SplitEmptyFunction: true
+# Braces
+BreakBeforeBraces: Allman
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortLambdasOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
 
-AllowShortFunctionsOnASingleLine: Inline
-AllowShortIfStatementsOnASingleLine: WithoutElse
-AllowShortLoopsOnASingleLine: true
-AllowShortBlocksOnASingleLine: Empty
-
-# Return type on its own line (Haiku style)
-AlwaysBreakAfterReturnType: TopLevelDefinitions
-IndentWrappedFunctionNames: false
-
-# Line width
-ColumnLimit: 95
-
-# Alignment
-AlignAfterOpenBracket: Align
-AlignConsecutiveAssignments: false
-AlignConsecutiveDeclarations: false
-AlignTrailingComments: true
-
-# Includes — group and sort
-IncludeBlocks: Regroup
-SortIncludes: CaseSensitive
-IncludeCategories:
-  # Own header first (highest priority)
-  - Regex: '^"[^/]*\.h"'
-    Priority: 1
-  # Standard library
-  - Regex: '^<(algorithm|array|atomic|cassert|cctype|chrono|cmath|cstdint|cstdio|cstdlib|cstring|ctime|deque|fstream|functional|iostream|limits|map|memory|mutex|numeric|optional|queue|random|regex|set|sstream|stdexcept|string|string_view|thread|tuple|type_traits|unordered_map|unordered_set|utility|variant|vector)>'
-    Priority: 2
-  # POSIX/system headers
-  - Regex: '^<(dirent|fcntl|netdb|poll|pthread|signal|sys/|unistd)'
-    Priority: 3
-  # Haiku API headers (capitalized names)
-  - Regex: '^<[A-Z]'
-    Priority: 4
-  # Third-party (curl, etc)
-  - Regex: '^<'
-    Priority: 5
-  # Project local headers (relative paths)
-  - Regex: '^"\.\.'
-    Priority: 6
-  - Regex: '^"'
-    Priority: 6
-
-# Constructor initializer — colon on its own line (Haiku style)
-BreakConstructorInitializers: BeforeColon
-ConstructorInitializerIndentWidth: 4
-PackConstructorInitializers: Never
-
-# Misc
+# Pointers/references
 PointerAlignment: Left
-SpaceAfterCStyleCast: false
+ReferenceAlignment: Left
+
+# Spaces
+SpaceAfterTemplateKeyword: false
 SpaceBeforeParens: ControlStatements
-SpaceInEmptyBlock: false
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 1
 SpacesInAngles: false
+SpacesInContainerLiterals: false
+SpacesInCStyleCastParentheses: false
 SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# Line length
+ColumnLimit: 100
+
+# Access modifiers
+AccessModifierOffset: -4
+IndentAccessModifiers: true
+
+# Includes
+IncludeCategories:
+  - Regex: '^<ext/.*\.h>'
+    Priority: 1
+  - Regex: '^<.*\.h>'
+    Priority: 2
+  - Regex: '^<.*\.hh>'
+    Priority: 2
+  - Regex: '^<.*\.hpp>'
+    Priority: 2
+  - Regex: '^<.*>'
+    Priority: 3
+  - Regex: '.*'
+    Priority: 4
+SortIncludes: true
+
+# Other
 AllowAllParametersOfDeclarationOnNextLine: true
+AllowAllConstructorInitializersOnNextLine: true
+AllowBreakAfterNREqualComma: false
+AllowBreakBeforeNREqualComma: false
+AllowBreakBeforeBinaryOperators: NonAssignment
+AllowBreakBeforeTernaryOperators: true
+AllowBreakConstructorInitializers: BeforeComma
+AllowBreakAfterAssignmentOperator: All
+AllowBreakBeforeBitwiseOperators: NonAssignment
+AllowBreakBeforeRangeBasedForLoopColon: false
+AllowConsecutiveBlankLines: 0
+AllowParenBreakAfterStatement: false
+AlignAfterOpenBracket: Align
+AlignArrayOfStructures: None
+AlignEscapedNewlinesLeft: false
+AlignOperands: Align
+AlignTrailingComments: true
+AlwaysBreakAfterDefinitionReturnType: false
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: false
+AlwaysBreakTemplateDeclarations: Yes
 BinPackArguments: true
 BinPackParameters: true
-MaxEmptyLinesToKeep: 2
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: false
+  AfterControlStatement: false
+  AfterEnum: false
+  AfterFunction: false
+  AfterNamespace: false
+  AfterObjCDeclaration: false
+  AfterStruct: false
+  AfterUnion: false
+  AfterExternBlock: false
+  BeforeCatch: false
+  BeforeElse: false
+  BeforeLambdaBody: false
+  BeforeWhile: false
+  IndentBraces: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+CaseIndentBlocks: false
+IndentCaseLabels: false
+IndentExternBlock: AfterExternBlock
+IndentFunctionDeclarationAfterType: false
+IndentPPDirectives: None
+IndentQuotes: false
+IndentWrappedFunctionNames: false
+JavaScriptQuotes: Leave
+JavaScriptWrapImports: true
 KeepEmptyLinesAtTheStartOfBlocks: false
-SeparateDefinitionBlocks: Always
-
-# Penalties
+KeepEmptyLinesAndAffectNonEmptyLines: false
+MacroBlockBegin: ''
+MacroBlockEnd: ''
+MaxEmptyLinesToKeep: 1
+NamespaceIndentation: None
+PPIndentBehaviors:
+  - If: Indent
+  - Else: Indent
+  - Endif: Outdent
+  - Ifdef: Indent
+  - Ifndef: Indent
+  - Else: Indent
+  - Endif: Outdent
+  - Define: Indent
+  - Undef: Indent
+  - Pragma: Indent
+  - If: Indent
+  - Else: Indent
+  - Endif: Outdent
+PenaltyBreakAssignment: 2
 PenaltyBreakBeforeFirstCallParameter: 19
 PenaltyBreakComment: 300
 PenaltyBreakFirstLessLess: 120
 PenaltyBreakString: 1000
+PenaltyBreakTemplateDeclaration: 10
 PenaltyExcessCharacter: 1000000
-PenaltyReturnTypeOnItsOwnLine: 0
-...
+PenaltyIndentedWhitespace: 0
+PenaltyReturnKindOnItsOwnLine: 60
+PenaltyBreakParenthesis: 50000
+PointerAlignment: Left
+RawStringDelimiter: Parentheses
+RequireSixteenBitCharacters: false
+RequireSixteenBitChars: false
+SortUsingDeclarations: true
+StatementAttributeLikeMacros:
+  - Q_UNUSED
+  - QT_REQUIRE_VERSION
+StatementMacros:
+  - Q_UNUSED
+  - QT_REQUIRE_VERSION
+TemplateKeywordAlignment: Left
+WhitespaceSensitiveMacros:
+  - STRINGIFY
+  - PP_STRINGIFY
+  - BOOST_PP_STRINGIFY
+Standard: Cpp20
