@@ -1,4 +1,5 @@
 #include "StdioTransport.h"
+#include "RAII.h"
 
 #include <cerrno>
 #include <csignal>
@@ -26,8 +27,8 @@ bool StdioTransport::start(std::string& err) {
 	if (fCommand.empty()) { err = "command required"; return false; }
 
 	int in_pipe[2], out_pipe[2];
-	if (pipe(in_pipe)  != 0) { err = std::strerror(errno); return false; }
-	if (pipe(out_pipe) != 0) {
+	if (!pipe_cloexec(in_pipe))  { err = std::strerror(errno); return false; }
+	if (!pipe_cloexec(out_pipe)) {
 		int e = errno;
 		close(in_pipe[0]); close(in_pipe[1]);
 		err = std::strerror(e);

@@ -90,6 +90,11 @@ int RunCommandCapture(const char* cmd, std::string& output);
 // Split command string into argv array (simple shell-like parsing, no shell execution).
 std::vector<std::string> split_command(const std::string& cmd);
 
+// Convert vector<string> to argv array for execvp/posix_spawn (no shell).
+// Returns vector<char*> with nullptr terminator. Strings are copied to ensure
+// valid pointers for the duration of the exec call.
+std::vector<char*> make_argv(const std::vector<std::string>& args);
+
 // Execute command via fork/execvp with argv array (no shell).
 // Returns exit code, or -1 on error. Captures stdout+stderr into output.
 int execvp_capture(const std::vector<std::string>& argv, std::string& output);

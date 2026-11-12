@@ -48,10 +48,15 @@ inline bool ApplyCurlSecurity(CURL* curl, const std::string& url) {
     // and host verification remain enforced.
 
     // For localhost/private IPs (self-hosted models, local Ollama, etc.),
-    // allow self-signed certificates — the CA bundle won't have them.
-    if (IsBlockedHost(ExtractHost(url))) {
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    // DO NOT disable verification. Instead, users should configure:
+    // - Custom CA bundle via CURLOPT_CAINFO pointing to their local CA
+    // - Or certificate pinning via CURLOPT_PINNEDPUBLICKEY for their server
+    // Disabling verification enables MITM attacks on local networks.
+    // If you need to connect to a local server with self-signed cert,
+    // set the PLUTO_CUSTOM_CA_BUNDLE env var to your CA file path.
+    const char* custom_ca = std::getenv("PLUTO_CUSTOM_CA_BUNDLE");
+    if (custom_ca && *custom_ca) {
+        curl_easy_setopt(curl, CURLOPT_CAINFO, custom_ca);
     }
 
     // Connection limits
@@ -175,5 +180,34 @@ public:
     bool empty() const { return data_.empty(); }
     void clear() { SecureZero(data_.data(), data_.size()); data_.clear(); }
 };
+
+// RAII wrapper for CURL handle
+struct CurlDeleter {
+    void operator()(CURL* curl) const noexcept {
+        if (curl) curl_easy_cleanup(curl);
+    }
+};
+using CurlPtr = std::unique_ptr<CURL, CurlDeleter>;
+
+inline CurlPtr MakeCurl() {
+    CURL* curl = curl_easy_init();
+    return CurlPtr(curl);
+}
+
+// RAII wrapper for curl_slist
+struct SlistDeleter {
+    void operator()(curl_slist* list) const noexcept {
+        if (list) curl_slist_free_all(list);
+    }
+};
+using SlistPtr = std::unique_ptr<curl_slist, SlistDeleter>;
+
+inline SlistPtr AppendSlist(SlistPtr& list, const std::string& item) {
+    curl_slist* new_list = curl_slist_append(list.get(), item.c_str());
+    if (!new_list) return nullptr;
+    // Release old list ownership, new_list takes over
+    list.release();
+    return SlistPtr(new_list);
+}
 
 } // namespace pluto

@@ -23,6 +23,7 @@ public:
 	// One-line human preview for permission prompts. Default: name(args).
 	virtual std::string preview(const std::string& input_json) const;
 
+	// Internal execution (assumes input already validated).
 	virtual ToolResult execute(const std::string& input_json) = 0;
 };
 
@@ -31,6 +32,10 @@ public:
     void add(std::unique_ptr<Tool> t);
     virtual Tool* find(const std::string& name);
     virtual std::vector<const Tool*> list() const;
+    
+    // Centralized execution with schema validation.
+    // Returns error result if tool not found or input fails schema validation.
+    ToolResult execute(const std::string& name, const std::string& input_json);
     
     ToolRegistry() = default;
     ToolRegistry(ToolRegistry&& other) noexcept 

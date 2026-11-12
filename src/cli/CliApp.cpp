@@ -496,23 +496,22 @@ int CliApp::run() {
     cfg_.dry_run = options_.dry_run;
     
     // Resolve credentials
-    pluto::ResolveCredentials(cfg_);
-    
-    // Check for API key
-    std::string creds = pluto::ResolveApiKey(cfg_);
-    if (creds.empty() && cfg_.provider != "openai-compat") {
-        std::fprintf(stderr, "No API key found. Options:\n");
+    auto creds = pluto::ResolveCredentials(cfg_);
+    if (creds.empty()) {
+        std::fprintf(stderr,
+            "No credentials found for provider '%s'.\n\n",
+            cfg_.provider.c_str());
         if (cfg_.provider == "anthropic") {
             std::fprintf(stderr,
                 " 1: OAuth (run 'pluto login')\n"
-                " 2: export %s=sk-ant-... (API key)\n"
+                " 2: export %s=sk-ant-...   (API key via env)\n"
                 " 3: use GUI Settings dialog to enter key\n",
                 cfg_.api_key_env.c_str());
         } else {
             std::fprintf(stderr,
                 " 1: export %s=<key>\n"
                 " 2: use GUI Settings dialog to enter key\n"
-                " (local servers like Ollama/LM Studio don't need key)\n",
+                " (local servers like Ollama/LM Studio don't need a key)\n",
                 cfg_.api_key_env.c_str());
         }
         std::fprintf(stderr, "\n");

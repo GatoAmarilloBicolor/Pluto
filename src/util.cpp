@@ -284,6 +284,19 @@ std::string shq(const std::string& s) {
 	return out;
 }
 
+// Convert vector<string> to argv array for execvp/posix_spawn (no shell).
+// Returns vector<char*> with nullptr terminator. Strings are copied to ensure
+// valid pointers for the duration of the exec call.
+std::vector<char*> make_argv(const std::vector<std::string>& args) {
+    std::vector<char*> argv;
+    argv.reserve(args.size() + 1);
+    for (const auto& s : args) {
+        argv.push_back(const_cast<char*>(s.c_str()));
+    }
+    argv.push_back(nullptr);
+    return argv;
+}
+
 // Execute command in a specific working directory via fork/execvp.
 // Returns exit code, fills output. No shell.
 int execvp_capture_cwd(const std::string& cwd, const std::vector<std::string>& argv, std::string& output) {

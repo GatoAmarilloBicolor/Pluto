@@ -28,6 +28,19 @@
 #include <string>
 
 #include "../json.h"
+#include <memory>
+
+// RAII wrapper for BLooper-derived classes
+template<typename T>
+struct LooperDeleter {
+    void operator()(T* looper) const {
+        if (!looper) return;
+        looper->Lock();
+        looper->Quit();
+        // Looper unlocks itself when exiting Run()
+        delete looper;
+    }
+};
 #include "../workspace.h"
 
 namespace pluto {
@@ -212,17 +225,14 @@ public:
 		}
 
 		NodeWatcher* watcher = new NodeWatcher();
+		std::unique_ptr<NodeWatcher, LooperDeleter<NodeWatcher>> watcher_guard(watcher);
 		BMessenger target(watcher);
 
 		uint32_t flags = B_WATCH_DIRECTORY | B_WATCH_NAME | B_WATCH_STAT;
 		if (watch_node(&nref, flags, target) != B_OK) {
-			watcher->Lock();
-			watcher->Quit();
-			watcher->Unlock();
-			delete watcher;
 			r.is_error = true;
 			r.output = "watch_node failed";
-			return r;
+			return r;  // watcher_guard will clean up
 		}
 
 		snooze(static_cast<bigtime_t>(duration_ms) * 1000LL);
@@ -256,13 +266,8 @@ public:
 			out += "\n";
 		}
 
-		watcher->Lock();
-		watcher->Quit();
-		watcher->Unlock();
-		delete watcher;
-
 		r.output = std::move(out);
-		return r;
+		return r;  // watcher_guard cleans up automatically
 	}
 };
 

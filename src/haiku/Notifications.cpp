@@ -6,23 +6,33 @@
 #include <Application.h>
 #include <Notification.h>
 #include <String.h>
+#include <TranslationUtils.h>
 #include <stdio.h>
 #include <memory>
 #endif
 
 #include <cstdio>
+#include <chrono>
 
 namespace pluto {
 
 #ifdef __HAIKU__
 
 void Notify(const std::string& title, const std::string& body,
-            const std::string& /*icon*/) {
-    // Note: BNotification::SetIcon() only accepts BBitmap*, not a string path.
-    // For cross-compilation, we ignore the icon parameter.
-    BNotification notification(B_INFORMATION_NOTIFICATION);
+            const std::string& icon) {
+    BNotification notification(B_INFO_NOTIFICATION);
     notification.SetTitle(title.c_str());
     notification.SetContent(body.c_str());
+    
+    // Load icon from file if provided
+    if (!icon.empty()) {
+        BBitmap* bitmap = BTranslationUtils::GetBitmapFile(icon.c_str());
+        if (bitmap) {
+            notification.SetIcon(bitmap);
+            // notification takes ownership of bitmap, don't delete
+        }
+    }
+    
     status_t err = notification.Send();
     if (err != B_OK) {
         fprintf(stderr, "[pluto] notification send failed: %s\n", strerror(err));
@@ -36,14 +46,22 @@ NotificationCenter::NotificationLooper::NotificationLooper()
 
 void NotificationCenter::NotificationLooper::MessageReceived(BMessage* msg) {
     if (msg->what == static_cast<uint32>(1)) {
-        BString title, body;
+        BString title, body, iconPath;
         msg->FindString("title", &title);
         msg->FindString("body", &body);
+        msg->FindString("icon", &iconPath);
 
-        BNotification notification(B_INFORMATION_NOTIFICATION);
+        BNotification notification(B_INFO_NOTIFICATION);
         notification.SetTitle(title);
         notification.SetContent(body);
-        // Note: icon parameter is ignored since BNotification::SetIcon() requires BBitmap*
+        // Load icon from file if provided in message
+        if (iconPath.Length() > 0) {
+            BBitmap* bitmap = BTranslationUtils::GetBitmapFile(iconPath.String());
+            if (bitmap) {
+                notification.SetIcon(bitmap);
+                // notification takes ownership of bitmap, don't delete
+            }
+        }
         status_t err = notification.Send();
         if (err != B_OK) {
             fprintf(stderr, "[pluto] notification send failed: %s\n", strerror(err));
@@ -55,6 +73,7 @@ void NotificationCenter::NotificationLooper::MessageReceived(BMessage* msg) {
 
 NotificationCenter::NotificationCenter() {
     fLock = std::make_unique<BLocker>("notification-lock");
+    // Store raw pointer in atomic - we manage lifetime manually with Shutdown()
     fLooper.store(new NotificationLooper(), std::memory_order_release);
 }
 
@@ -65,18 +84,17 @@ NotificationCenter::~NotificationCenter() {
 void NotificationCenter::Shutdown() {
     NotificationLooper* looper = fLooper.exchange(nullptr, std::memory_order_acq_rel);
     if (looper) {
-        // Quit the looper and wait for thread to finish
+        // Properly shut down the looper
         looper->Lock();
         looper->Quit();
-        // Wait for the looper thread to finish (it will unlock itself when exiting Run())
-        // We don't call Unlock() here - the looper unlocks itself when exiting Run()
+        // Looper unlocks itself when exiting Run()
         delete looper;
     }
 }
 
 void NotificationCenter::Post(const std::string& title,
                                const std::string& body,
-                               const std::string& /*icon*/) {
+                               const std::string& icon) {
     NotificationLooper* looper = fLooper.load(std::memory_order_acquire);
     if (!looper) return;
 
@@ -100,7 +118,9 @@ void NotificationCenter::Post(const std::string& title,
     BMessage msg(static_cast<uint32>(1));
     msg.AddString("title", title.c_str());
     msg.AddString("body", body.c_str());
-    // Note: icon parameter is not passed since BNotification::SetIcon() requires BBitmap*
+    if (!icon.empty()) {
+        msg.AddString("icon", icon.c_str());
+    }
 
     looper->PostMessage(&msg);
 }
@@ -115,9 +135,7 @@ void Notify(const std::string& /*title*/, const std::string& /*body*/,
 NotificationCenter::NotificationCenter() {}
 NotificationCenter::~NotificationCenter() {}
 void NotificationCenter::Shutdown() {}
-void NotificationCenter::Post(const std::string&, const std::string&,
-                              const std::string&) {}
 
-#endif  // __HAIKU__
+#endif
 
-}  // namespace pluto
+} // namespace pluto

@@ -18,6 +18,7 @@
 
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <poll.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -217,8 +218,20 @@ bool RunFirstRunWizard(Config& cfg) {
 	std::fflush(stdout);
 
 	char buf[32];
-	if (!std::fgets(buf, sizeof(buf), stdin))
-		return false;
+	// Use poll() to check for stdin input with timeout, allowing cancel flag check
+	struct pollfd pfd = { STDIN_FILENO, POLLIN, 0 };
+	while (true) {
+		if (pluto::IsCancelRequested()) return false;
+		int ret = poll(&pfd, 1, 100);  // 100ms timeout
+		if (ret < 0) {
+			if (errno == EINTR) continue;
+			return false;
+		}
+		if (ret > 0 && (pfd.revents & POLLIN)) {
+			if (!std::fgets(buf, sizeof(buf), stdin)) return false;
+			break;
+		}
+	}
 
 	int choice = std::atoi(buf);
 
@@ -483,23 +496,37 @@ void DetectProviderFromModel(const std::string& model,
 }
 
 void AutoDetectProvider(Config& cfg) {
-	std::string provider, base_url, api_key_env;
-	DetectProviderFromModel(cfg.model, provider, base_url, api_key_env);
-	cfg.provider = provider;
-	cfg.base_url = base_url;
-	cfg.api_key_env = api_key_env;
-	
-	// Also save to providers map for persistence
-	SavedProviderConfig p;
-	p.name = provider;
-	p.provider_type = provider;
-	p.model = cfg.model;
-	p.base_url = base_url;
-	p.api_key_env = api_key_env;
-	p.max_tokens = cfg.max_tokens;
-	p.context_window = cfg.context_window;
-	p.cache = cfg.cache;
-	cfg.providers[provider] = std::move(p);
+    // Only auto-detect if provider/model not already set from config
+    std::string provider = cfg.provider;
+    std::string base_url = cfg.base_url;
+    std::string api_key_env = cfg.api_key_env;
+    std::string model = cfg.model;
+
+    // If no provider set at all, try to detect from model
+    if (provider.empty()) {
+        std::string detected_provider, detected_base_url, detected_api_key_env;
+        DetectProviderFromModel(model, detected_provider, detected_base_url, detected_api_key_env);
+        if (provider.empty()) provider = detected_provider;
+        if (base_url.empty()) base_url = detected_base_url;
+        if (api_key_env.empty()) api_key_env = detected_api_key_env;
+    }
+
+    cfg.provider = provider;
+    cfg.base_url = base_url;
+    cfg.api_key_env = api_key_env;
+    cfg.model = model;
+    
+    // Save to providers map for persistence
+    SavedProviderConfig p;
+    p.name = provider;
+    p.provider_type = provider;
+    p.model = model;
+    p.base_url = base_url;
+    p.api_key_env = api_key_env;
+    p.max_tokens = cfg.max_tokens;
+    p.context_window = cfg.context_window;
+    p.cache = cfg.cache;
+    cfg.providers[provider] = std::move(p);
 }
 
 std::unique_ptr<Provider> CreateProvider(const Config& cfg) {

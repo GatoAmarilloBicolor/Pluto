@@ -275,9 +275,9 @@ public:
         BDirectory dir(path_.c_str());
         if (dir.InitCheck() != B_OK) return;
 
-        // Watch for node changes
-        status_t err = watch_node(dir.NodeRef(), B_WATCH_NAME | B_WATCH_STAT | B_WATCH_ATTR,
-                                  BMessenger(this, NULL));
+// Watch for node changes
+		status_t err = watch_node(dir.NodeRef(), B_WATCH_NAME | B_WATCH_STAT | B_WATCH_ATTR,
+		                          BMessenger(this));
         if (err == B_OK) {
             running_ = true;
         }
@@ -286,10 +286,10 @@ public:
     void stop() override {
         if (!running_) return;
         
-        BDirectory dir(path_.c_str());
-        if (dir.InitCheck() == B_OK) {
-            watch_node(dir.NodeRef(), B_STOP_WATCHING, BMessenger(this, NULL));
-        }
+BDirectory dir(path_.c_str());
+		if (dir.InitCheck() == B_OK) {
+			watch_node(dir.NodeRef(), B_STOP_WATCHING, BMessenger(this));
+		}
         running_ = false;
     }
 
@@ -354,13 +354,13 @@ private:
             default: alert_type = B_INFO_ALERT; break;
         }
 
+        // BAlert created with new + Go() is self-deleting when dismissed.
+        // For async Go(NULL), we need to ensure cleanup. Use synchronous Go()
+        // which blocks until dismissed and then deletes the alert.
         BAlert* alert = new BAlert("Pluto", n.message.c_str(), "OK", nullptr, nullptr, 
                                    B_WIDTH_AS_USUAL, alert_type);
-        if (blocking) {
-            alert->Go();
-        } else {
-            alert->Go(NULL);
-        }
+        // Always use synchronous Go() for proper cleanup - BAlert deletes itself
+        alert->Go();
     }
 };
 

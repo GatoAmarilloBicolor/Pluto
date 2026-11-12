@@ -11,9 +11,11 @@
 #include <string>
 #include <chrono>
 #include <unordered_set>
+#include <mutex>
 
 #include <sys/wait.h>
 #include <unistd.h>
+#include <poll.h>
 
 namespace pluto {
 
@@ -43,7 +45,20 @@ PermissionFn InteractivePrompt() {
 		std::printf("  %s[y]allow  [a]always  [n]deny: %s", kYellow, kReset);
 		std::fflush(stdout);
 		char buf[32];
-		if (!std::fgets(buf, sizeof(buf), stdin)) return Permission::Deny;
+		// Use poll() to check for stdin input with timeout, allowing cancel flag check
+		struct pollfd pfd = { STDIN_FILENO, POLLIN, 0 };
+		while (true) {
+			if (pluto::IsCancelRequested()) return Permission::Deny;
+			int ret = poll(&pfd, 1, 100);  // 100ms timeout
+			if (ret < 0) {
+				if (errno == EINTR) continue;
+				return Permission::Deny;
+			}
+			if (ret > 0 && (pfd.revents & POLLIN)) {
+				if (!std::fgets(buf, sizeof(buf), stdin)) return Permission::Deny;
+				break;
+			}
+		}
 		char c = 0;
 		for (char* p = buf; *p; ++p) {
 			if (!std::isspace(static_cast<unsigned char>(*p))) {
@@ -330,8 +345,8 @@ req.messages = messages;
     {
         std::lock_guard<std::mutex> lock(tools_disabled_mutex);
         skip_tools = tools_disabled_models.count(cfg.model) > 0;
+        req.tools = skip_tools ? std::vector<ToolDef>{} : tool_defs;
     }
-    req.tools = skip_tools ? std::vector<ToolDef>{} : tool_defs;
 		req.max_tokens = cfg.max_tokens;
 
 		// Clamp max_tokens to known per-model output limits to avoid

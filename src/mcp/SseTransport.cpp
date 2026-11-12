@@ -36,6 +36,12 @@ size_t handshake_write_cb(char* ptr, size_t size, size_t nmemb, void* ud) {
     size_t bytes = size * nmemb;
     st->buffer.append(ptr, bytes);
 
+    // Hard cap: if buffer exceeds 1 MiB without finding endpoint, abort
+    if (st->buffer.size() > 1024 * 1024) {
+        st->found = true; // signal failure via empty endpoint
+        return 0;
+    }
+
     // Parse SSE events line by line.
     for (;;) {
         size_t nl = st->buffer.find('\n');
@@ -71,8 +77,13 @@ size_t handshake_write_cb(char* ptr, size_t size, size_t nmemb, void* ud) {
 
 size_t response_write_cb(char* ptr, size_t size, size_t nmemb, void* ud) {
     auto* out = static_cast<std::string*>(ud);
-    out->append(ptr, size * nmemb);
-    return size * nmemb;
+    size_t bytes = size * nmemb;
+    // Hard cap: prevent unbounded response growth (DoS)
+    if (out->size() + bytes > 1024 * 1024) {
+        return 0; // abort curl
+    }
+    out->append(ptr, bytes);
+    return bytes;
 }
 
 // Extract origin (scheme + host + port) from a URL.
@@ -160,7 +171,7 @@ std::string resolve_url(const std::string& base_url, const std::string& url,
             return {};
         }
         
-        // Validate first IP is allowed (public, not private/internal)
+        // Validate ALL resolved IPs are allowed (public, not private/internal)
         for (const auto& ip : ips) {
             if (is_private_ip(ip)) {
                 origin_ok = false;
@@ -301,7 +312,7 @@ bool SseTransport::do_handshake(std::string& err) {
 
     // CURLE_WRITE_ERROR is expected — the write callback returns 0 to abort
     // once the endpoint event is found.
-    if (!st.found) {
+    if (!st.found || st.endpoint.empty()) {
         if (rc != CURLE_OK && rc != CURLE_WRITE_ERROR)
             err = "SSE handshake: " + std::string(curl_easy_strerror(rc));
         else
@@ -575,6 +586,7 @@ void SseTransport::heartbeat_thread_func(SseTransport* self) {
             break;
         }
     }
+    // Thread exits cleanly - no dangling thread on destruction
 }
 
 }  // namespace pluto
