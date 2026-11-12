@@ -15,6 +15,7 @@
 #include <Notification.h>
 #include <OS.h>
 #include <Path.h>
+#include <PopUpMenu.h>
 #include <Roster.h>
 #include <Screen.h>
 #include <ScrollView.h>
