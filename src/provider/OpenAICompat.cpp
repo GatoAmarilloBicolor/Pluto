@@ -350,6 +350,9 @@ static size_t oai_write_callback(char* ptr, size_t size, size_t nmemb, void* use
 }  // namespace
 
 void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback cb) {
+    // Store model for token estimation
+    fModel = req.model;
+    
     std::string base_url = fBaseUrl;
     if (base_url.empty()) base_url = "https://api.openai.com/v1/chat/completions";
     if (base_url.find("/chat/completions") == std::string::npos) {
@@ -418,11 +421,23 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
         curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
     }
 
+    // Log request
+    log_request(LogLevel::INFO, "POST " + base_url + " (attempt 1/" + std::to_string(fRetryPolicy.max_attempts) + ")");
+
     bool tools_stripped = false;
     CompletionRequest current_req = req;
     std::string current_body = body;
 
-    for (int attempt = 1; attempt <= 4; ++attempt) {
+    for (int attempt = 1; attempt <= fRetryPolicy.max_attempts; ++attempt) {
+        // Check circuit breaker before each attempt
+        if (!fCircuitBreaker.allow_request()) {
+            StreamEvent err;
+            err.type = StreamEvent::ERROR;
+            err.error = "Circuit breaker open for " + fBaseUrl + " (state: " + fCircuitBreaker.state() + ")";
+            try { cb(err); } catch (...) {}
+            return;
+        }
+
         st.buffer.clear();
         st.done = false;
         st.cb_error = false;
@@ -431,6 +446,10 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
         st.current_tool_id.clear();
         st.current_tool_name.clear();
         st.current_tool_index = -1;
+
+        if (attempt > 1) {
+            log_request(LogLevel::INFO, "Retry attempt " + std::to_string(attempt) + "/" + std::to_string(fRetryPolicy.max_attempts) + " for " + base_url);
+        }
 
         CURLcode res = curl_easy_perform(curl);
         
@@ -442,32 +461,28 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
             return;
         }
 
-        if (res != CURLE_OK) {
-            StreamEvent err;
-            err.type = StreamEvent::ERROR;
-            err.error = std::string("curl: ") + curl_easy_strerror(res);
-            if (attempt < 4) {
-                err.type = StreamEvent::RETRY_INFO;
-                err.text = "Network error: " + std::string(curl_easy_strerror(res)) + ", retrying...";
-                try { cb(err); } catch (...) {}
-                sleep_ms(calc_backoff_ms(attempt), req.cancel);
-                continue;
-            }
-            try { cb(err); } catch (...) {}
-            return;
-        }
-
         long http_code = 0;
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
 
-        if (http_code == 200) {
+        bool should_retry = false;
+        long retry_delay_ms = 0;
+
+        if (res != CURLE_OK) {
+            log_request(LogLevel::WARN, "curl error: " + std::string(curl_easy_strerror(res)) + " (attempt " + std::to_string(attempt) + ")");
+            
+            if (attempt < fRetryPolicy.max_attempts && fRetryPolicy.should_retry_curl(res)) {
+                should_retry = true;
+                retry_delay_ms = calc_backoff_ms(attempt, fRetryPolicy.base_backoff_ms, fRetryPolicy.max_backoff_ms, fRetryPolicy.jitter_factor);
+            }
+        } else if (http_code == 200) {
             if (!st.done) {
                 try { oai_emit_message_end(st, "stop"); } catch (...) {}
             }
+            fCircuitBreaker.record_success();
+            log_request(LogLevel::DEBUG, "Request succeeded (HTTP 200)");
             return;
-        }
-
-        if (http_code == 400 && !tools_stripped && !current_req.tools.empty()) {
+        } else if (http_code == 400 && !tools_stripped && !current_req.tools.empty()) {
+            // Special case: model doesn't support tools
             tools_stripped = true;
             current_req.tools.clear();
             try {
@@ -486,37 +501,58 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
             info.type = StreamEvent::RETRY_INFO;
             info.text = "model does not support tools — retrying without";
             try { cb(info); } catch (...) {}
+            
+            // Don't count this as a failure for circuit breaker
             continue;
+        } else {
+            // Check if we should retry based on HTTP status
+            if (attempt < fRetryPolicy.max_attempts && fRetryPolicy.should_retry_http(http_code)) {
+                should_retry = true;
+                
+                // Check for Retry-After header
+                std::string retry_after_hdr;
+                curl_easy_getinfo(curl, CURLINFO_RETRY_AFTER, &retry_after_hdr);
+                long retry_secs = parse_retry_after(retry_after_hdr);
+                if (retry_secs > 0) {
+                    retry_delay_ms = retry_secs * 1000;
+                } else {
+                    retry_delay_ms = calc_backoff_ms(attempt, fRetryPolicy.base_backoff_ms, fRetryPolicy.max_backoff_ms, fRetryPolicy.jitter_factor);
+                }
+            }
+            
+            log_request(LogLevel::WARN, "HTTP " + std::to_string(http_code) + " (attempt " + std::to_string(attempt) + "), body: " + st.buffer.substr(0, 512));
         }
 
-        if (http_code == 429 || (http_code >= 500 && http_code < 600)) {
-            std::string retry_after_hdr;
-            curl_easy_getinfo(curl, CURLINFO_RETRY_AFTER, &retry_after_hdr);
+        if (should_retry) {
+            fCircuitBreaker.record_failure();
             
-            long retry_secs = -1;
-            if (!retry_after_hdr.empty()) {
-                retry_secs = parse_retry_after(retry_after_hdr);
-            }
-            if (retry_secs < 0) {
-                retry_secs = calc_backoff_ms(attempt) / 1000;
-                if (retry_secs < 1) retry_secs = 1;
-            }
-            if (retry_secs > 60) retry_secs = 60;
-
-            log_warn("openai-compat", "HTTP %ld (retry-after=%ld), body: %.512s",
-                http_code, retry_secs, st.buffer.c_str());
             StreamEvent info;
             info.type = StreamEvent::RETRY_INFO;
-            info.text = "HTTP " + std::to_string(http_code)
-                + ", retrying in " + std::to_string(retry_secs) + "s...";
+            info.text = "HTTP " + std::to_string(http_code) + ", retrying in " + std::to_string((retry_delay_ms + 999) / 1000) + "s...";
             try { cb(info); } catch (...) {}
-            sleep_ms(retry_secs * 1000, req.cancel);
+            
+            sleep_ms(retry_delay_ms, req.cancel);
+            
+            if (req.cancel && req.cancel->load(std::memory_order_relaxed)) {
+                StreamEvent err;
+                err.type = StreamEvent::ERROR;
+                err.error = "Request cancelled during retry delay";
+                try { cb(err); } catch (...) {}
+                return;
+            }
             continue;
         }
 
+        // No retry or max attempts reached
+        fCircuitBreaker.record_failure();
+        
         StreamEvent err;
         err.type = StreamEvent::ERROR;
-        err.error = "HTTP " + std::to_string(http_code) + ": " + st.buffer;
+        if (res != CURLE_OK) {
+            err.error = std::string("curl: ") + curl_easy_strerror(res);
+        } else {
+            err.error = "HTTP " + std::to_string(http_code) + ": " + st.buffer;
+        }
         try { cb(err); } catch (...) {}
         return;
     }

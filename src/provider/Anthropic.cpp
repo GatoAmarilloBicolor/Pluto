@@ -30,11 +30,16 @@ struct StreamState {
     bool done = false;
     bool cb_error = false;
 
-    enum { NONE, TEXT_BLOCK, TOOL_USE_BLOCK } block_type = NONE;
+    enum { NONE, TEXT_BLOCK, TOOL_USE_BLOCK, DOCUMENT_BLOCK } block_type = NONE;
     std::string tool_id;
     std::string tool_name;
     std::string tool_input;
     int tool_index = -1;  // sequential index for robust matching
+
+    // For document blocks
+    std::string document_data;
+    std::string document_media_type;
+    std::string document_filename;
 
     int input_tokens = 0;
     int output_tokens = 0;
@@ -167,6 +172,15 @@ static void emit_tool_end(StreamState& st, const std::string& full_json, int ind
     st.cb(ev);
 }
 
+static void emit_document_block(StreamState& st, int index) {
+    StreamEvent ev;
+    ev.type = StreamEvent::DOCUMENT_BLOCK;
+    ev.document_data = st.document_data;
+    ev.document_media_type = st.document_media_type;
+    ev.document_filename = st.document_filename;
+    st.cb(ev);
+}
+
 static void emit_message_end(StreamState& st, const std::string& stop_reason) {
     StreamEvent ev;
     ev.type = StreamEvent::MESSAGE_END;
@@ -226,6 +240,13 @@ static void process_sse_line(const std::string& line, StreamState& st) {
                 st.tool_index = index;
                 emit_tool_start(st, st.tool_id, st.tool_name, index);
             }
+            else if (block_type == "document") {
+                st.block_type = StreamState::DOCUMENT_BLOCK;
+                st.document_media_type = block && block->find("media_type") ? block->find("media_type")->as_str() : "";
+                st.document_filename = block && block->find("filename") ? block->find("filename")->as_str() : "";
+                st.document_data.clear();
+                st.tool_index = index;
+            }
         }
         else if (type == "content_block_delta") {
             const json::Value* index_val = v.find("index");
@@ -242,15 +263,27 @@ static void process_sse_line(const std::string& line, StreamState& st) {
                 st.tool_input += partial_json ? partial_json->as_str() : "";
                 emit_tool_input_delta(st, partial_json ? partial_json->as_str() : "", index);
             }
+            else if (delta_type == "document_delta" && st.block_type == StreamState::DOCUMENT_BLOCK) {
+                const json::Value* data_val = delta ? delta->find("data") : nullptr;
+                if (data_val) {
+                    st.document_data += data_val->as_str();
+                }
+            }
         }
         else if (type == "content_block_stop") {
             if (st.block_type == StreamState::TOOL_USE_BLOCK) {
                 emit_tool_end(st, st.tool_input, st.tool_index);
             }
+            else if (st.block_type == StreamState::DOCUMENT_BLOCK) {
+                emit_document_block(st, st.tool_index);
+            }
             st.block_type = StreamState::NONE;
             st.tool_id.clear();
             st.tool_name.clear();
             st.tool_input.clear();
+            st.document_data.clear();
+            st.document_media_type.clear();
+            st.document_filename.clear();
             st.tool_index = -1;
         }
         else if (type == "message_delta") {
@@ -298,6 +331,9 @@ static size_t write_callback(char* ptr, size_t size, size_t nmemb, void* userdat
 }
 
 void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) {
+    // Store model for token estimation
+    fModel = req.model;
+    
     std::string body;
     try {
         body = build_request_body(req);
@@ -357,9 +393,10 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &st);
 
-    // Apply security with pinning (uses correct pins from curl_security.h)
-    // Apply security with pinning (uses correct pins from curl_security.h)
-    ApplyCurlSecurityWithPinning(curl, url);
+    // TCP keepalive for long-lived connections
+    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
+    curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 30L);
+    curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 10L);
 
     // Override timeouts for long streaming responses
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 300L);
@@ -375,10 +412,26 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
         curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
     }
 
-    for (int attempt = 1; attempt <= 3; ++attempt) {
+    // Log request
+    log_request(LogLevel::INFO, "POST " + url + " (attempt 1/" + std::to_string(fRetryPolicy.max_attempts) + ")");
+
+    for (int attempt = 1; attempt <= fRetryPolicy.max_attempts; ++attempt) {
+        // Check circuit breaker before each attempt
+        if (!fCircuitBreaker.allow_request()) {
+            StreamEvent err;
+            err.type = StreamEvent::ERROR;
+            err.error = "Circuit breaker open for " + fBaseUrl + " (state: " + fCircuitBreaker.state() + ")";
+            cb(err);
+            return;
+        }
+
         st.buffer.clear();
         st.done = false;
         st.cb_error = false;
+
+        if (attempt > 1) {
+            log_request(LogLevel::INFO, "Retry attempt " + std::to_string(attempt) + "/" + std::to_string(fRetryPolicy.max_attempts) + " for " + url);
+        }
 
         CURLcode res = curl_easy_perform(curl);
         
@@ -390,57 +443,73 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
             return;
         }
 
-        if (res != CURLE_OK) {
-            StreamEvent err;
-            err.type = StreamEvent::ERROR;
-            err.error = std::string("curl: ") + curl_easy_strerror(res);
-            if (attempt < 3) {
-                err.type = StreamEvent::RETRY_INFO;
-                err.text = "Network error: " + std::string(curl_easy_strerror(res)) + ", retrying...";
-                cb(err);
-                sleep_ms(calc_backoff_ms(attempt), req.cancel);
-                continue;
-            }
-            cb(err);
-            return;
-        }
-
         long http_code = 0;
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
 
-        if (http_code == 200) {
+        bool should_retry = false;
+        long retry_delay_ms = 0;
+
+        if (res != CURLE_OK) {
+            log_request(LogLevel::WARN, "curl error: " + std::string(curl_easy_strerror(res)) + " (attempt " + std::to_string(attempt) + ")");
+            
+            if (attempt < fRetryPolicy.max_attempts && fRetryPolicy.should_retry_curl(res)) {
+                should_retry = true;
+                retry_delay_ms = calc_backoff_ms(attempt, fRetryPolicy.base_backoff_ms, fRetryPolicy.max_backoff_ms, fRetryPolicy.jitter_factor);
+            }
+        } else if (http_code == 200) {
             if (!st.done) emit_message_end(st, "end_turn");
+            fCircuitBreaker.record_success();
+            log_request(LogLevel::DEBUG, "Request succeeded (HTTP 200)");
             return;
+        } else {
+            // Check if we should retry based on HTTP status
+            if (attempt < fRetryPolicy.max_attempts && fRetryPolicy.should_retry_http(http_code)) {
+                should_retry = true;
+                
+                // Check for Retry-After header
+                std::string retry_after_hdr;
+                curl_easy_getinfo(curl, CURLINFO_RETRY_AFTER, &retry_after_hdr);
+                long retry_secs = parse_retry_after(retry_after_hdr);
+                if (retry_secs > 0) {
+                    retry_delay_ms = retry_secs * 1000;
+                } else {
+                    retry_delay_ms = calc_backoff_ms(attempt, fRetryPolicy.base_backoff_ms, fRetryPolicy.max_backoff_ms, fRetryPolicy.jitter_factor);
+                }
+            }
+            
+            log_request(LogLevel::WARN, "HTTP " + std::to_string(http_code) + " (attempt " + std::to_string(attempt) + "), body: " + st.buffer.substr(0, 512));
         }
 
-        if (http_code == 429 || (http_code >= 500 && http_code < 600)) {
-            std::string retry_after_hdr;
-            curl_easy_getinfo(curl, CURLINFO_RETRY_AFTER, &retry_after_hdr);
+        if (should_retry) {
+            fCircuitBreaker.record_failure();
             
-            long retry_secs = -1;
-            if (!retry_after_hdr.empty()) {
-                retry_secs = parse_retry_after(retry_after_hdr);
-            }
-            if (retry_secs < 0) {
-                retry_secs = calc_backoff_ms(attempt) / 1000;
-                if (retry_secs < 1) retry_secs = 1;
-            }
-            if (retry_secs > 60) retry_secs = 60;
-
-            log_warn("anthropic", "HTTP %ld (retry-after=%ld), body: %.512s",
-                http_code, retry_secs, st.buffer.c_str());
             StreamEvent info;
             info.type = StreamEvent::RETRY_INFO;
-            info.text = "HTTP " + std::to_string(http_code)
-                + ", retrying in " + std::to_string(retry_secs) + "s...";
+            info.text = "HTTP " + std::to_string(http_code) + ", retrying in " + std::to_string((retry_delay_ms + 999) / 1000) + "s...";
             cb(info);
-            sleep_ms(retry_secs * 1000, req.cancel);
+            
+            sleep_ms(retry_delay_ms, req.cancel);
+            
+            if (req.cancel && req.cancel->load(std::memory_order_relaxed)) {
+                StreamEvent err;
+                err.type = StreamEvent::ERROR;
+                err.error = "Request cancelled during retry delay";
+                cb(err);
+                return;
+            }
             continue;
         }
 
+        // No retry or max attempts reached
+        fCircuitBreaker.record_failure();
+        
         StreamEvent err;
         err.type = StreamEvent::ERROR;
-        err.error = "HTTP " + std::to_string(http_code) + ": " + st.buffer;
+        if (res != CURLE_OK) {
+            err.error = std::string("curl: ") + curl_easy_strerror(res);
+        } else {
+            err.error = "HTTP " + std::to_string(http_code) + ": " + st.buffer;
+        }
         cb(err);
         return;
     }

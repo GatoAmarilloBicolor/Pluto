@@ -93,6 +93,7 @@ private:
 	void _CloseOtherTabs(int32 keep);
 	void _RenameTab(int32 idx);
 	void _OnTabChanged();
+	void _RefreshTabLabels();
 	void _UpdateMiniMap();
 	void _SaveWorkspace();
 	bool _RestoreWorkspace();
@@ -156,6 +157,9 @@ private:
 	                  bool is_error) override;
 	void OnImage(const std::string& base64_data,
 	             const std::string& media_type) override;
+	void OnDocument(const std::string& base64_data,
+	             const std::string& media_type,
+	             const std::string& filename) override;
 	void OnTurnDone(const std::string& preview) override;
 	int  RequestToolApproval(const std::string& tool_name,
 	                         const std::string& input_preview) override;

@@ -1232,6 +1232,26 @@ public:
 			msgRename->AddInt32("tab_index", clicked);
 			menu->AddItem(new BMenuItem("Rename" B_UTF8_ELLIPSIS, msgRename));
 
+			// Pin/Unpin option
+			BMessage* msgPin = new BMessage(kMsgTabCtxPin);
+			msgPin->AddInt32("tab_index", clicked);
+			// We need to check if the tab is already pinned
+			if (Window()) {
+				BView* v = ViewForTab(clicked);
+				if (v) {
+					auto* conv = static_cast<ConversationView*>(v);
+					if (conv && conv->IsPinned()) {
+						menu->AddItem(new BMenuItem("Unpin", msgPin));
+					} else {
+						menu->AddItem(new BMenuItem("Pin", msgPin));
+					}
+				} else {
+					menu->AddItem(new BMenuItem("Pin", msgPin));
+				}
+			} else {
+				menu->AddItem(new BMenuItem("Pin", msgPin));
+			}
+
 			menu->SetTargetForItems(Window());
 			ConvertToScreen(&where);
 			menu->Go(where, true, true, true);
@@ -1716,6 +1736,16 @@ void MainWindow::OnTitleChanged(const std::string& /*title*/) {
 	}
 }
 
+void MainWindow::_RefreshTabLabels() {
+	if (!fTabView) return;
+	for (int32 i = 0; i < fTabView->CountTabs(); ++i) {
+		auto* conv = static_cast<ConversationView*>(fTabView->ViewForTab(i));
+		if (!conv) continue;
+		fTabView->TabAt(i)->SetLabel(_BuildTabLabel(conv).c_str());
+	}
+	fTabView->Invalidate();
+}
+
 void MainWindow::OnError(const std::string& error) {
 	// Show native Haiku notification for errors.
 	BNotification n(B_ERROR_NOTIFICATION);
@@ -1750,8 +1780,21 @@ void MainWindow::OnToolOutput(const std::string& tool_name,
 }
 
 void MainWindow::OnImage(const std::string& base64_data,
-                          const std::string& /*media_type*/) {
+                          const std::string& media_type) {
+	auto* conv = _ActiveConv();
+	if (conv) {
+		conv->InsertInlineImage(base64_data, media_type, "");
+	}
 	_LoadImagePreviewFromBase64(base64_data);
+}
+
+void MainWindow::OnDocument(const std::string& base64_data,
+                           const std::string& media_type,
+                           const std::string& filename) {
+	auto* conv = _ActiveConv();
+	if (conv) {
+		conv->InsertInlineDocument(base64_data, media_type, filename);
+	}
 }
 
 void MainWindow::OnTurnDone(const std::string& preview) {
@@ -1959,6 +2002,10 @@ void MainWindow::_BuildMenuBar() {
 			new BMessage(kMsgPrevTab));
 		prevTab->SetShortcut(B_LEFT_ARROW, B_COMMAND_KEY);
 		view->AddItem(prevTab);
+		BMenuItem* quickTab = new BMenuItem("Quick switch" B_UTF8_ELLIPSIS,
+			new BMessage(kMsgQuickTabSwitch));
+		quickTab->SetShortcut('T', B_COMMAND_KEY | B_SHIFT_KEY);
+		view->AddItem(quickTab);
 	}
 	view->AddSeparatorItem();
 	view->AddItem(new BMenuItem("Audio player",
@@ -2429,6 +2476,32 @@ void MainWindow::MessageReceived(BMessage* msg) {
 			int32 idx = 0;
 			if (msg->FindInt32("tab_index", &idx) == B_OK)
 				_RenameTab(idx);
+			break;
+		}
+		case kMsgTabCtxPin: {
+			int32 idx = 0;
+			if (msg->FindInt32("tab_index", &idx) == B_OK && fTabView) {
+				BView* v = fTabView->ViewForTab(idx);
+				if (v) {
+					auto* conv = static_cast<ConversationView*>(v);
+					if (conv) {
+						bool newPinned = !conv->IsPinned();
+						conv->SetPinned(newPinned);
+						// Update tab label immediately
+						fTabView->TabAt(idx)->SetLabel(_BuildTabLabel(conv).c_str());
+						fTabView->Invalidate();
+					}
+				}
+			}
+			break;
+		}
+		case kMsgQuickTabSwitch: {
+			if (!fTabView || fTabView->CountTabs() <= 1) break;
+			auto* dlg = new QuickTabSwitchDialog(BRect(0, 0, 450, 400), this);
+			int32 selected = dlg->WaitForResult();
+			if (selected >= 0 && selected < fTabView->CountTabs()) {
+				fTabView->Select(selected);
+			}
 			break;
 		}
 
@@ -3464,13 +3537,19 @@ void MainWindow::_ResetConversation() {
 }
 
 // Build a tab label: "title · provider:model" (truncated to fit).
+// Shows a pin icon for pinned tabs.
 std::string MainWindow::_BuildTabLabel(ConversationView* conv) {
 	if (!conv) return "New conversation";
 
 	// Title part.
 	std::string t = conv->GetSessionTitle();
 	std::string label = t.empty() ? "New conversation" : t;
-	if (label.size() > 20) label = label.substr(0, 17) + "\xe2\x80\xa6";
+	if (label.size() > 18) label = label.substr(0, 15) + "\xe2\x80\xa6";
+
+	// Pin indicator
+	if (conv->IsPinned()) {
+		label = "\xe2\x9d\x8f " + label;  // 📍 pin emoji
+	}
 
 	// Provider short name from base_url or provider id.
 	const auto& cfg = conv->GetConfig();
@@ -3508,6 +3587,11 @@ std::string MainWindow::_BuildTabLabel(ConversationView* conv) {
 	auto slash = m.rfind('/');
 	if (slash != std::string::npos) m = m.substr(slash + 1);
 	if (m.size() > 14) m = m.substr(0, 11) + "\xe2\x80\xa6";
+
+	// Busy indicator
+	if (conv->IsBusy()) {
+		label += " \xe2\x8f\xb3";  // ⏳ hourglass
+	}
 
 	label += " \xc2\xb7 " + prov + ":" + m;
 	return label;
@@ -3555,6 +3639,15 @@ void MainWindow::_CloseTab() {
 	}
 
 	auto* c = _ActiveConv();
+	if (c && c->IsPinned()) {
+		BAlert* alert = new BAlert("Pluto",
+			"This tab is pinned and cannot be closed.\n"
+			"Unpin it first from the tab context menu.",
+			"OK", nullptr, nullptr,
+			B_WIDTH_AS_USUAL, B_INFO_ALERT);
+		alert->Go(nullptr);
+		return;
+	}
 	if (c && c->IsBusy()) {
 		BAlert* alert = new BAlert("Pluto",
 			"This tab has a turn in progress.\nCancel it first.",
@@ -3588,7 +3681,7 @@ void MainWindow::_CloseTab() {
 void MainWindow::_CloseOtherTabs(int32 keep) {
 	if (!fTabView) return;
 
-	// Check if any other tab is busy.
+	// Check if any other tab is busy or pinned.
 	for (int32 i = 0; i < fTabView->CountTabs(); ++i) {
 		if (i == keep) continue;
 		auto* conv = static_cast<ConversationView*>(fTabView->ViewForTab(i));
@@ -3601,12 +3694,23 @@ void MainWindow::_CloseOtherTabs(int32 keep) {
 			alert->Go(nullptr);
 			return;
 		}
+		if (conv && conv->IsPinned()) {
+			BAlert* alert = new BAlert("Pluto",
+				"Cannot close other tabs: a pinned tab exists.\n"
+				"Unpin it first.",
+				"OK", nullptr, nullptr,
+				B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+			alert->Go(nullptr);
+			return;
+		}
 	}
 
 	// Remove tabs from the end backwards to avoid index shifting.
 	// ~BTab() deletes the view, so no separate delete needed.
 	for (int32 i = fTabView->CountTabs() - 1; i >= 0; --i) {
 		if (i == keep) continue;
+		auto* conv = static_cast<ConversationView*>(fTabView->ViewForTab(i));
+		if (conv && conv->IsPinned()) continue;  // Skip pinned tabs
 		BTab* tab = fTabView->RemoveTab(i);
 		delete tab;
 		// Adjust keep index if a tab before it was removed.
@@ -3669,6 +3773,128 @@ private:
 	BTextControl* fInput;
 	sem_id        fSem;
 	int32         fResult;
+};
+
+// Quick tab switch dialog: shows a list of tabs with filtering.
+class QuickTabSwitchDialog : public BWindow {
+public:
+	QuickTabSwitchDialog(BRect frame, MainWindow* window)
+		: BWindow(frame, "Quick tab switch", B_MODAL_WINDOW_LOOK,
+		          B_MODAL_APP_WINDOW_FEEL,
+		          B_NOT_RESIZABLE | B_NOT_ZOOMABLE | B_AUTO_UPDATE_SIZE_LIMITS),
+		  fWindow(window), fSem(create_sem(0, "quick-tab-switch")), fSelected(-1) {
+		fFilter = new BTextControl("filter", "", "", new BMessage('fltr'));
+		fFilter->SetModificationMessage(new BMessage('fltr'));
+		fList = new BListView("tabList");
+		fList->SetSelectionMessage(new BMessage('slSe'));
+		fList->SetInvocationMessage(new BMessage('slIn'));
+		auto* scroll = new BScrollView("tabScroll", fList,
+		                              0, false, true, B_FANCY_BORDER);
+		scroll->SetExplicitMinSize(BSize(400, 300));
+
+		BLayoutBuilder::Group<>(this, B_VERTICAL, 8)
+			.SetInsets(12)
+			.Add(fFilter)
+			.Add(scroll)
+			.End();
+
+		_BuildList("");
+		fFilter->MakeFocus(true);
+		CenterOnScreen();
+	}
+	~QuickTabSwitchDialog() override { delete_sem(fSem); }
+
+	void MessageReceived(BMessage* msg) override {
+		if (msg->what == 'fltr') {
+			std::string filter = fFilter->Text();
+			_BuildList(filter);
+		} else if (msg->what == 'slIn') {
+			// Double-click or Enter - select and close
+			int32 sel = fList->CurrentSelection();
+			if (sel >= 0) {
+				fSelected = sel;
+				PostMessage(B_QUIT_REQUESTED);
+			}
+		} else if (msg->what == 'okBt') {
+			int32 sel = fList->CurrentSelection();
+			if (sel >= 0) {
+				fSelected = sel;
+				PostMessage(B_QUIT_REQUESTED);
+			}
+		} else if (msg->what == 'caBt') {
+			fSelected = -1;
+			PostMessage(B_QUIT_REQUESTED);
+		} else {
+			BWindow::MessageReceived(msg);
+		}
+	}
+	bool QuitRequested() override { release_sem(fSem); return true; }
+
+	// Returns the selected tab index, or -1 if cancelled.
+	int32 WaitForResult() {
+		Show();
+		while (acquire_sem(fSem) == B_INTERRUPTED) {}
+		return fSelected;
+	}
+
+private:
+	void _BuildList(const std::string& filter) {
+		if (!LockLooper()) return;
+		while (fList->CountItems() > 0)
+			delete fList->RemoveItem((int32)0);
+
+		std::string f = filter;
+		std::transform(f.begin(), f.end(), f.begin(), ::tolower);
+
+		if (!fWindow || !fWindow->fTabView) {
+			UnlockLooper();
+			return;
+		}
+
+		for (int32 i = 0; i < fWindow->fTabView->CountTabs(); ++i) {
+			BView* v = fWindow->fTabView->ViewForTab(i);
+			if (!v) continue;
+			auto* conv = static_cast<ConversationView*>(v);
+			if (!conv) continue;
+
+			std::string title = conv->GetSessionTitle();
+			if (title.empty()) title = "New conversation";
+			
+			std::string model = conv->GetModel();
+			if (model.rfind("claude-", 0) == 0) model = model.substr(7);
+			auto slash = model.rfind('/');
+			if (slash != std::string::npos) model = model.substr(slash + 1);
+			
+			std::string label = title + "  (" + model + ")";
+			if (conv->IsPinned()) label = "📍 " + label;
+			if (conv->IsBusy()) label += "  ⏳";
+
+			// Filter
+			std::string labelLower = label;
+			std::transform(labelLower.begin(), labelLower.end(), labelLower.begin(), ::tolower);
+			if (!f.empty() && labelLower.find(f) == std::string::npos)
+				continue;
+
+			fList->AddItem(new BStringItem(label.c_str()));
+		}
+
+		// Select current tab by default
+		if (fWindow->fTabView && fWindow->fTabView->Selection() >= 0 &&
+		    fWindow->fTabView->Selection() < fList->CountItems()) {
+			fList->Select(fWindow->fTabView->Selection());
+			fList->ScrollToSelection();
+		} else if (fList->CountItems() > 0) {
+			fList->Select(0);
+		}
+
+		UnlockLooper();
+	}
+
+	MainWindow* fWindow;
+	BTextControl* fFilter;
+	BListView* fList;
+	sem_id fSem;
+	int32 fSelected;
 };
 
 void MainWindow::_RenameTab(int32 idx) {

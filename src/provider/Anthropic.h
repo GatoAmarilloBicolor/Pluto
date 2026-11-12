@@ -1,6 +1,8 @@
 #pragma once
 
 #include "ProviderBase.h"
+#include "CurlUtil.h"
+#include "../token_estimator.h"
 
 namespace pluto {
 
@@ -22,10 +24,25 @@ public:
     ProviderType type() const override { return ProviderType::ANTHROPIC; }
     std::string name() const override { return "Anthropic"; }
 
+    // Improved token estimation using model-specific encoder
+    int estimate_tokens(const std::string& text) const override {
+        return estimate_tokens_for_model(fModel.empty() ? "claude-3-5-sonnet" : fModel, text);
+    }
+
+    // Configure retry policy
+    void set_retry_policy(const RetryPolicy& policy) { fRetryPolicy = policy; }
+    const RetryPolicy& retry_policy() const { return fRetryPolicy; }
+
+    // Set current model for accurate token estimation
+    void set_model(const std::string& model) { fModel = model; }
+
 private:
     std::string fToken;
     AuthType    fAuthType;
     std::string fBaseUrl;
+    std::string fModel;
+    RetryPolicy fRetryPolicy;
+    CircuitBreaker fCircuitBreaker;
 };
 
 }  // namespace pluto

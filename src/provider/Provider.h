@@ -105,6 +105,7 @@ struct StreamEvent {
     enum Type {
         TEXT_DELTA,
         IMAGE_BLOCK,
+        DOCUMENT_BLOCK,
         TOOL_USE_START,
         TOOL_USE_INPUT_DELTA,
         TOOL_USE_END,
@@ -126,6 +127,9 @@ struct StreamEvent {
     int tool_index = -1;
     std::string image_data;
     std::string image_media_type;
+    std::string document_data;
+    std::string document_media_type;
+    std::string document_filename;
     std::string stop_reason;
     std::string error;
     json::Value raw;  // Provider-specific raw event for debugging

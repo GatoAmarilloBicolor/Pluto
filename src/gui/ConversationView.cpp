@@ -587,32 +587,36 @@ void ConversationView::_RenderMessages() {
 				if (b.type == ContentBlock::TEXT || b.type == ContentBlock::IMAGE
 				    || b.type == ContentBlock::AUDIO || b.type == ContentBlock::DOCUMENT)
 					{ has_content = true; break; }
-			if (has_content) _EmitUserHeader();
-			for (const auto& b : m.content) {
-				if (b.type == ContentBlock::TEXT) {
-					_Append(b.text + "\n\n", kColUserBody);
-				} else if (b.type == ContentBlock::IMAGE) {
-					if (!b.image_data.empty())
-						_InsertInlineImage(b.image_data);
-					else {
-						std::string label = "\xf0\x9f\x96\xbc [";
-						label += b.image_media_type.empty() ? "image" : b.image_media_type;
-						label += "]\n";
-						_Append(label, fDocTextColor, B_ITALIC_FACE);
-					}
-				} else if (b.type == ContentBlock::AUDIO) {
-					std::string label = "\xf0\x9f\x94\x8a [audio: ";
-					label += b.audio_format.empty() ? "?" : b.audio_format;
-					label += ", ";
-					label += std::to_string(b.audio_data.size() / 1370);
-					label += " KB]\n";
+if (has_content) _EmitUserHeader();
+		for (const auto& b : m.content) {
+			if (b.type == ContentBlock::TEXT) {
+				_Append(b.text + "\n\n", kColUserBody);
+			} else if (b.type == ContentBlock::IMAGE) {
+				if (!b.image_data.empty())
+					_InsertInlineImage(b.image_data, b.image_media_type, "");
+				else {
+					std::string label = "\xf0\x9f\x96\xbc [";
+					label += b.image_media_type.empty() ? "image" : b.image_media_type;
+					label += "]\n";
 					_Append(label, fDocTextColor, B_ITALIC_FACE);
-				} else if (b.type == ContentBlock::DOCUMENT) {
+				}
+			} else if (b.type == ContentBlock::AUDIO) {
+				std::string label = "\xf0\x9f\x94\x8a [audio: ";
+				label += b.audio_format.empty() ? "?" : b.audio_format;
+				label += ", ";
+				label += std::to_string(b.audio_data.size() / 1370);
+				label += " KB]\n";
+				_Append(label, fDocTextColor, B_ITALIC_FACE);
+			} else if (b.type == ContentBlock::DOCUMENT) {
+				if (!b.doc_data.empty())
+					_InsertInlineDocument(b.doc_data, b.doc_media_type, b.filename);
+				else {
 					std::string label = "\xf0\x9f\x93\x84 [PDF: ";
 					label += std::to_string(b.doc_data.size() / 1370);
 					label += " KB]\n";
 					_Append(label, fDocTextColor, B_ITALIC_FACE);
-				} else if (b.type == ContentBlock::TOOL_RESULT) {
+				}
+			} else if (b.type == ContentBlock::TOOL_RESULT) {
 					std::string body = b.text;
 					if (body.size() > 600)
 						body = body.substr(0, 600) + "\n\xe2\x80\xa6";
@@ -620,37 +624,40 @@ void ConversationView::_RenderMessages() {
 					_Append(body, b.is_error ? fErrorColor : fPanelBgColor, 0, true);
 				}
 			}
-		} else if (m.role == "assistant") {
-			bool has_text = false;
-			for (const auto& b : m.content)
-				if (b.type == ContentBlock::TEXT) { has_text = true; break; }
-			if (has_text) _EmitAssistantHeader();
-			for (const auto& b : m.content) {
-				if (b.type == ContentBlock::TEXT) {
-					_RenderAssistantMarkdown(b.text + "\n");
-				} else if (b.type == ContentBlock::IMAGE) {
-					if (!b.image_data.empty())
-						_InsertInlineImage(b.image_data);
-					else {
-						std::string label = "\xf0\x9f\x96\xbc [";
-						label += b.image_media_type.empty() ? "image" : b.image_media_type;
-						label += "]\n";
-						_Append(label, fDocTextColor, B_ITALIC_FACE);
-					}
-				} else if (b.type == ContentBlock::AUDIO) {
-					_Append("\xf0\x9f\x94\x8a [audio attached]\n", fDocTextColor, B_ITALIC_FACE);
-				} else if (b.type == ContentBlock::DOCUMENT) {
-					_Append("\xf0\x9f\x93\x84 [PDF attached]\n", fDocTextColor, B_ITALIC_FACE);
-				} else if (b.type == ContentBlock::TOOL_USE) {
-					std::string head = "\n\xE2\x97\x86 ";
-					head += b.tool_name;
-					head += "\n";
-					_Append(head, fControlTextColor, B_BOLD_FACE);
+} else if (m.role == "assistant") {
+		bool has_text = false;
+		for (const auto& b : m.content)
+			if (b.type == ContentBlock::TEXT) { has_text = true; break; }
+		if (has_text) _EmitAssistantHeader();
+		for (const auto& b : m.content) {
+			if (b.type == ContentBlock::TEXT) {
+				_RenderAssistantMarkdown(b.text + "\n");
+			} else if (b.type == ContentBlock::IMAGE) {
+				if (!b.image_data.empty())
+					_InsertInlineImage(b.image_data, b.image_media_type, "");
+				else {
+					std::string label = "\xf0\x9f\x96\xbc [";
+					label += b.image_media_type.empty() ? "image" : b.image_media_type;
+					label += "]\n";
+					_Append(label, fDocTextColor, B_ITALIC_FACE);
 				}
+			} else if (b.type == ContentBlock::AUDIO) {
+				_Append("\xf0\x9f\x94\x8a [audio attached]\n", fDocTextColor, B_ITALIC_FACE);
+			} else if (b.type == ContentBlock::DOCUMENT) {
+				if (!b.doc_data.empty())
+					_InsertInlineDocument(b.doc_data, b.doc_media_type, b.filename);
+				else
+					_Append("\xf0\x9f\x93\x84 [PDF attached]\n", fDocTextColor, B_ITALIC_FACE);
+			} else if (b.type == ContentBlock::TOOL_USE) {
+				std::string head = "\n\xE2\x97\x86 ";
+				head += b.tool_name;
+				head += "\n";
+				_Append(head, fControlTextColor, B_BOLD_FACE);
 			}
-			_Append("\n", fDocTextColor);
 		}
+		_Append("\n", fDocTextColor);
 	}
+}
 }
 
 // ---- worker event handlers ----
@@ -943,6 +950,19 @@ int32 ConversationView::_WorkerEntry(void* data) {
 		im.AddString("media_type", media_type.c_str());
 		target.SendMessage(&im);
 	};
+	ui.on_document = [target](const std::string& base64_data,
+	                       const std::string& media_type,
+	                       const std::string& filename) {
+		BMessage m(kMsgWorkerText);
+		std::string label = "\xf0\x9f\x93\x84 [" + filename + "]\n";
+		m.AddString("text", label.c_str());
+		target.SendMessage(&m);
+		BMessage dm(kMsgWorkerDocument);
+		dm.AddString("data", base64_data.c_str());
+		dm.AddString("media_type", media_type.c_str());
+		dm.AddString("filename", filename.c_str());
+		target.SendMessage(&dm);
+	};
 	ui.on_error = [target](const std::string& err) {
 		BMessage m(kMsgWorkerErr);
 		m.AddString("error", err.c_str());
@@ -1059,9 +1079,22 @@ void ConversationView::MessageReceived(BMessage* msg) {
 			msg->FindString("data", &data);
 			msg->FindString("media_type", &mt);
 			if (data && *data) {
-				_InsertInlineImage(data);
+				_InsertInlineImage(data, mt ? mt : "");
 				if (fDelegate)
 					fDelegate->OnImage(data, mt ? mt : "");
+			}
+			break;
+		}
+
+		case kMsgWorkerDocument: {
+			const char* data = "";
+			const char* mt = "";
+			const char* fn = "";
+			msg->FindString("data", &data);
+			msg->FindString("media_type", &mt);
+			msg->FindString("filename", &fn);
+			if (data && *data) {
+				_InsertInlineDocument(data, mt ? mt : "", fn ? fn : "");
 			}
 			break;
 		}
@@ -1366,6 +1399,18 @@ void ConversationView::UpdateParserColors(bool useSystem,
 	fMdParser.UpdateColors(useSystem, codeFg, codeBg, linkColor);
 }
 
+void ConversationView::RestoreScrollPosition(float position) {
+	if (!fOutputScroll) return;
+	BScrollBar* sb = fOutputScroll->ScrollBar(B_VERTICAL);
+	if (sb) {
+		// Clamp to valid range
+		float max = sb->MaxValue();
+		if (position < 0) position = 0;
+		if (position > max) position = max;
+		sb->SetValue(position);
+	}
+}
+
 std::string ConversationView::BuildMarkdown() const {
 	std::string out;
 	out.reserve(1024);
@@ -1432,9 +1477,12 @@ namespace {
 class InlineImageView : public BView {
 public:
 	InlineImageView(BBitmap* bitmap, float maxWidth,
-	                const std::string& pngData)
-		: BView("inlineImage", B_WILL_DRAW), fBitmap(bitmap),
-		  fPngData(pngData)
+	                const std::string& pngData,
+	                const std::string& mimeType = "image/png",
+	                const std::string& originalName = "")
+		: BView("inlineImage", B_WILL_DRAW | B_NAVIGABLE), fBitmap(bitmap),
+		  fPngData(pngData), fMimeType(mimeType), fOriginalName(originalName),
+		  fZoom(1.0f), fDragOffset(0, 0), fDragging(false)
 	{
 		SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
 		BRect br = fBitmap->Bounds();
@@ -1443,10 +1491,13 @@ public:
 		float scale = (iw > maxWidth && maxWidth > 10) ? maxWidth / iw : 1.0f;
 		fDrawWidth = iw * scale;
 		fDrawHeight = ih * scale;
-		if (fDrawHeight > 300) {
-			fDrawHeight = 300;
-			fDrawWidth = iw * (300.0f / ih);
+		fOriginalWidth = iw;
+		fOriginalHeight = ih;
+		if (fDrawHeight > 400) {
+			fDrawHeight = 400;
+			fDrawWidth = iw * (400.0f / ih);
 		}
+		fZoom = std::min(fDrawWidth / iw, fDrawHeight / ih);
 	}
 
 	~InlineImageView() override { delete fBitmap; }
@@ -1454,26 +1505,73 @@ public:
 	void Draw(BRect /*updateRect*/) override {
 		if (!fBitmap) return;
 		BRect src = fBitmap->Bounds();
-		BRect dst(0, 0, fDrawWidth - 1, fDrawHeight - 1);
+		BRect dst(0, 0, fDrawWidth * fZoom - 1, fDrawHeight * fZoom - 1);
 		SetDrawingMode(B_OP_ALPHA);
 		DrawBitmap(fBitmap, src, dst);
+		
+		// Draw zoom indicator in corner
+		if (fZoom != 1.0f) {
+			char buf[32];
+			snprintf(buf, sizeof(buf), "%.0f%%", fZoom * 100);
+			BFont font = *be_plain_font;
+			font.SetSize(9);
+			SetFont(&font);
+			SetHighColor(ui_color(B_CONTROL_TEXT_COLOR));
+			DrawString(buf, BPoint(4, 14));
+		}
+		
+		// Draw filename if available
+		if (!fOriginalName.empty() && fZoom >= 1.0f) {
+			BFont font = *be_plain_font;
+			font.SetSize(9);
+			SetFont(&font);
+			SetHighColor(ui_color(B_CONTROL_TEXT_COLOR));
+			DrawString(fOriginalName.c_str(), BPoint(4, fDrawHeight * fZoom - 4));
+		}
 	}
 
 	void MouseDown(BPoint where) override {
 		if (!fBitmap) return;
 		uint32 buttons = 0;
 		GetMouse(&where, &buttons);
+		
+		if (buttons & B_SECONDARY_MOUSE_BUTTON) {
+			_ShowContextMenu(where);
+			return;
+		}
+		
 		if (!(buttons & B_PRIMARY_MOUSE_BUTTON)) return;
 
+		// Check for double-click to zoom
+		if (Window() && Window()->CurrentMessage()) {
+			bigtime_t clickTime = Window()->CurrentMessage()->GetInt64("when", 0);
+			bigtime_t now = system_time();
+			if (now - fLastClickTime < 500000 && fZoom < 2.0f) {  // Double-click
+				_SetZoom(std::min(fZoom * 2.0f, 3.0f));
+				fLastClickTime = now;
+				return;
+			}
+			fLastClickTime = now;
+		}
+
+		// Start drag for pan (when zoomed)
+		if (fZoom > 1.0f) {
+			fDragOffset = where;
+			fDragging = true;
+			SetMouseEventMask(B_POINTER_EVENTS, B_LOCK_WINDOW_FOCUS | B_NO_POINTER_HISTORY);
+			return;
+		}
+
+		// Normal drag for copy
 		BMessage drag(B_SIMPLE_DATA);
 		drag.AddInt32("be:actions", B_COPY_TARGET);
 		drag.AddString("be:types", "application/octet-stream");
-		drag.AddString("be:filetypes", "image/png");
-		drag.AddString("be:type_descriptions", "PNG image");
-		drag.AddString("be:clip_name", "pluto_image.png");
+		drag.AddString("be:filetypes", fMimeType.c_str());
+		drag.AddString("be:type_descriptions", "Image file");
+		drag.AddString("be:clip_name", fOriginalName.empty() ? "pluto_image.png" : fOriginalName.c_str());
 
-		float thumbW = std::min(fDrawWidth, 100.0f);
-		float thumbH = fDrawHeight * (thumbW / fDrawWidth);
+		float thumbW = std::min(fDrawWidth * fZoom, 100.0f);
+		float thumbH = fDrawHeight * fZoom * (thumbW / (fDrawWidth * fZoom));
 		BBitmap* thumb = new BBitmap(BRect(0, 0, thumbW - 1, thumbH - 1),
 		                             B_RGBA32, true);
 		if (thumb->Lock()) {
@@ -1488,19 +1586,109 @@ public:
 		this->DragMessage(&drag, thumb, B_OP_ALPHA, BPoint(thumbW / 2, thumbH / 2));
 	}
 
+	void MouseUp(BPoint where) override {
+		fDragging = false;
+	}
+
+	void MouseMoved(BPoint where, uint32 transit, const BMessage* msg) override {
+		if (fDragging && fZoom > 1.0f) {
+			BPoint delta = where - fDragOffset;
+			fDragOffset = where;
+			// Pan the image (would need scroll view integration)
+			// For now, just update and redraw
+			Invalidate();
+		}
+	}
+
 	void MessageReceived(BMessage* msg) override {
 		if (msg->what == B_COPY_TARGET) {
 			_HandleCopyTarget(msg);
+		} else if (msg->what == 'imgZ') {  // Zoom in
+			_SetZoom(std::min(fZoom * 1.5f, 4.0f));
+		} else if (msg->what == 'imgZo') {  // Zoom out
+			_SetZoom(std::max(fZoom / 1.5f, 0.25f));
+		} else if (msg->what == 'imgR') {  // Reset zoom
+			_SetZoom(1.0f);
+		} else if (msg->what == 'imgS') {  // Save
+			_HandleSaveAs();
+		} else if (msg->what == 'imgC') {  // Copy
+			_HandleCopy();
+		} else if (msg->what == 'imgO') {  // Open externally
+			_HandleOpenExternally();
+		} else if (msg->what == 'imgF') {  // Full screen
+			_HandleFullScreen();
 		} else {
 			BView::MessageReceived(msg);
 		}
 	}
 
+	void KeyDown(const char* bytes, int32 numBytes) override {
+		if (numBytes == 1 && bytes[0] == '+') {
+			_SetZoom(std::min(fZoom * 1.25f, 4.0f));
+		} else if (numBytes == 1 && bytes[0] == '-') {
+			_SetZoom(std::max(fZoom / 1.25f, 0.25f));
+		} else if (numBytes == 1 && bytes[0] == '0') {
+			_SetZoom(1.0f);
+		} else {
+			BView::KeyDown(bytes, numBytes);
+		}
+	}
+
 	BSize MinSize() override { return BSize(fDrawWidth, fDrawHeight); }
-	BSize MaxSize() override { return BSize(fDrawWidth, fDrawHeight); }
-	BSize PreferredSize() override { return BSize(fDrawWidth, fDrawHeight); }
+	BSize MaxSize() override { return BSize(fDrawWidth * 4, fDrawHeight * 4); }
+	BSize PreferredSize() override { return BSize(fDrawWidth * fZoom, fDrawHeight * fZoom); }
 
 private:
+	void _ShowContextMenu(BPoint where) {
+		BPopUpMenu* menu = new BPopUpMenu("image_ctx", false, false);
+		
+		// Zoom submenu
+		BMenu* zoomMenu = new BMenu("Zoom");
+		zoomMenu->AddItem(new BMenuItem("Zoom in (+)", new BMessage('imgZ'), '+'));
+		zoomMenu->AddItem(new BMenuItem("Zoom out (-)", new BMessage('imgZo'), '-'));
+		zoomMenu->AddItem(new BMenuItem("Reset (0)", new BMessage('imgR'), '0'));
+		zoomMenu->AddSeparatorItem();
+		zoomMenu->AddItem(new BMenuItem("Fit to window", new BMessage('imgF')));
+		menu->AddItem(zoomMenu);
+		
+		menu->AddSeparatorItem();
+		menu->AddItem(new BMenuItem("Save as" B_UTF8_ELLIPSIS, new BMessage('imgS')));
+		menu->AddItem(new BMenuItem("Copy", new BMessage('imgC'), 'C'));
+		menu->AddItem(new BMenuItem("Open externally", new BMessage('imgO')));
+		menu->AddSeparatorItem();
+		
+		// Image info
+		char info[128];
+		snprintf(info, sizeof(info), "%dx%d %s", 
+		         (int)fOriginalWidth, (int)fOriginalHeight, fMimeType.c_str());
+		BMenuItem* infoItem = new BMenuItem(info, nullptr);
+		infoItem->SetEnabled(false);
+		menu->AddItem(infoItem);
+		
+		if (!fOriginalName.empty()) {
+			BMenuItem* nameItem = new BMenuItem(fOriginalName.c_str(), nullptr);
+			nameItem->SetEnabled(false);
+			menu->AddItem(nameItem);
+		}
+		
+		menu->SetTargetForItems(this);
+		ConvertToScreen(&where);
+		menu->Go(where, true, true, true);
+	}
+
+	void _SetZoom(float zoom) {
+		if (zoom < 0.25f) zoom = 0.25f;
+		if (zoom > 4.0f) zoom = 4.0f;
+		if (fabs(zoom - fZoom) < 0.01f) return;
+		
+		fZoom = zoom;
+		InvalidateLayout();
+		Invalidate();
+		
+		// Notify parent to relayout
+		if (Parent()) Parent()->InvalidateLayout();
+	}
+
 	void _HandleCopyTarget(BMessage* msg) {
 		entry_ref dir;
 		const char* name = nullptr;
@@ -1516,13 +1704,513 @@ private:
 		file.SetSize(fPngData.size());
 
 		BNodeInfo info(&file);
-		info.SetType("image/png");
+		info.SetType(fMimeType.c_str());
+	}
+
+	void _HandleSaveAs() {
+		if (!Window()) return;
+		
+		BFilePanel* panel = new BFilePanel(B_SAVE_PANEL,
+		                                   nullptr,  // target
+		                                   nullptr,  // directory
+		                                   B_FILE_NODE,
+		                                   false,    // allow multiple
+		                                   nullptr,  // message
+		                                   nullptr,  // filter
+		                                   true,     // modal
+		                                   Window());
+		
+		// Set default filename
+		std::string filename = fOriginalName.empty() ? "pluto_image.png" : fOriginalName;
+		// We can't easily set the filename in BFilePanel, so we'll use a custom approach
+		
+		// For now, save to desktop
+		BDirectory homeDir;
+		BPath desktopPath;
+		if (find_directory(B_DESKTOP_DIRECTORY, &desktopPath) == B_OK) {
+			BPath filePath(desktopPath.Path());
+			filePath.Append(filename.c_str());
+			
+			BFile file(filePath.Path(), B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+			if (file.InitCheck() == B_OK) {
+				file.Write(fPngData.data(), fPngData.size());
+				file.SetSize(fPngData.size());
+				BNodeInfo info(&file);
+				info.SetType(fMimeType.c_str());
+				
+				// Show notification
+				if (Window()) {
+					BNotification n(B_INFO_NOTIFICATION);
+					n.SetGroup("Pluto");
+					n.SetTitle("Image saved");
+					n.SetContent(filePath.Path());
+					n.Send(5000000LL);
+				}
+			}
+		}
+	}
+
+	void _HandleCopy() {
+		if (!Window()) return;
+		
+		BMessage clip(B_SIMPLE_DATA);
+		clip.AddInt32("be:actions", B_COPY_TARGET);
+		clip.AddString("be:types", "application/octet-stream");
+		clip.AddString("be:filetypes", fMimeType.c_str());
+		clip.AddString("be:type_descriptions", "Image file");
+		clip.AddString("be:clip_name", fOriginalName.empty() ? "pluto_image.png" : fOriginalName.c_str());
+		
+		if (be_clipboard && be_clipboard->Lock()) {
+			be_clipboard->Clear();
+			be_clipboard->Data()->AddData("application/octet-stream", B_MIME_TYPE, 
+			                              fPngData.data(), fPngData.size());
+			be_clipboard->Commit();
+			be_clipboard->Unlock();
+		}
+	}
+
+	void _HandleOpenExternally() {
+		// Save to temp file and open with default handler
+		BPath tempPath;
+		if (find_directory(B_SYSTEM_TEMP_DIRECTORY, &tempPath) != B_OK) return;
+		
+		std::string filename = fOriginalName.empty() ? "pluto_image.png" : fOriginalName;
+		tempPath.Append(filename.c_str());
+		
+		BFile file(tempPath.Path(), B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+		if (file.InitCheck() != B_OK) return;
+		file.Write(fPngData.data(), fPngData.size());
+		file.SetSize(fPngData.size());
+		BNodeInfo info(&file);
+		info.SetType(fMimeType.c_str());
+		
+		entry_ref ref;
+		if (get_ref_for_path(tempPath.Path(), &ref) == B_OK) {
+			be_roster->Launch(&ref);
+		}
+	}
+
+	void _HandleFullScreen() {
+		// Create a full-screen window with the image
+		if (!Window()) return;
+		
+		BRect screenFrame;
+		if (BScreen* screen = new BScreen(Window())) {
+			screenFrame = screen->Frame();
+			delete screen;
+		}
+		
+		BRect winFrame(0, 0, 
+		               std::min(fOriginalWidth, screenFrame.Width() * 0.9),
+		               std::min(fOriginalHeight, screenFrame.Height() * 0.9));
+		winFrame.OffsetTo((screenFrame.Width() - winFrame.Width()) / 2,
+		                  (screenFrame.Height() - winFrame.Height()) / 2);
+		
+		BWindow* fullWin = new BWindow(winFrame, "Image Viewer", B_TITLED_WINDOW,
+		                               B_ASYNCHRONOUS_CONTROLS | B_NOT_RESIZABLE);
+		
+		// Create a scroll view with the full-size image
+		BBitmap* fullBitmap = new BBitmap(fBitmap->Bounds(), fBitmap->ColorSpace(), true);
+		if (fullBitmap->Lock()) {
+			fullBitmap->ImportBits(fBitmap->Bits(), fBitmap->BitsLength(), fBitmap->BytesPerRow(),
+			                       fBitmap->ColorSpace());
+			fullBitmap->Unlock();
+		}
+		
+		// Create image view with full resolution
+		BView* imgView = new BView("fullImage", B_WILL_DRAW);
+		imgView->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+		
+		class FullImageView : public BView {
+		public:
+			FullImageView(BBitmap* bmp) : BView("fullImg", B_WILL_DRAW), fBitmap(bmp) {}
+			~FullImageView() override { delete fBitmap; }
+			void Draw(BRect) override {
+				if (fBitmap) DrawBitmap(fBitmap, BPoint(0, 0));
+			}
+			BSize MinSize() override { 
+				return fBitmap ? BSize(fBitmap->Bounds().Width()+1, fBitmap->Bounds().Height()+1) : BSize(100, 100); 
+			}
+			BSize MaxSize() override { return MinSize(); }
+			BSize PreferredSize() override { return MinSize(); }
+		private:
+			BBitmap* fBitmap;
+		};
+		
+		FullImageView* fullImg = new FullImageView(fullBitmap);
+		BScrollView* scroll = new BScrollView("fullScroll", fullImg, 0, true, true, B_FANCY_BORDER);
+		
+		fullWin->AddChild(scroll);
+		fullWin->CenterOnScreen();
+		fullWin->Show();
 	}
 
 	BBitmap*    fBitmap;
 	std::string fPngData;
+	std::string fMimeType;
+	std::string fOriginalName;
 	float       fDrawWidth;
 	float       fDrawHeight;
+	float       fOriginalWidth;
+	float       fOriginalHeight;
+	float       fZoom;
+	BPoint      fDragOffset;
+	bool        fDragging;
+	bigtime_t   fLastClickTime = 0;
+};
+
+}  // anon namespace
+
+// ---- inline PDF/document support ----
+
+namespace {
+
+class InlineDocumentView : public BView {
+public:
+	InlineDocumentView(const std::string& docData, const std::string& mimeType,
+	                   const std::string& filename, float maxWidth)
+		: BView("inlineDocument", B_WILL_DRAW | B_NAVIGABLE),
+		  fDocData(docData), fMimeType(mimeType), fFilename(filename),
+		  fMaxWidth(maxWidth), fPageCount(0), fCurrentPage(0)
+	{
+		SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+		_ParseDocument();
+	}
+
+	~InlineDocumentView() override {
+		delete fFirstPageBitmap;
+	}
+
+	void Draw(BRect /*updateRect*/) override {
+		if (fFirstPageBitmap) {
+			BRect src = fFirstPageBitmap->Bounds();
+			BRect dst(0, 0, fDrawWidth - 1, fDrawHeight - 1);
+			SetDrawingMode(B_OP_ALPHA);
+			DrawBitmap(fFirstPageBitmap, src, dst);
+			
+			// Draw page indicator
+			if (fPageCount > 1) {
+				char buf[64];
+				snprintf(buf, sizeof(buf), "Page %d of %d", fCurrentPage + 1, fPageCount);
+				BFont font = *be_plain_font;
+				font.SetSize(10);
+				font.SetFace(B_BOLD_FACE);
+				SetFont(&font);
+				SetHighColor(ui_color(B_CONTROL_TEXT_COLOR));
+				DrawString(buf, BPoint(8, 20));
+			}
+		} else {
+			// Fallback: draw document icon and info
+			_DrawDocumentPlaceholder();
+		}
+		
+		// Draw filename
+		if (!fFilename.empty()) {
+			BFont font = *be_plain_font;
+			font.SetSize(10);
+			SetFont(&font);
+			SetHighColor(ui_color(B_CONTROL_TEXT_COLOR));
+			float y = fFirstPageBitmap ? fDrawHeight + 20 : 60;
+			DrawString(fFilename.c_str(), BPoint(8, y));
+		}
+	}
+
+	void MouseDown(BPoint where) override {
+		uint32 buttons = 0;
+		GetMouse(&where, &buttons);
+		
+		if (buttons & B_SECONDARY_MOUSE_BUTTON) {
+			_ShowContextMenu(where);
+			return;
+		}
+		
+		if (!(buttons & B_PRIMARY_MOUSE_BUTTON)) return;
+
+		// Double-click to open externally
+		if (Window() && Window()->CurrentMessage()) {
+			bigtime_t clickTime = Window()->CurrentMessage()->GetInt64("when", 0);
+			bigtime_t now = system_time();
+			if (now - fLastClickTime < 500000) {
+				_HandleOpenExternally();
+				fLastClickTime = now;
+				return;
+			}
+			fLastClickTime = now;
+		}
+
+		// Single click - cycle pages if multi-page
+		if (fPageCount > 1) {
+			fCurrentPage = (fCurrentPage + 1) % fPageCount;
+			_RenderPage(fCurrentPage);
+			Invalidate();
+		}
+	}
+
+	void KeyDown(const char* bytes, int32 numBytes) override {
+		if (numBytes == 1 && bytes[0] == B_RIGHT_ARROW && fPageCount > 1) {
+			fCurrentPage = (fCurrentPage + 1) % fPageCount;
+			_RenderPage(fCurrentPage);
+			Invalidate();
+		} else if (numBytes == 1 && bytes[0] == B_LEFT_ARROW && fPageCount > 1) {
+			fCurrentPage = (fCurrentPage - 1 + fPageCount) % fPageCount;
+			_RenderPage(fCurrentPage);
+			Invalidate();
+		} else if (numBytes == 1 && bytes[0] == B_ENTER) {
+			_HandleOpenExternally();
+		} else {
+			BView::KeyDown(bytes, numBytes);
+		}
+	}
+
+	void MessageReceived(BMessage* msg) override {
+		if (msg->what == B_COPY_TARGET) {
+			_HandleCopyTarget(msg);
+		} else if (msg->what == 'docS') {  // Save
+			_HandleSaveAs();
+		} else if (msg->what == 'docC') {  // Copy
+			_HandleCopy();
+		} else if (msg->what == 'docO') {  // Open externally
+			_HandleOpenExternally();
+		} else if (msg->what == 'docE') {  // Extract text
+			_HandleExtractText();
+		} else {
+			BView::MessageReceived(msg);
+		}
+	}
+
+	BSize MinSize() override { return BSize(fDrawWidth, fDrawHeight + 40); }
+	BSize MaxSize() override { return BSize(fMaxWidth, fDrawHeight + 40); }
+	BSize PreferredSize() override { return BSize(fDrawWidth, fDrawHeight + 40); }
+
+private:
+	void _ParseDocument() {
+		if (fDocData.empty()) return;
+		
+		// For PDF, we'd use a PDF renderer. For now, create a placeholder.
+		// In a real implementation, we'd use PDFium, Poppler, or Haiku's PDF translator.
+		
+		// Try to use Haiku's translator to get first page as bitmap
+		BMemoryIO memIO(fDocData.data(), fDocData.size());
+		BTranslatorRoster* roster = BTranslatorRoster::Default();
+		BBitmapStream stream;
+		
+		// Try to translate as image (some PDF translators support this)
+		if (roster->Translate(&memIO, NULL, NULL, &stream, B_TRANSLATOR_BITMAP) == B_OK) {
+			stream.DetachBitmap(&fFirstPageBitmap);
+			if (fFirstPageBitmap) {
+				BRect bounds = fFirstPageBitmap->Bounds();
+				float iw = bounds.Width() + 1;
+				float ih = bounds.Height() + 1;
+				float scale = (iw > fMaxWidth && fMaxWidth > 10) ? fMaxWidth / iw : 1.0f;
+				fDrawWidth = iw * scale;
+				fDrawHeight = ih * scale;
+				if (fDrawHeight > 500) {
+					fDrawHeight = 500;
+					fDrawWidth = iw * (500.0f / ih);
+				}
+			}
+		}
+		
+		// If no bitmap, use default placeholder size
+		if (!fFirstPageBitmap) {
+			fDrawWidth = std::min(400.0f, fMaxWidth);
+			fDrawHeight = 300;
+		}
+		
+		fPageCount = 1;  // Would be parsed from PDF in real implementation
+	}
+
+	void _RenderPage(int page) {
+		// In real implementation, re-render the specific page
+		fCurrentPage = page;
+		Invalidate();
+	}
+
+	void _DrawDocumentPlaceholder() {
+		// Draw a document icon with info
+		BRect bounds = Bounds();
+		float cx = bounds.Width() / 2;
+		float cy = bounds.Height() / 2;
+		
+		// Document icon background
+		SetHighColor({200, 220, 255, 255});
+		SetDrawingMode(B_OP_ALPHA);
+		FillRoundRect(BRect(cx - 60, cy - 80, cx + 60, cy + 20), 8, 8);
+		
+		// Document icon lines
+		SetHighColor({60, 100, 180, 255});
+		SetPenSize(2);
+		StrokeLine(BPoint(cx - 40, cy - 60), BPoint(cx + 40, cy - 60));
+		StrokeLine(BPoint(cx - 40, cy - 30), BPoint(cx + 40, cy - 30));
+		StrokeLine(BPoint(cx - 40, cy), BPoint(cx + 10, cy));
+		StrokeLine(BPoint(cx - 40, cy + 10), BPoint(cx - 10, cy + 10));
+		
+		// Document type label
+		BFont font = *be_plain_font;
+		font.SetSize(12);
+		font.SetFace(B_BOLD_FACE);
+		SetFont(&font);
+		SetHighColor({40, 60, 120, 255});
+		
+		std::string type = _GetDocumentTypeLabel();
+		float tw = font.StringWidth(type.c_str());
+		DrawString(type.c_str(), BPoint(cx - tw / 2, cy + 45));
+		
+		// Size info
+		font.SetSize(10);
+		font.SetFace(0);
+		SetFont(&font);
+		char sizeInfo[64];
+		snprintf(sizeInfo, sizeof(sizeInfo), "%.1f KB", fDocData.size() / 1024.0);
+		tw = font.StringWidth(sizeInfo);
+		DrawString(sizeInfo, BPoint(cx - tw / 2, cy + 65));
+	}
+
+	std::string _GetDocumentTypeLabel() const {
+		if (fMimeType.find("pdf") != std::string::npos) return "PDF Document";
+		if (fMimeType.find("word") != std::string::npos || 
+		    fMimeType.find("docx") != std::string::npos) return "Word Document";
+		if (fMimeType.find("spreadsheet") != std::string::npos || 
+		    fMimeType.find("xlsx") != std::string::npos) return "Spreadsheet";
+		if (fMimeType.find("text") != std::string::npos) return "Text Document";
+		return "Document";
+	}
+
+	void _ShowContextMenu(BPoint where) {
+		BPopUpMenu* menu = new BPopUpMenu("doc_ctx", false, false);
+		
+		if (fPageCount > 1) {
+			menu->AddItem(new BMenuItem("Next page (Right)", nullptr, B_RIGHT_ARROW));
+			menu->AddItem(new BMenuItem("Previous page (Left)", nullptr, B_LEFT_ARROW));
+			menu->AddSeparatorItem();
+		}
+		
+		menu->AddItem(new BMenuItem("Save as" B_UTF8_ELLIPSIS, new BMessage('docS')));
+		menu->AddItem(new BMenuItem("Copy", new BMessage('docC'), 'C'));
+		menu->AddItem(new BMenuItem("Open externally", new BMessage('docO')));
+		menu->AddSeparatorItem();
+		menu->AddItem(new BMenuItem("Extract text" B_UTF8_ELLIPSIS, new BMessage('docE')));
+		
+		menu->AddSeparatorItem();
+		
+		// Document info
+		char info[128];
+		snprintf(info, sizeof(info), "%s  |  %d page(s)  |  %.1f KB",
+		         _GetDocumentTypeLabel().c_str(), fPageCount, fDocData.size() / 1024.0);
+		BMenuItem* infoItem = new BMenuItem(info, nullptr);
+		infoItem->SetEnabled(false);
+		menu->AddItem(infoItem);
+		
+		if (!fFilename.empty()) {
+			BMenuItem* nameItem = new BMenuItem(fFilename.c_str(), nullptr);
+			nameItem->SetEnabled(false);
+			menu->AddItem(nameItem);
+		}
+		
+		menu->SetTargetForItems(this);
+		ConvertToScreen(&where);
+		menu->Go(where, true, true, true);
+	}
+
+	void _HandleCopyTarget(BMessage* msg) {
+		entry_ref dir;
+		const char* name = nullptr;
+		if (msg->FindRef("directory", &dir) != B_OK
+		    || msg->FindString("name", &name) != B_OK)
+			return;
+
+		BDirectory destDir(&dir);
+		BFile file(&destDir, name, B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+		if (file.InitCheck() != B_OK) return;
+
+		file.Write(fDocData.data(), fDocData.size());
+		file.SetSize(fDocData.size());
+
+		BNodeInfo info(&file);
+		info.SetType(fMimeType.c_str());
+	}
+
+	void _HandleSaveAs() {
+		if (!Window()) return;
+		
+		BPath desktopPath;
+		if (find_directory(B_DESKTOP_DIRECTORY, &desktopPath) != B_OK) return;
+		
+		std::string filename = fFilename.empty() ? "pluto_document.pdf" : fFilename;
+		BPath filePath(desktopPath.Path());
+		filePath.Append(filename.c_str());
+		
+		BFile file(filePath.Path(), B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+		if (file.InitCheck() == B_OK) {
+			file.Write(fDocData.data(), fDocData.size());
+			file.SetSize(fDocData.size());
+			BNodeInfo info(&file);
+			info.SetType(fMimeType.c_str());
+			
+			if (Window()) {
+				BNotification n(B_INFO_NOTIFICATION);
+				n.SetGroup("Pluto");
+				n.SetTitle("Document saved");
+				n.SetContent(filePath.Path());
+				n.Send(5000000LL);
+			}
+		}
+	}
+
+	void _HandleCopy() {
+		if (!Window()) return;
+		
+		if (be_clipboard && be_clipboard->Lock()) {
+			be_clipboard->Clear();
+			be_clipboard->Data()->AddData(fMimeType.c_str(), B_MIME_TYPE, 
+			                              fDocData.data(), fDocData.size());
+			be_clipboard->Commit();
+			be_clipboard->Unlock();
+		}
+	}
+
+	void _HandleOpenExternally() {
+		BPath tempPath;
+		if (find_directory(B_SYSTEM_TEMP_DIRECTORY, &tempPath) != B_OK) return;
+		
+		std::string filename = fFilename.empty() ? "pluto_document.pdf" : fFilename;
+		tempPath.Append(filename.c_str());
+		
+		BFile file(tempPath.Path(), B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+		if (file.InitCheck() != B_OK) return;
+		file.Write(fDocData.data(), fDocData.size());
+		file.SetSize(fDocData.size());
+		BNodeInfo info(&file);
+		info.SetType(fMimeType.c_str());
+		
+		entry_ref ref;
+		if (get_ref_for_path(tempPath.Path(), &ref) == B_OK) {
+			be_roster->Launch(&ref);
+		}
+	}
+
+	void _HandleExtractText() {
+		// In a real implementation, extract text from PDF
+		// For now, show a notification
+		if (Window()) {
+			BNotification n(B_INFO_NOTIFICATION);
+			n.SetGroup("Pluto");
+			n.SetTitle("Text extraction");
+			n.SetContent("Text extraction requires PDF parsing library (not yet implemented)");
+			n.Send(5000000LL);
+		}
+	}
+
+	std::string fDocData;
+	std::string fMimeType;
+	std::string fFilename;
+	float       fMaxWidth;
+	float       fDrawWidth;
+	float       fDrawHeight;
+	int         fPageCount;
+	int         fCurrentPage;
+	BBitmap*    fFirstPageBitmap = nullptr;
+	bigtime_t   fLastClickTime = 0;
 };
 
 }  // anon namespace
@@ -1532,7 +2220,9 @@ void ConversationView::_ClearInlineImages() {
 	fImageOffsets.clear();
 }
 
-void ConversationView::_InsertInlineImage(const std::string& base64_data) {
+void ConversationView::_InsertInlineImage(const std::string& base64_data, 
+                                         const std::string& mimeType = "image/png",
+                                         const std::string& filename = "") {
 	std::string raw = base64_decode(base64_data);
 	if (raw.empty()) {
 		_Append("\xf0\x9f\x96\xbc [image decode failed]\n", fDocTextColor);
@@ -1554,32 +2244,20 @@ void ConversationView::_InsertInlineImage(const std::string& base64_data) {
 		BRect bounds = bitmap->Bounds();
 		float iw = bounds.Width() + 1;
 		float ih = bounds.Height() + 1;
-		float maxW = 400.0f;
+		float maxW = 500.0f;  // Increased max width
 		if (fDocView) {
 			float viewW = fDocView->Bounds().Width() - 20;
 			if (viewW > 50 && viewW < maxW) maxW = viewW;
 		}
-		float scale = (iw > maxW) ? maxW / iw : 1.0f;
-		float dw = iw * scale;
-		float dh = ih * scale;
-		if (dh > 300) { dh = 300; dw = iw * (300.0f / ih); }
 
-		BBitmap* scaled = new BBitmap(BRect(0, 0, dw - 1, dh - 1),
-		                              B_RGBA32, true);
-		if (scaled->Lock()) {
-			BView canvas(scaled->Bounds(), "", 0, 0);
-			scaled->AddChild(&canvas);
-			canvas.SetDrawingMode(B_OP_ALPHA);
-			canvas.DrawBitmap(bitmap, bitmap->Bounds(), canvas.Bounds());
-			canvas.Sync();
-			scaled->RemoveChild(&canvas);
-			scaled->Unlock();
-		}
-
+		// Create InlineImageView with the original image data
+		InlineImageView* imgView = new InlineImageView(bitmap, maxW, raw, mimeType, filename);
+		
 		if (fTextDoc) {
 			Paragraph imgPara;
 			TextSpan imgSpan;
-			imgSpan.SetImage(scaled, BString("image"));
+			// We use a custom span type for the image view
+			imgSpan.SetImage(imgView, BString("image"));
 			imgPara.Append(imgSpan);
 			fTextDoc->Append(imgPara);
 
@@ -1589,15 +2267,48 @@ void ConversationView::_InsertInlineImage(const std::string& base64_data) {
 
 			if (fDocView) fDocView->Relayout();
 		} else {
-			delete scaled;
+			delete imgView;
 		}
-		delete bitmap;
 	} else {
 		_Append("\xf0\x9f\x96\xbc [image \xe2\x80\x94 could not render]\n", fDocTextColor);
 	}
 
 	if (fDelegate)
-		fDelegate->OnImage(base64_data, "image/png");
+		fDelegate->OnImage(base64_data, mimeType);
+}
+
+void ConversationView::_InsertInlineDocument(const std::string& base64_data, 
+                                            const std::string& mimeType,
+                                            const std::string& filename) {
+	std::string raw = base64_decode(base64_data);
+	if (raw.empty()) {
+		_Append("\xf0\x9f\x93\x84 [document decode failed]\n", fDocTextColor);
+		return;
+	}
+
+	float maxW = 500.0f;
+	if (fDocView) {
+		float viewW = fDocView->Bounds().Width() - 20;
+		if (viewW > 50 && viewW < maxW) maxW = viewW;
+	}
+
+	InlineDocumentView* docView = new InlineDocumentView(raw, mimeType, filename, maxW);
+	
+	if (fTextDoc) {
+		Paragraph docPara;
+		TextSpan docSpan;
+		docSpan.SetImage(docView, BString("document"));
+		docPara.Append(docSpan);
+		fTextDoc->Append(docPara);
+
+		Paragraph spacer;
+		spacer.Append(TextSpan(" ", CharacterStyle()));
+		fTextDoc->Append(spacer);
+
+		if (fDocView) fDocView->Relayout();
+	} else {
+		delete docView;
+	}
 }
 
 void ConversationView::_RepositionInlineImages() {

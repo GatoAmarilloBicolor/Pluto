@@ -146,8 +146,16 @@ public:
 	void SetSessionPath(const std::string& path) { fSessionPath = path; }
 
 	// Insert a base64-encoded image inline in the chat.
-	void InsertInlineImage(const std::string& base64Data)
-		{ _InsertInlineImage(base64Data); }
+	void InsertInlineImage(const std::string& base64Data,
+	                       const std::string& mimeType = "image/png",
+	                       const std::string& filename = "")
+		{ _InsertInlineImage(base64Data, mimeType, filename); }
+
+	// Insert a base64-encoded document inline in the chat.
+	void InsertInlineDocument(const std::string& base64Data,
+	                          const std::string& mimeType,
+	                          const std::string& filename)
+		{ _InsertInlineDocument(base64Data, mimeType, filename); }
 
 	// Access the output views.
 	// Legacy OutputView() returns nullptr — use DocView() instead.
@@ -166,9 +174,20 @@ public:
 	                        rgb_color codeFg, rgb_color codeBg,
 	                        rgb_color linkColor);
 
+	// Restore scroll position (called after workspace restore)
+	void RestoreScrollPosition(float position);
+
 	// Per-tab image preview bitmap (for save/restore on tab switch).
 	BBitmap* PreviewBitmap() const { return fPreviewBitmap; }
 	void     SetPreviewBitmap(BBitmap* bmp) { delete fPreviewBitmap; fPreviewBitmap = bmp; }
+
+	// Tab pinning (pinned tabs stay open and are visually distinguished)
+	void     SetPinned(bool pinned) { fPinned = pinned; }
+	bool     IsPinned() const { return fPinned; }
+
+	// Input text persistence
+	void     SetInputText(const std::string& text) { fInputText = text; }
+	std::string GetInputText() const { return fInputText; }
 
 	// Access messages for export.
 	const std::vector<Message>& Messages() const { return fMessages; }
@@ -242,7 +261,12 @@ private:
 	void _ShowCursor();
 	void _HideCursor();
 	void _RenderMessages();
-	void _InsertInlineImage(const std::string& base64_data);
+	void _InsertInlineImage(const std::string& base64_data,
+                          const std::string& mimeType = "image/png",
+                          const std::string& filename = "");
+	void _InsertInlineDocument(const std::string& base64_data,
+	                           const std::string& mimeType,
+	                           const std::string& filename);
 	void _ClearInlineImages();
 	void _RepositionInlineImages();
 
@@ -313,6 +337,12 @@ private:
 
 	// Per-tab image preview bitmap (owned, saved/restored on tab switch).
 	BBitmap*                        fPreviewBitmap = nullptr;
+
+	// Tab pinning state
+	bool                            fPinned = false;
+
+	// Input text for persistence
+	std::string                     fInputText;
 
 	// Inline image views embedded in the chat output.
 	std::vector<BView*>             fInlineImages;

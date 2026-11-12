@@ -9,14 +9,11 @@
 #include <thread>
 #include <chrono>
 #include <algorithm>
-#include <thread>
-#include <chrono>
 #include <atomic>
-#include <thread>
-#include <chrono>
-#include <atomic>
-#include <algorithm>
+#include <mutex>
 #include <cstdlib>
+#include <cstdio>
+#include <ctime>
 
 namespace pluto {
 
@@ -72,18 +69,100 @@ struct HeadersGuard {
 	curl_slist* get() const { return headers; }
 };
 
+// Retry policy configuration.
+struct RetryPolicy {
+    int max_attempts = 3;              // Total attempts including first
+    long base_backoff_ms = 1000;       // Initial backoff
+    long max_backoff_ms = 30000;       // Cap on backoff
+    double jitter_factor = 0.25;       // ±25% jitter
+    std::vector<int> retry_status_codes = {429, 500, 502, 503, 504}; // HTTP codes to retry
+    std::vector<CURLcode> retry_curl_codes = {
+        CURLE_OPERATION_TIMEDOUT,
+        CURLE_COULDNT_CONNECT,
+        CURLE_COULDNT_RESOLVE_HOST,
+        CURLE_PARTIAL_FILE,
+        CURLE_RECV_ERROR,
+        CURLE_SEND_ERROR,
+        CURLE_SSL_CONNECT_ERROR,
+        CURLE_SSL_CERTPROBLEM
+    };
+    
+    // Check if an HTTP status code should be retried
+    bool should_retry_http(long http_code) const {
+        return std::find(retry_status_codes.begin(), retry_status_codes.end(), static_cast<int>(http_code)) != retry_status_codes.end();
+    }
+    
+    // Check if a CURLcode should be retried
+    bool should_retry_curl(CURLcode code) const {
+        return std::find(retry_curl_codes.begin(), retry_curl_codes.end(), code) != retry_curl_codes.end();
+    }
+};
+
+// Circuit breaker state for a host.
+struct CircuitBreaker {
+    std::mutex mutex;
+    int failures = 0;
+    int successes = 0;
+    std::chrono::steady_clock::time_point last_failure;
+    bool open = false;
+    int failure_threshold = 5;      // Open after N consecutive failures
+    int success_threshold = 2;      // Close after N consecutive successes
+    long reset_timeout_ms = 60000;  // Time before allowing test request (1 min)
+    
+    // Record a successful request
+    void record_success() {
+        std::lock_guard<std::mutex> lock(mutex);
+        failures = 0;
+        if (++successes >= success_threshold) {
+            open = false;
+        }
+    }
+    
+    // Record a failed request
+    void record_failure() {
+        std::lock_guard<std::mutex> lock(mutex);
+        successes = 0;
+        last_failure = std::chrono::steady_clock::now();
+        if (++failures >= failure_threshold) {
+            open = true;
+        }
+    }
+    
+    // Check if circuit allows requests (with auto-half-open)
+    bool allow_request() {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (!open) return true;
+        
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_failure).count();
+        if (elapsed >= reset_timeout_ms) {
+            // Half-open: allow one test request
+            return true;
+        }
+        return false;
+    }
+    
+    // Get current state for logging
+    std::string state() const {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (open) return "OPEN";
+        if (failures > 0) return "DEGRADED";
+        return "CLOSED";
+    }
+};
+
 // Calculate exponential backoff with jitter.
 // attempt: 1-based attempt number (first retry is attempt=1)
 // base_ms: base delay in milliseconds
 // max_ms: maximum delay cap in milliseconds
-inline long calc_backoff_ms(int attempt, long base_ms = 1000, long max_ms = 30000) {
-	long backoff = base_ms * (1L << (attempt - 1));
-	if (backoff > max_ms) backoff = max_ms;
-	// Add jitter: ±25%
-	long jitter = backoff / 4;
-	backoff += (std::rand() % (jitter * 2 + 1)) - jitter;
-	if (backoff < 0) backoff = 0;
-	return backoff;
+// jitter_factor: fraction for jitter (0.25 = ±25%)
+inline long calc_backoff_ms(int attempt, long base_ms = 1000, long max_ms = 30000, double jitter_factor = 0.25) {
+    long backoff = base_ms * (1L << (attempt - 1));
+    if (backoff > max_ms) backoff = max_ms;
+    long jitter = static_cast<long>(backoff * jitter_factor);
+    backoff += (std::rand() % (jitter * 2 + 1)) - jitter;
+    if (backoff < 0) backoff = 0;
+    return backoff;
 }
 
 // Sleep for milliseconds, checking cancellation flag.
@@ -101,15 +180,37 @@ inline void sleep_ms(long ms, const std::atomic<bool>* cancel = nullptr) {
 // Parse retry-after header value.
 // Returns seconds to wait, or -1 if not parseable.
 inline long parse_retry_after(const std::string& value) {
-	if (value.empty()) return -1;
-	
-	// Could be seconds (integer) or HTTP-date (RFC 1123)
-	// For simplicity, only handle seconds format
-	try {
-		long secs = std::stol(value);
-		if (secs > 0 && secs <= 300) return secs;
-	} catch (...) {}
-	return -1;
+    if (value.empty()) return -1;
+    
+    // Could be seconds (integer) or HTTP-date (RFC 1123)
+    // For simplicity, only handle seconds format
+    try {
+        long secs = std::stol(value);
+        if (secs > 0 && secs <= 300) return secs;
+    } catch (...) {}
+    return -1;
+}
+
+// Log level for request/response logging
+enum class LogLevel { NONE, ERROR, WARN, INFO, DEBUG };
+
+// Global log callback for request/response debugging
+using LogCallback = std::function<void(LogLevel, const std::string&)>;
+inline LogCallback g_log_callback = nullptr;
+
+// Set global log callback
+inline void set_log_callback(LogCallback cb) {
+    g_log_callback = std::move(cb);
+}
+
+// Internal logging helper
+inline void log_request(LogLevel level, const std::string& msg) {
+    if (g_log_callback) {
+        g_log_callback(level, msg);
+    } else if (level <= LogLevel::WARN) {
+        // Default to stderr for warnings/errors
+        std::fprintf(stderr, "[pluto-http] %s\n", msg.c_str());
+    }
 }
 
 }  // namespace pluto

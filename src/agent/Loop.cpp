@@ -426,6 +426,21 @@ void RunTurn(Provider& provider,
 						ui.on_text("\xf0\x9f\x96\xbc [" + ev.image_media_type + "]\n");
 					break;
 				}
+				case StreamEvent::DOCUMENT_BLOCK: {
+					active_text_idx = -1;
+					ContentBlock db;
+					db.type = ContentBlock::DOCUMENT;
+					db.doc_data = ev.document_data;
+					db.doc_media_type = ev.document_media_type;
+					db.filename = ev.document_filename;
+					assistant.content.push_back(std::move(db));
+					// Notify UI about the document.
+					if (ui.on_document)
+						ui.on_document(ev.document_data, ev.document_media_type, ev.document_filename);
+					else if (ui.on_text)
+						ui.on_text("\xf0\x9f\x93\x84 [" + ev.document_filename + "]\n");
+					break;
+				}
 				case StreamEvent::TOOL_USE_START: {
 					active_text_idx = -1;
 					ContentBlock b;
@@ -536,6 +551,18 @@ void RunTurn(Provider& provider,
 								ui.on_image(ev.image_data, ev.image_media_type);
 							break;
 						}
+						case StreamEvent::DOCUMENT_BLOCK: {
+							active_text_idx = -1;
+							ContentBlock db;
+							db.type = ContentBlock::DOCUMENT;
+							db.doc_data = ev.document_data;
+							db.doc_media_type = ev.document_media_type;
+							db.filename = ev.document_filename;
+							assistant.content.push_back(std::move(db));
+							if (ui.on_document)
+								ui.on_document(ev.document_data, ev.document_media_type, ev.document_filename);
+							break;
+						}
 						case StreamEvent::MESSAGE_END:
 							stop_reason = ev.stop_reason;
 							if (ui.on_usage && (ev.input_tokens > 0 || ev.output_tokens > 0))
@@ -638,192 +665,270 @@ bool MaybeCompact(Provider& provider,
                    int cumulative_input_tokens,
                    const UiCallbacks& ui,
                    CompactionResult* result) {
-	if (cfg.context_window <= 0) return false;
-	
-	double compact_threshold = cfg.context_compact_threshold > 0 ? cfg.context_compact_threshold : 0.90;
-	int threshold = static_cast<int>(cfg.context_window * compact_threshold);
-	if (cumulative_input_tokens < threshold) return false;
-	if (messages.size() <= 2) return false;  // nothing useful to compact
+    if (cfg.context_window <= 0) return false;
+    
+    double compact_threshold = cfg.context_compact_threshold > 0 ? cfg.context_compact_threshold : 0.90;
+    int threshold = static_cast<int>(cfg.context_window * compact_threshold);
+    if (cumulative_input_tokens < threshold) return false;
+    if (messages.size() <= 2) return false;  // nothing useful to compact
 
-	if (result) {
-		result->messages_before = static_cast<int>(messages.size());
-		result->tokens_before = cumulative_input_tokens;
-		result->model_used = cfg.summary_model.empty() ? cfg.model : cfg.summary_model;
-	}
+    if (result) {
+        result->messages_before = static_cast<int>(messages.size());
+        result->tokens_before = cumulative_input_tokens;
+        result->model_used = cfg.summary_model.empty() ? cfg.model : cfg.summary_model;
+    }
 
-	// Find a safe split point that doesn't break tool_use/tool_result pairs.
-	// Start from the end and walk backwards to find the last complete "round":
-	// user → assistant [→ user(tool_result) → assistant]*
-	// We keep the last complete round intact. A round ends at a user message
-	// that either has no tool_results, or is the final user turn.
-	size_t keep_from = messages.size();
-	bool found_boundary = false;
-	for (size_t i = messages.size(); i-- > 0; ) {
-		// If we hit the very last user message, we stop (keep everything from here).
-		if (messages[i].role == "user") {
-			// Check if this user message has tool_results.
-			bool has_tool_result = false;
-			for (const auto& b : messages[i].content)
-				if (b.type == ContentBlock::TOOL_RESULT) { has_tool_result = true; break; }
-			if (!has_tool_result) {
-				// This user message has no tool_results - safe to keep from here.
-				keep_from = i;
-				found_boundary = true;
-				break;
-			}
-			// This user has tool_results - check if previous is assistant with tool_use.
-			if (i > 0 && messages[i - 1].role == "assistant") {
-				bool has_tool_use = false;
-				for (const auto& b : messages[i - 1].content)
-					if (b.type == ContentBlock::TOOL_USE) { has_tool_use = true; break; }
-				if (has_tool_use) {
-					// This is a tool_use → tool_result pair. Keep both.
-					// Continue walking back to find the previous boundary.
-					keep_from = i - 1;
-					continue;
-				}
-			}
-			// No matching tool_use before this tool_result - safe boundary.
-			keep_from = i;
-			found_boundary = true;
-			break;
-		}
-		// Assistant message without tool_use is a safe boundary.
-		if (messages[i].role == "assistant") {
-			bool has_tool_use = false;
-			for (const auto& b : messages[i].content)
-				if (b.type == ContentBlock::TOOL_USE) { has_tool_use = true; break; }
-			if (!has_tool_use) {
-				keep_from = i;
-				found_boundary = true;
-				break;
-			}
-			// Assistant with tool_use but no following user with tool_result
-			// (should have been repaired) - treat as boundary.
-			if (i + 1 >= messages.size() || messages[i + 1].role != "user") {
-				keep_from = i;
-				found_boundary = true;
-				break;
-			}
-			// Continue walking back.
-		}
-	}
+    // Find a safe split point that doesn't break tool_use/tool_result pairs.
+    // Start from the end and walk backwards to find the last complete "round":
+    // user → assistant [→ user(tool_result) → assistant]*
+    // We keep the last complete round intact. A round ends at a user message
+    // that either has no tool_results, or is the final user turn.
+    size_t keep_from = messages.size();
+    bool found_boundary = false;
+    for (size_t i = messages.size(); i-- > 0; ) {
+        // If we hit the very last user message, we stop (keep everything from here).
+        if (messages[i].role == "user") {
+            // Check if this user message has tool_results.
+            bool has_tool_result = false;
+            for (const auto& b : messages[i].content)
+                if (b.type == ContentBlock::TOOL_RESULT) { has_tool_result = true; break; }
+            if (!has_tool_result) {
+                // This user message has no tool_results - safe to keep from here.
+                keep_from = i;
+                found_boundary = true;
+                break;
+            }
+            // This user has tool_results - check if previous is assistant with tool_use.
+            if (i > 0 && messages[i - 1].role == "assistant") {
+                bool has_tool_use = false;
+                for (const auto& b : messages[i - 1].content)
+                    if (b.type == ContentBlock::TOOL_USE) { has_tool_use = true; break; }
+                if (has_tool_use) {
+                    // This is a tool_use → tool_result pair. Keep both.
+                    // Continue walking back to find the previous boundary.
+                    keep_from = i - 1;
+                    continue;
+                }
+            }
+            // No matching tool_use before this tool_result - safe boundary.
+            keep_from = i;
+            found_boundary = true;
+            break;
+        }
+        // Assistant message without tool_use is a safe boundary.
+        if (messages[i].role == "assistant") {
+            bool has_tool_use = false;
+            for (const auto& b : messages[i].content)
+                if (b.type == ContentBlock::TOOL_USE) { has_tool_use = true; break; }
+            if (!has_tool_use) {
+                keep_from = i;
+                found_boundary = true;
+                break;
+            }
+            // Assistant with tool_use but no following user with tool_result
+            // (should have been repaired) - treat as boundary.
+            if (i + 1 >= messages.size() || messages[i + 1].role != "user") {
+                keep_from = i;
+                found_boundary = true;
+                break;
+            }
+            // Continue walking back.
+        }
+    }
 
-	// If no boundary found (shouldn't happen), don't compact
-	if (!found_boundary) return false;
+    // If no boundary found (shouldn't happen), don't compact
+    if (!found_boundary) return false;
 
-	// Ensure we keep at least the last 2 messages (final user turn + optional assistant).
-	// BUT: only if the kept portion doesn't start with an orphaned tool_use
-	if (keep_from < messages.size() - 2) {
-		// Check if messages[keep_from] is an assistant with tool_use but no following user
-		if (keep_from < messages.size() && messages[keep_from].role == "assistant") {
-			bool has_tool_use = false;
-			for (const auto& b : messages[keep_from].content)
-				if (b.type == ContentBlock::TOOL_USE) { has_tool_use = true; break; }
-			if (has_tool_use && (keep_from + 1 >= messages.size() || messages[keep_from + 1].role != "user")) {
-				// This would leave an orphaned tool_use - don't force the minimum
-			} else {
-				keep_from = messages.size() - 2;
-			}
-		} else {
-			keep_from = messages.size() - 2;
-		}
-	}
+    // Ensure we keep at least the last 2 messages (final user turn + optional assistant).
+    // BUT: only if the kept portion doesn't start with an orphaned tool_use
+    if (keep_from < messages.size() - 2) {
+        // Check if messages[keep_from] is an assistant with tool_use but no following user
+        if (keep_from < messages.size() && messages[keep_from].role == "assistant") {
+            bool has_tool_use = false;
+            for (const auto& b : messages[keep_from].content)
+                if (b.type == ContentBlock::TOOL_USE) { has_tool_use = true; break; }
+            if (has_tool_use && (keep_from + 1 >= messages.size() || messages[keep_from + 1].role != "user")) {
+                // This would leave an orphaned tool_use - don't force the minimum
+            } else {
+                keep_from = messages.size() - 2;
+            }
+        } else {
+            keep_from = messages.size() - 2;
+        }
+    }
 
-	// Build the text to summarize.
-	std::string conversation_text;
-	for (size_t i = 0; i < keep_from; ++i) {
-		conversation_text += "[" + messages[i].role + "]\n";
-		for (const auto& b : messages[i].content) {
-			if (b.type == ContentBlock::TEXT && !b.text.empty()) {
-				conversation_text += b.text + "\n";
-			} else if (b.type == ContentBlock::TOOL_USE) {
-				conversation_text += "(tool_use " + b.tool_name + ")\n";
-			} else if (b.type == ContentBlock::TOOL_RESULT) {
-				std::string out = b.text;
-				if (out.size() > 200) out = out.substr(0, 200) + "...";
-				conversation_text += "(tool_result: " + out + ")\n";
-			} else if (b.type == ContentBlock::IMAGE) {
-				conversation_text += "(image: " + b.image_media_type + ")\n";
-			}
-		}
-	}
+    // Score messages in the to-be-compacted region for importance
+    // This helps us build a better summary prompt that emphasizes key parts
+    struct ScoredBlock {
+        std::string text;
+        double importance;
+        std::string type;  // "user", "assistant", "tool_use", "tool_result"
+    };
+    std::vector<ScoredBlock> scored_blocks;
+    scored_blocks.reserve(keep_from);
 
-	// Cap summary input to avoid blowing up the compaction request itself.
-	if (conversation_text.size() > 60000)
-		conversation_text = conversation_text.substr(conversation_text.size() - 60000);
+    for (size_t i = 0; i < keep_from; ++i) {
+        const auto& msg = messages[i];
+        std::string role_prefix = "[" + msg.role + "]";
+        double base_importance = (msg.role == "user") ? 0.6 : 0.4;
+        
+        for (const auto& b : msg.content) {
+            if (b.type == ContentBlock::TEXT && !b.text.empty()) {
+                ScoredBlock sb;
+                sb.text = b.text;
+                sb.type = msg.role;
+                sb.importance = base_importance;
+                
+                // Boost importance for key content
+                if (b.text.find("error") != std::string::npos ||
+                    b.text.find("fail") != std::string::npos ||
+                    b.text.find("success") != std::string::npos ||
+                    b.text.find("fix") != std::string::npos ||
+                    b.text.find("change") != std::string::npos ||
+                    b.text.find("decision") != std::string::npos) {
+                    sb.importance += 0.2;
+                }
+                // File paths are important
+                if (b.text.find('/') != std::string::npos &&
+                    (b.text.find(".cpp") != std::string::npos ||
+                     b.text.find(".h") != std::string::npos ||
+                     b.text.find(".py") != std::string::npos ||
+                     b.text.find(".js") != std::string::npos ||
+                     b.text.find(".json") != std::string::npos)) {
+                    sb.importance += 0.15;
+                }
+                // Tool results with errors are important
+                if (msg.role == "user" && b.type == ContentBlock::TOOL_RESULT) {
+                    sb.importance += 0.1;
+                }
+                sb.importance = std::min(1.0, sb.importance);
+                scored_blocks.push_back(std::move(sb));
+            } else if (b.type == ContentBlock::TOOL_USE) {
+                ScoredBlock sb;
+                sb.text = "(tool_use " + b.tool_name + ")";
+                sb.type = "tool_use";
+                sb.importance = 0.7;
+                scored_blocks.push_back(std::move(sb));
+            } else if (b.type == ContentBlock::TOOL_RESULT) {
+                ScoredBlock sb;
+                std::string out = b.text;
+                if (out.size() > 300) out = out.substr(0, 300) + "...";
+                sb.text = "(tool_result: " + out + ")";
+                sb.type = "tool_result";
+                sb.importance = b.is_error ? 0.8 : 0.5;
+                scored_blocks.push_back(std::move(sb));
+            } else if (b.type == ContentBlock::IMAGE) {
+                ScoredBlock sb;
+                sb.text = "(image: " + b.image_media_type + ")";
+                sb.type = "image";
+                sb.importance = 0.5;
+                scored_blocks.push_back(std::move(sb));
+            }
+        }
+    }
 
-	if (ui.on_status) ui.on_status("Compacting conversation...");
+    // Build conversation text with importance markers for the summarizer
+    std::string conversation_text;
+    conversation_text.reserve(50000);
+    
+    for (size_t i = 0; i < keep_from; ++i) {
+        const auto& msg = messages[i];
+        conversation_text += "[" + msg.role + "]\n";
+        for (const auto& b : msg.content) {
+            if (b.type == ContentBlock::TEXT && !b.text.empty()) {
+                conversation_text += b.text + "\n";
+            } else if (b.type == ContentBlock::TOOL_USE) {
+                conversation_text += "(tool_use " + b.tool_name + ")\n";
+            } else if (b.type == ContentBlock::TOOL_RESULT) {
+                std::string out = b.text;
+                if (out.size() > 200) out = out.substr(0, 200) + "...";
+                conversation_text += "(tool_result: " + out + ")\n";
+            } else if (b.type == ContentBlock::IMAGE) {
+                conversation_text += "(image: " + b.image_media_type + ")\n";
+            }
+        }
+    }
 
-	// Use summary_model if configured (e.g., smaller/faster model for compaction)
-	std::string summary_model = cfg.summary_model.empty() ? cfg.model : cfg.summary_model;
-	
-	// Use custom prompt if provided
-	std::string summary_prompt = cfg.summary_prompt.empty() 
-		? "You are a conversation summarizer. Produce a concise summary "
-		  "of the conversation below, preserving key decisions, code changes, "
-		  "file paths, and important context. Be factual and brief."
-		: cfg.summary_prompt;
+    // Cap summary input to avoid blowing up the compaction request itself.
+    if (conversation_text.size() > 60000)
+        conversation_text = conversation_text.substr(conversation_text.size() - 60000);
 
-	// Ask the model to summarize.
-	CompletionRequest req;
-	req.model = summary_model;
-	req.system = summary_prompt;
-	req.max_tokens = cfg.summary_max_tokens > 0 ? cfg.summary_max_tokens : 2048;
-	req.use_cache = false;
+    if (ui.on_status) ui.on_status("Compacting conversation...");
 
-	Message sum_user;
-	sum_user.role = "user";
-	ContentBlock tb;
-	tb.type = ContentBlock::TEXT;
-	tb.text = "Summarize this conversation:\n\n" + conversation_text;
-	sum_user.content.push_back(std::move(tb));
-	req.messages.push_back(std::move(sum_user));
+    // Use summary_model if configured (e.g., smaller/faster model for compaction)
+    std::string summary_model = cfg.summary_model.empty() ? cfg.model : cfg.summary_model;
+    
+    // Use custom prompt if provided
+    std::string summary_prompt = cfg.summary_prompt.empty() 
+        ? "You are a conversation summarizer. Produce a concise, structured summary "
+          "of the conversation below, preserving:\n"
+          "1. Key decisions and rationale\n"
+          "2. Code changes and file paths mentioned\n"
+          "3. Errors encountered and their resolutions\n"
+          "4. Tool usage patterns and outcomes\n"
+          "5. Important context for continuing the conversation\n\n"
+          "Format as bullet points. Be factual and brief."
+        : cfg.summary_prompt;
 
-	std::string summary;
-	bool had_error = false;
-	provider.stream(req, [&](const StreamEvent& ev) {
-		if (ev.type == StreamEvent::TEXT_DELTA)
-			summary += ev.text;
-		else if (ev.type == StreamEvent::ERROR)
-			had_error = true;
-	});
+    // Ask the model to summarize.
+    CompletionRequest req;
+    req.model = summary_model;
+    req.system = summary_prompt;
+    req.max_tokens = cfg.summary_max_tokens > 0 ? cfg.summary_max_tokens : 2048;
+    req.use_cache = false;
 
-	if (had_error || summary.empty()) return false;
+    Message sum_user;
+    sum_user.role = "user";
+    ContentBlock tb;
+    tb.type = ContentBlock::TEXT;
+    tb.text = "Summarize this conversation:\n\n" + conversation_text;
+    sum_user.content.push_back(std::move(tb));
+    req.messages.push_back(std::move(sum_user));
 
-	if (result) {
-		result->summary_tokens = provider.estimate_tokens(summary);
-	}
+    std::string summary;
+    bool had_error = false;
+    provider.stream(req, [&](const StreamEvent& ev) {
+        if (ev.type == StreamEvent::TEXT_DELTA)
+            summary += ev.text;
+        else if (ev.type == StreamEvent::ERROR)
+            had_error = true;
+    });
 
-	// Replace old messages with a single user message containing the summary.
-	std::vector<Message> compacted;
-	Message summary_msg;
-	summary_msg.role = "user";
-	ContentBlock sb;
-	sb.type = ContentBlock::TEXT;
-	sb.text = "[Conversation summary — earlier messages were compacted "
-		"to free context space]\n\n" + summary;
-	summary_msg.content.push_back(std::move(sb));
-	compacted.push_back(std::move(summary_msg));
+    if (had_error || summary.empty()) return false;
 
-	// Append the kept tail.
-	for (size_t i = keep_from; i < messages.size(); ++i)
-		compacted.push_back(std::move(messages[i]));
+    if (result) {
+        result->summary_tokens = provider.estimate_tokens(summary);
+    }
 
-	messages = std::move(compacted);
+    // Replace old messages with a single user message containing the summary.
+    std::vector<Message> compacted;
+    Message summary_msg;
+    summary_msg.role = "user";
+    ContentBlock sb;
+    sb.type = ContentBlock::TEXT;
+    sb.text = "[Conversation summary — earlier messages were compacted "
+        "to free context space]\n\n" + summary;
+    summary_msg.content.push_back(std::move(sb));
+    compacted.push_back(std::move(summary_msg));
 
-	if (result) {
-		result->messages_after = static_cast<int>(messages.size());
-		result->tokens_after = estimate_tokens(provider, messages);
-		result->performed = true;
-	}
+    // Append the kept tail.
+    for (size_t i = keep_from; i < messages.size(); ++i)
+        compacted.push_back(std::move(messages[i]));
 
-	if (ui.on_status) {
-		ui.on_status("Compacted: " + std::to_string(keep_from)
-			+ " messages summarized, ~" + std::to_string(result ? result->tokens_before - result->tokens_after : 0)
-			+ " tokens saved");
-	}
-	return true;
+    messages = std::move(compacted);
+
+    if (result) {
+        result->messages_after = static_cast<int>(messages.size());
+        result->tokens_after = estimate_tokens(provider, messages);
+        result->performed = true;
+    }
+
+    if (ui.on_status) {
+        ui.on_status("Compacted: " + std::to_string(keep_from)
+            + " messages summarized, ~" + std::to_string(result ? result->tokens_before - result->tokens_after : 0)
+            + " tokens saved");
+    }
+    return true;
 }
 
 // Backward-compatible overload
