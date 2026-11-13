@@ -33,23 +33,14 @@ void ensure_dir(const std::string& dir) {
 		acc += dir[i];
 		if (dir[i] == '/' && i > 0) ::mkdir(acc.c_str(), 0755);
 	}
-	::mkdir(dir.c_str(), 0755);
+::mkdir(dir.c_str(), 0755);
 }
-
-std::string trim(const std::string& s) {
-	size_t a = s.find_first_not_of(" \t\r\n");
-	if (a == std::string::npos) return {};
-	size_t b = s.find_last_not_of(" \t\r\n");
-	return s.substr(a, b - a + 1);
-}
-
-
 
 bool parse_fm_line(const std::string& line, std::string& key, std::string& val) {
 	size_t colon = line.find(':');
 	if (colon == std::string::npos) return false;
-	key = trim(line.substr(0, colon));
-	val = trim(line.substr(colon + 1));
+	key = pluto::Trim(line.substr(0, colon));
+	val = pluto::Trim(line.substr(colon + 1));
 	return !key.empty();
 }
 
@@ -59,7 +50,7 @@ std::vector<std::string> split_csv(const std::string& s) {
 	std::istringstream ss(s);
 	std::string tok;
 	while (std::getline(ss, tok, ',')) {
-		std::string t = trim(tok);
+		std::string t = pluto::Trim(tok);
 		if (!t.empty()) out.push_back(t);
 	}
 	return out;
@@ -508,7 +499,7 @@ std::string AgentSourceUrl(const std::string& name) {
 	if (!f) return {};
 	std::string url;
 	std::getline(f, url);
-	return trim(url);
+	return pluto::Trim(url);
 }
 
 bool UpdateAgent(const std::string& name, std::string& error) {

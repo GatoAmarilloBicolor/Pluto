@@ -48,14 +48,6 @@ std::string log_file_path() {
 	return settings_dir() + "/access.log";
 }
 
-std::string trim(const std::string& s) {
-	size_t a = 0, b = s.size();
-	while (a < b && (s[a] == ' ' || s[a] == '\t' || s[a] == '\r')) ++a;
-	while (b > a && (s[b - 1] == ' ' || s[b - 1] == '\t' || s[b - 1] == '\r'))
-		--b;
-	return s.substr(a, b - a);
-}
-
 // Normalize a path string by resolving . and .. components.
 // Does NOT touch the filesystem — purely lexical.
 std::string normalize_path(const std::string& path) {
@@ -241,7 +233,7 @@ std::vector<std::string> ListTrustedWorkspaces() {
 	if (!f) return out;
 	std::string line;
 	while (std::getline(f, line)) {
-		std::string s = trim(line);
+		std::string s = pluto::Trim(line);
 		if (!s.empty()) out.push_back(s);
 	}
 	return out;
