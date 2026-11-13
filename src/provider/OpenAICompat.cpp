@@ -477,6 +477,12 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
     OaiStreamState st;
     st.cb = std::move(cb);
 
+    // Local cancel flag whose lifetime covers the entire curl_easy_perform.
+    // Using req.cancel directly would be a use-after-free if the caller's
+    // atomic<bool> is destroyed while libcurl is still running the progress
+    // callback inside multi_runsingle.
+    std::atomic<bool> local_cancel{false};
+
     curl_easy_setopt(curl, CURLOPT_URL, base_url.c_str());
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
@@ -495,13 +501,13 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 300L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
 
-    if (req.cancel) {
+    if (req.cancel || true) {
         curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION,
             [](void* clientp, curl_off_t, curl_off_t, curl_off_t, curl_off_t) -> int {
                 auto cancel = static_cast<std::atomic<bool>*>(clientp);
-                return cancel && cancel->load() ? 1 : 0;
+                return cancel && cancel->load(std::memory_order_relaxed) ? 1 : 0;
             });
-        curl_easy_setopt(curl, CURLOPT_XFERINFODATA, const_cast<std::atomic<bool>*>(req.cancel));
+        curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &local_cancel);
         curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
     }
 
@@ -545,6 +551,8 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
         st.current_tool_id.clear();
         st.current_tool_name.clear();
         st.current_tool_index = -1;
+        // Refresh local cancel from caller's flag each attempt.
+        local_cancel.store(req.cancel ? req.cancel->load(std::memory_order_relaxed) : false);
 
         if (attempt > 1) {
             log_request(LogLevel::INFO, "Retry attempt " + std::to_string(attempt) + "/" + std::to_string(fRetryPolicy.max_attempts) + " for " + base_url);
@@ -630,7 +638,7 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
             info.text = "HTTP " + std::to_string(http_code) + ", retrying in " + std::to_string((retry_delay_ms + 999) / 1000) + "s...";
             try { cb(info); } catch (...) {}
             
-            sleep_ms(retry_delay_ms, req.cancel);
+            sleep_ms(retry_delay_ms, &local_cancel);
             
             if (req.cancel && req.cancel->load(std::memory_order_relaxed)) {
                 StreamEvent err;
