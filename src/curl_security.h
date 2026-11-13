@@ -94,6 +94,15 @@ inline bool ApplyCurlSecurityWithPinning(CURL* curl, const std::string& url) {
     return true;
 }
 
+// Convenience wrapper used by HttpPostHelper — applies centralized TLS settings.
+// Returns true if the handle was configured (or URL is HTTP), false on error.
+inline bool configure_secure_curl(CURL* curl, const std::string& url) {
+    if (url.rfind("https://", 0) == 0) {
+        return ApplyCurlSecurityWithPinning(curl, url);
+    }
+    return true;
+}
+
 // Secure zeroization of sensitive memory
 inline void SecureZero(void* ptr, size_t len) {
     if (!ptr || len == 0) return;
