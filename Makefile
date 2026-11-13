@@ -12,6 +12,14 @@ else
     LDFLAGS  = -Wl,-rpath,@loader_path/mock_libs
 endif
 
+# Optional sanitizers for debug builds (Haiku): make SANITIZE=1
+ifeq ($(SANITIZE),1)
+    SANITIZE_FLAGS = -fsanitize=address,undefined -fno-omit-frame-pointer -O0 -g
+    CXXFLAGS += $(SANITIZE_FLAGS)
+    LDLIBS   += -fsanitize=address,undefined
+    LDFLAGS  += -fsanitize=address,undefined
+endif
+
 PKG_NAME    = pluto
 PKG_VERSION = 0.7.1
 PKG_ARCH    = x86_64
