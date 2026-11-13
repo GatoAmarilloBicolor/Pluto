@@ -252,12 +252,9 @@ std::string SessionStore::save(std::string path,
 		int64_t now = now_unix();
 		// 4-hex random suffix to avoid collision between concurrent instances.
 		static thread_local std::mt19937 rng(std::random_device{}());
-		char buf[80];
-		// Use PRIu64 for portable 64-bit integer formatting
-		std::snprintf(buf, sizeof(buf), "%" PRIu64 "-%s-%04x",
-			(uint64_t)now, slug.c_str(),
-			(unsigned)(rng() & 0xffff));
-		path = sessions_dir() + "/" + buf + ".jsonl";
+		char hex[5];
+		std::snprintf(hex, sizeof(hex), "%04x", (unsigned)(rng() & 0xffff));
+		path = sessions_dir() + "/" + std::to_string(now) + "-" + slug + "-" + hex + ".jsonl";
 		created_ts = now;
 	}
 

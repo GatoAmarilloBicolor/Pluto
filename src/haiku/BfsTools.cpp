@@ -75,9 +75,10 @@ std::string format_attr_value(uint32_t type, const void* data, ssize_t size) {
 #ifdef __HAIKU__
 	switch (type) {
 		case B_STRING_TYPE: {
+			if (!data || size <= 0) return "";
 			const char* s = static_cast<const char*>(data);
 			ssize_t len = size;
-			if (len > 0 && s[len - 1] == 0) --len;
+			if (s[len - 1] == 0) --len;
 			return std::string(s, len);
 		}
 		case B_INT32_TYPE: {
@@ -101,7 +102,8 @@ std::string format_attr_value(uint32_t type, const void* data, ssize_t size) {
 			return std::to_string(v);
 		}
 		case B_BOOL_TYPE: {
-			bool v = size > 0 && *static_cast<const char*>(data) != 0;
+			if (!data || size <= 0) return "false";
+			bool v = *static_cast<const char*>(data) != 0;
 			return v ? "true" : "false";
 		}
 		default: {
@@ -175,6 +177,13 @@ public:
 		if (node.GetAttrInfo(name.c_str(), &info) != B_OK) {
 			r.is_error = true;
 			r.output = "attribute not found: " + name;
+			return r;
+		}
+		// Reject absurdly large attributes to prevent allocation attacks.
+		constexpr ssize_t kMaxAttrSize = 1024 * 1024; // 1 MB
+		if (info.size > kMaxAttrSize) {
+			r.is_error = true;
+			r.output = "attribute too large: " + std::to_string(info.size) + " bytes";
 			return r;
 		}
 		std::vector<char> buf(info.size > 0 ? info.size : 1);

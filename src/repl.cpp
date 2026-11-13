@@ -159,10 +159,9 @@ bool read_line(std::string& out) {
 		}
 		return true;
 	}
-	// Fallback: plain fgets (e.g. if editline init failed).
-	char buf[4096];
-	if (!std::fgets(buf, sizeof(buf), stdin)) return false;
-	out = buf;
+	// Fallback: plain getline (e.g. if editline init failed).
+	// std::getline reads complete lines with no size limit — no truncation.
+	if (!std::getline(std::cin, out)) return false;
 	while (!out.empty() && (out.back() == '\n' || out.back() == '\r'))
 		out.pop_back();
 	return true;

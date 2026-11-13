@@ -44,7 +44,7 @@ PermissionFn InteractivePrompt() {
 		if (always->count(tool.name())) return Permission::Allow;
 		std::printf("  %s[y]allow  [a]always  [n]deny: %s", kYellow, kReset);
 		std::fflush(stdout);
-		char buf[32];
+		char buf[256];
 		// Use poll() to check for stdin input with timeout, allowing cancel flag check
 		struct pollfd pfd = { STDIN_FILENO, POLLIN, 0 };
 		while (true) {
