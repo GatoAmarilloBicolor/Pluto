@@ -455,7 +455,7 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
         return;
     }
 
-    CURL* curl = curl_easy_init();
+    CURL* curl = ensure_curl(base_url);
     if (!curl) {
         StreamEvent err;
         err.type = StreamEvent::ERROR;
@@ -463,7 +463,6 @@ void OpenAICompatProvider::stream(const CompletionRequest& req, StreamCallback c
         cb(err);
         return;
     }
-    CurlGuard guard(curl);
 
     HeadersGuard headers;
     headers.append("Content-Type: application/json");

@@ -376,16 +376,6 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
         return;
     }
 
-    CURL* curl = curl_easy_init();
-    if (!curl) {
-        StreamEvent err;
-        err.type = StreamEvent::ERROR;
-        err.error = "curl_easy_init failed";
-        cb(err);
-        return;
-    }
-    CurlGuard guard(curl);
-
     HeadersGuard headers;
     headers.append("Content-Type: application/json");
     
@@ -403,6 +393,15 @@ void AnthropicProvider::stream(const CompletionRequest& req, StreamCallback cb) 
     if (url.empty()) url = "https://api.anthropic.com";
     if (url.back() == '/') url.pop_back();
     url += "/v1/messages";
+
+    CURL* curl = ensure_curl(url);
+    if (!curl) {
+        StreamEvent err;
+        err.type = StreamEvent::ERROR;
+        err.error = "curl_easy_init failed";
+        cb(err);
+        return;
+    }
 
     // Apply TLS security (peer + host verification, CA bundle)
     ApplyCurlSecurity(curl, url);
