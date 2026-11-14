@@ -45,7 +45,7 @@ HttpPostResult http_post(const HttpPostOptions& opts) {
         curl_easy_setopt(curl, CURLOPT_RESOLVE, resolve_list);
     }
 
-    configure_secure_curl(curl);
+    configure_secure_curl(curl, opts.url);
 
     if (headers_list) {
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers_list);
