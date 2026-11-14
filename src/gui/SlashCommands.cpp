@@ -10,6 +10,7 @@
 #include <TextView.h>
 #include <image.h>
 
+#include <curl/curl.h>
 #include <ctime>
 #include <thread>
 
@@ -851,6 +852,7 @@ std::thread([messenger, input_arg]() {
 			"  /help              show this help\n"
 			"\n"
 			" /systemone show System One (Laya) status and tools\n"
+			" /doctor          network/TLS health check against base_url\n"
 			"Custom commands from ~/config/settings/pluto/commands/\n"
 			"are also available as /<name> [args].\n\n",
 			ui_color(B_DOCUMENT_TEXT_COLOR));
@@ -875,6 +877,59 @@ std::thread([messenger, input_arg]() {
 		_Append("  systemone_decide_program  - full pipeline (token-efficient)\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		_Append("Token savings: 5-10x fewer tokens by delegating to System One\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		_Append("Memory: persistent topic memory (remember/recall/consult)\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		return true;
+	}
+
+	// /doctor — network/TLS health check against the configured base_url.
+	if (text == "/doctor") {
+		_Append("Pluto Doctor — network/TLS health check\n", ui_color(B_DOCUMENT_TEXT_COLOR), B_BOLD_FACE);
+		_Append("=========================================\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+
+		if (!fProvider) {
+			_Append("no provider configured\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+			return true;
+		}
+
+		std::string url = fProvider->base_url();
+		if (url.empty()) url = "https://api.anthropic.com";
+		if (url.back() == '/') url.pop_back();
+		url += (url.find("/v1/") == std::string::npos) ? "/v1/messages" : "";
+
+		_Append("target: " + url + "\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+
+		CURL* curl = curl_easy_init();
+		if (!curl) {
+			_Append("error: curl_easy_init failed\n\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+			return true;
+		}
+
+		// Apply centralized TLS security (peer + host verification + CA bundle)
+		ApplyCurlSecurity(curl, url);
+
+		curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+		curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);            // HEAD only
+		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
+		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
+		curl_easy_setopt(curl, CURLOPT_USERAGENT, "Pluto/0.7.1 doctor");
+
+		CURLcode rc = curl_easy_perform(curl);
+
+		if (rc != CURLE_OK) {
+			_Append("curl error: " + std::string(curl_easy_strerror(rc)) + "\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		} else {
+			long http_code = 0;
+			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+			_Append("HTTP status: " + std::to_string(http_code) + "\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+			if (http_code >= 200 && http_code < 300)
+				_Append("status: OK — TLS and connectivity are working\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+			else if (http_code == 401 || http_code == 403)
+				_Append("status: reachable but auth rejected (check API key)\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+			else
+				_Append("status: reachable but unexpected HTTP " + std::to_string(http_code) + "\n", ui_color(B_DOCUMENT_TEXT_COLOR));
+		}
+
+		curl_easy_cleanup(curl);
+		_Append("\n", ui_color(B_DOCUMENT_TEXT_COLOR));
 		return true;
 	}
 

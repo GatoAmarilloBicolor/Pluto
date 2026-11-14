@@ -100,9 +100,7 @@ struct RetryPolicy {
         CURLE_COULDNT_RESOLVE_HOST,
         CURLE_PARTIAL_FILE,
         CURLE_RECV_ERROR,
-        CURLE_SEND_ERROR,
-        CURLE_SSL_CONNECT_ERROR,
-        CURLE_SSL_CERTPROBLEM
+        CURLE_SEND_ERROR
     };
     
     // Check if an HTTP status code should be retried
