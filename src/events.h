@@ -139,6 +139,7 @@ public:
     // Bail: stop on first non-null result
     template <typename Result>
     std::optional<Result> bail(Args... args, std::function<std::optional<Result>(Args...)> mapper) const {
+        (void)mapper;
         std::vector<std::function<std::optional<Result>(Args...)>> to_call;
         {
             std::lock_guard<std::mutex> lock(mutex_);

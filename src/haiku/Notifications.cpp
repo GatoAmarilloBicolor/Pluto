@@ -5,7 +5,7 @@
 #ifdef __HAIKU__
 #include <Application.h>
 #include <Notification.h>
-#include <String.h>
+#include <string.h>
 #include <TranslationUtils.h>
 #include <stdio.h>
 #include <memory>

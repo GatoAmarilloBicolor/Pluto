@@ -75,6 +75,7 @@ public:
 
     // Estimate tokens for a message role (system, user, assistant)
     static int estimate_role(const std::string& role, Encoding encoding) {
+        (void)encoding;
         // Role tokens: "system", "user", "assistant" + formatting overhead
         static const std::unordered_map<std::string, int> role_tokens = {
             {"system", 3}, {"user", 2}, {"assistant", 2}, {"tool", 2}
@@ -99,6 +100,8 @@ public:
 
     // Estimate tokens for image (fixed cost based on detail level)
     static int estimate_image(const std::string& media_type, int detail = 0) {
+        (void)media_type;
+        (void)detail;
         // Low detail: ~85 tokens, High detail: ~170-255 tokens
         // For simplicity, use fixed cost
         return 85;
@@ -112,6 +115,7 @@ public:
 
     // Estimate tokens for audio
     static int estimate_audio(const std::string& format) {
+        (void)format;
         // Rough estimate: ~50 tokens per audio file reference
         return 50;
     }

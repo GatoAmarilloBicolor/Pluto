@@ -179,7 +179,7 @@ PLUTO_RSRC_LINK =
 endif
 
 Pluto_cli: $(CORE_OBJS) $(CLI_OBJS) $(PLUTO_RSRC_DEP)
-	$(CXX) $(CXXFLAGS) -o $@ $(CORE_OBJS) $(CLI_OBJS) $(LDLIBS) -ltranslation $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -o $@ $(CORE_OBJS) $(CLI_OBJS) $(LDLIBS) $(LDFLAGS)
 	$(PLUTO_RSRC_LINK)
 
 # Compile md4c (C file) separately.
@@ -188,7 +188,7 @@ src/gui/textview/md4c.o: src/gui/textview/md4c.c
 	$(CC) -Wall -O2 -MMD -MP -c -o $@ $<
 
 Pluto: $(CORE_OBJS) $(GUI_OBJS) $(MD4C_OBJ) $(PLUTO_RSRC_DEP)
-	$(CXX) $(CXXFLAGS) -o $@ $(CORE_OBJS) $(GUI_OBJS) $(MD4C_OBJ) $(LDLIBS) -ltracker -ltranslation
+	$(CXX) $(CXXFLAGS) -o $@ $(CORE_OBJS) $(GUI_OBJS) $(MD4C_OBJ) $(LDLIBS) -ltracker
 	$(PLUTO_RSRC_LINK)
 
 # Tracker add-on (shared library).
@@ -341,7 +341,7 @@ test_tabs: tests/test_tabs.cpp src/gui/ConversationView.o \
            src/mcp/Transport.o src/mcp/HttpTransport.o \
            src/mcp/StdioTransport.o src/mcp/SseSubscriber.o \
            src/mcp/SseTransport.o
-	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDLIBS) -ltranslation
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDLIBS)
 
 # Compile GUI helper modules (used by tests independently of the full GUI).
 src/gui/ToolBlockManager.o: src/gui/ToolBlockManager.cpp src/gui/ToolBlockManager.h

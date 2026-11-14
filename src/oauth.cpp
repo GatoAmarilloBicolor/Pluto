@@ -51,7 +51,6 @@ static std::mutex g_oauth_mutex;
 static const size_t kKeySize = 32;      // 256 bits
 static const size_t kIvSize = 12;       // 96 bits for GCM
 static const size_t kTagSize = 16;      // 128 bits
-static const size_t kSaltSize = 16;     // For PBKDF2
 
 std::string EncryptionKeyPath() {
     return HomeDir() + "/config/settings/pluto/oauth-key";
@@ -279,6 +278,10 @@ static std::vector<std::string> SplitString(const std::string& s, char delim) {
 // Returns true if signature is valid, false otherwise.
 static bool VerifyJWTSignature(const std::string& jwt, const std::string& header_b64,
                                 const std::string& payload_b64, const std::string& sig_b64) {
+    (void)jwt;
+    (void)header_b64;
+    (void)payload_b64;
+    (void)sig_b64;
     // TODO: Implement full JWKS fetch and RS256 verification
     // For now, we validate structure and claims; signature verification requires:
     // 1. Fetch JWKS from https://api.anthropic.com/.well-known/jwks.json

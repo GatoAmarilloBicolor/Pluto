@@ -226,6 +226,7 @@ static void oai_emit_tool_end(OaiStreamState& st, const std::string& full_json, 
 }
 
 static void oai_emit_document(OaiStreamState& st, int index) {
+    (void)index;
     StreamEvent ev;
     ev.type = StreamEvent::DOCUMENT_BLOCK;
     ev.document_data = st.current_document_data;

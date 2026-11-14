@@ -538,7 +538,6 @@ std::unique_ptr<Provider> CreateProvider(const Config& cfg) {
 	std::string api_key_env = cfg.api_key_env;
 	int max_tokens = cfg.max_tokens;
 	bool cache = cfg.cache;
-	int context_window = cfg.context_window;
 
 	auto it = cfg.providers.find(provider_name);
 	if (it != cfg.providers.end()) {
@@ -549,7 +548,6 @@ std::unique_ptr<Provider> CreateProvider(const Config& cfg) {
 		api_key_env = p.api_key_env;
 		max_tokens = p.max_tokens;
 		cache = p.cache;
-		if (p.context_window > 0) context_window = p.context_window;
 	} else {
 		// Fallback to legacy flat config
 		provider_type = cfg.provider;

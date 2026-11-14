@@ -14,7 +14,7 @@
 #include <FindDirectory.h>
 #include <Node.h>
 #include <OS.h>
-#include <String.h>
+#include <string.h>
 #endif
 
 #include <sys/stat.h>

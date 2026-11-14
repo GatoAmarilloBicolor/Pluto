@@ -31,7 +31,7 @@ public:
     void populate(ToolRegistry& registry) const;
 
 private:
-    const Config* config_;
+    [[maybe_unused]] const Config* config_;
 };
 
 // Tools plugin - mounts the tools capability
@@ -77,6 +77,7 @@ public:
     ::std::vector<::std::string> depends_on() const override { return {}; }
     
     void apply(PluginContext& ctx) override {
+        (void)ctx;
         // Provider is set by the application based on config
         // This plugin just declares the capability
     }
@@ -98,6 +99,7 @@ public:
     ::std::vector<::std::string> depends_on() const override { return {}; }
     
     void apply(PluginContext& ctx) override {
+        (void)ctx;
         // Session store is created by the application
     }
     
@@ -118,6 +120,7 @@ public:
     ::std::vector<::std::string> depends_on() const override { return {}; }
     
     void apply(PluginContext& ctx) override {
+        (void)ctx;
         // Config is provided by the application
     }
     

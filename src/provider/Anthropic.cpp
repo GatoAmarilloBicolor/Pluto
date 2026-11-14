@@ -176,6 +176,7 @@ static void emit_tool_end(StreamState& st, const std::string& full_json, int ind
 }
 
 static void emit_document_block(StreamState& st, int index) {
+    (void)index;
     StreamEvent ev;
     ev.type = StreamEvent::DOCUMENT_BLOCK;
     ev.document_data = st.document_data;

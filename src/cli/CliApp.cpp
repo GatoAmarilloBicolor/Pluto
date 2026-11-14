@@ -521,7 +521,7 @@ int CliApp::run() {
     if (!provider_) return 2;
     
     // Build tool registry
-    tools_ = std::make_unique<ToolRegistry>(std::move(ToolRegistryBuilder::build(cfg_)));
+    tools_ = std::make_unique<ToolRegistry>(ToolRegistryBuilder::build(cfg_));
     
     // MCP bootstrap
     mcp_manager_ = McpBootstrap::create(*tools_, prompt_project_approval);
