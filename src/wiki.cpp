@@ -510,10 +510,8 @@ int RunWikiCli(int argc, char** argv) {
 				dup2(pipefd[1], STDOUT_FILENO);
 				dup2(pipefd[1], STDERR_FILENO);
 				close(pipefd[1]);
-				std::vector<char*> args;
-				for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
-				args.push_back(nullptr);
-				execvp(args[0], args.data());
+			auto args = make_argv(argv);
+			execvp(args[0], args.data());
 				_exit(127);
 			}
 			close(pipefd[1]);

@@ -610,11 +610,8 @@ int RunRoutineCli(int argc, char** argv) {
 		pid_t pid = fork();
 		if (pid < 0) return -1;
 		if (pid == 0) {
-			std::vector<char*> args;
-			args.reserve(run_argv.size() + 1);
-			for (const auto& s : run_argv) args.push_back(const_cast<char*>(s.c_str()));
-			args.push_back(nullptr);
-			execvp(args[0], args.data());
+		auto args = make_argv(run_argv);
+		execvp(args[0], args.data());
 			_exit(127);
 		}
 		int status = 0;

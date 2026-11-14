@@ -367,51 +367,47 @@ void CliApp::handle_subcommands() {
     }
     
     if (mcp_command_) {
-        std::vector<char*> args;
-        args.push_back(const_cast<char*>("pluto"));
-        args.push_back(const_cast<char*>("mcp"));
-        if (!mcp_subcommand_.empty()) args.push_back(const_cast<char*>(mcp_subcommand_.c_str()));
-        for (auto& a : mcp_args_) args.push_back(const_cast<char*>(a.c_str()));
-        args.push_back(nullptr);
-        pluto::RunMcpCli(args.size() - 1, args.data());
+        std::vector<std::string> mcp_args = {"pluto", "mcp"};
+        if (!mcp_subcommand_.empty()) mcp_args.push_back(mcp_subcommand_);
+        for (auto& a : mcp_args_) mcp_args.push_back(a);
+        auto args = make_argv(mcp_args);
+        pluto::RunMcpCli(static_cast<int>(args.size() - 1), args.data());
         return;
     }
     
     if (stats_command_) {
-        std::vector<char*> args = {const_cast<char*>("pluto"), const_cast<char*>("stats"), nullptr};
-        pluto::RunStatsCli(2, args.data());
+        auto args = make_argv({"pluto", "stats"});
+        pluto::RunStatsCli(static_cast<int>(args.size() - 1), args.data());
         return;
     }
     
     if (routine_command_) {
-        std::vector<char*> args = {const_cast<char*>("pluto"), const_cast<char*>("routine"), nullptr};
-        pluto::RunRoutineCli(2, args.data());
+        auto args = make_argv({"pluto", "routine"});
+        pluto::RunRoutineCli(static_cast<int>(args.size() - 1), args.data());
         return;
     }
     
     if (schedule_command_) {
-        std::vector<char*> args = {const_cast<char*>("pluto"), const_cast<char*>("schedule"), nullptr};
-        pluto::RunScheduleCli(2, args.data());
+        auto args = make_argv({"pluto", "schedule"});
+        pluto::RunScheduleCli(static_cast<int>(args.size() - 1), args.data());
         return;
     }
     
     if (wiki_command_) {
-        std::vector<char*> args = {const_cast<char*>("pluto"), const_cast<char*>("wiki"), nullptr};
-        pluto::RunWikiCli(2, args.data());
+        auto args = make_argv({"pluto", "wiki"});
+        pluto::RunWikiCli(static_cast<int>(args.size() - 1), args.data());
         return;
     }
     
     if (beapi_command_) {
-        std::vector<char*> args = {const_cast<char*>("pluto"), const_cast<char*>("beapi"), nullptr};
-        pluto::RunBeapiCli(2, args.data());
+        auto args = make_argv({"pluto", "beapi"});
+        pluto::RunBeapiCli(static_cast<int>(args.size() - 1), args.data());
         return;
     }
     
     if (agent_command_) {
-        std::vector<char*> args;
-        args.push_back(const_cast<char*>("pluto"));
-        args.push_back(const_cast<char*>("agent"));
-        pluto::RunAgentStoreCli(0, nullptr);
+        auto args = make_argv({"pluto", "agent"});
+        pluto::RunAgentStoreCli(static_cast<int>(args.size() - 1), args.data());
         return;
     }
     

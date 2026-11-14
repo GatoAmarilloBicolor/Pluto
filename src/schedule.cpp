@@ -343,10 +343,7 @@ int RunScheduleCli(int argc, char** argv) {
 		if (!sched.model.empty()) std::printf(" --model %s", sched.model.c_str());
 		std::printf("\n");
 
-		std::vector<char*> args;
-		args.reserve(argv_run.size() + 1);
-		for (const auto& s : argv_run) args.push_back(const_cast<char*>(s.c_str()));
-		args.push_back(nullptr);
+		auto args = make_argv(argv_run);
 		execvp(args[0], args.data());
 		// If execvp returns, it failed
 		std::fprintf(stderr, "execvp failed: %s\n", strerror(errno));

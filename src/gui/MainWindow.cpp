@@ -3107,8 +3107,8 @@ void MainWindow::MessageReceived(BMessage* msg) {
 						// Open URL without shell to prevent injection.
 						pid_t pid = fork();
 						if (pid == 0) {
-							char* args[] = {const_cast<char*>("open"), const_cast<char*>(lr.url.c_str()), nullptr};
-							execvp("open", args);
+							auto args = make_argv({"open", lr.url});
+							execvp("open", args.data());
 							_exit(127);
 						}
 					}
@@ -4912,9 +4912,7 @@ static std::string _ProbeMediaInfo(const std::string& path,
 				dup2(pipefd[1], STDOUT_FILENO);
 				dup2(pipefd[1], STDERR_FILENO);
 				close(pipefd[1]);
-				std::vector<char*> args;
-				for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
-				args.push_back(nullptr);
+				auto args = make_argv(argv);
 				execvp(args[0], args.data());
 				_exit(127);
 			}

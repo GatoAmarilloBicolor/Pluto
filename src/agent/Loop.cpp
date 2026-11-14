@@ -1,4 +1,5 @@
 #include "Loop.h"
+#include "../util.h"
 #include "../rag.h"
 #include "../haiku/Notifications.h"
 #include "../systemone/SystemOneClient.h"
@@ -132,10 +133,7 @@ int run_hook_safe(const char* cmd, const char* env_name, const std::string& env_
 	if (pid == 0) {
 		// Child: set env var safely, then exec directly (no shell)
 		::setenv(env_name, env_value.c_str(), 1);
-		std::vector<char*> args;
-		args.reserve(argv.size() + 1);
-		for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
-		args.push_back(nullptr);
+		auto args = make_argv(argv);
 		execvp(args[0], args.data());
 		::_exit(127); // exec failed
 	}

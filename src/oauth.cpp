@@ -627,8 +627,8 @@ bool OAuthLogin() {
     std::fprintf(stderr, " -> %s\n", auth_url.c_str());
 
     // Try Haiku's be_roster first (global variable, declared in Roster.h)
-    char* argv[] = {const_cast<char*>("open"), const_cast<char*>(auth_url.c_str()), nullptr};
-    if (be_roster && be_roster->Launch("text/html", 1, const_cast<const char**>(argv)) == B_OK) {
+    auto argv = make_argv({"open", auth_url});
+    if (be_roster && be_roster->Launch("text/html", 1, const_cast<const char**>(argv.data())) == B_OK) {
         // Success
     } else {
         // Fallback: fork/exec open command (no shell)

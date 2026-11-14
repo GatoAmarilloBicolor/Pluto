@@ -109,10 +109,7 @@ public:
             if (timeout_secs > 0) alarm(timeout_secs);
             
             // Execute directly via execvp (no shell)
-            std::vector<char*> args;
-            args.reserve(exec_argv.size() + 1);
-            for (const auto& s : exec_argv) args.push_back(const_cast<char*>(s.c_str()));
-            args.push_back(nullptr);
+            auto args = make_argv(exec_argv);
             execvp(args[0], args.data());
             _exit(127); // exec failed
         }

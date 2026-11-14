@@ -390,10 +390,7 @@ void ScheduleDialog::_RunSelected() {
 	// Fork and exec Terminal directly (no std::system)
 	pid_t pid = fork();
 	if (pid == 0) {
-		std::vector<char*> args;
-		args.reserve(argv.size() + 1);
-		for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
-		args.push_back(nullptr);
+		auto args = make_argv(argv);
 		execvp(args[0], args.data());
 		_exit(127);
 	}

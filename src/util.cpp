@@ -88,11 +88,8 @@ PipeGuard::PipeGuard(const char* command, const char* mode)
         dup2(pipefd[1], STDOUT_FILENO);
         dup2(pipefd[1], STDERR_FILENO);
         ::close(pipefd[1]);
-        std::vector<char*> args;
-        args.reserve(argv.size() + 1);
-        for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
-        args.push_back(nullptr);
-        execvp(args[0], args.data());
+		auto args = make_argv(argv);
+		execvp(args[0], args.data());
         _exit(127);
     }
 
@@ -164,10 +161,7 @@ static int execvp_with_env(const std::vector<std::string>& argv, const char* env
 		if (env_name && !env_value.empty()) {
 			::setenv(env_name, env_value.c_str(), 1);
 		}
-		std::vector<char*> args;
-		args.reserve(argv.size() + 1);
-		for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
-		args.push_back(nullptr);
+		auto args = make_argv(argv);
 		execvp(args[0], args.data());
 		::_exit(127);
 	}
@@ -210,10 +204,7 @@ int RunCommandCapture(const char* cmd, std::string& output) {
 		dup2(pipefd[1], STDOUT_FILENO);
 		dup2(pipefd[1], STDERR_FILENO);
 		close(pipefd[1]);
-		std::vector<char*> args;
-		args.reserve(argv.size() + 1);
-		for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
-		args.push_back(nullptr);
+		auto args = make_argv(argv);
 		execvp(args[0], args.data());
 		_exit(127);
 	}
@@ -251,10 +242,7 @@ int execvp_capture(const std::vector<std::string>& argv, std::string& output) {
 		dup2(pipefd[1], STDOUT_FILENO);
 		dup2(pipefd[1], STDERR_FILENO);
 		close(pipefd[1]);
-		std::vector<char*> args;
-		args.reserve(argv.size() + 1);
-		for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
-		args.push_back(nullptr);
+		auto args = make_argv(argv);
 		execvp(args[0], args.data());
 		_exit(127);
 	}
@@ -320,10 +308,7 @@ int execvp_capture_cwd(const std::string& cwd, const std::vector<std::string>& a
 		dup2(pipefd[1], STDOUT_FILENO);
 		dup2(pipefd[1], STDERR_FILENO);
 		close(pipefd[1]);
-		std::vector<char*> args;
-		args.reserve(argv.size() + 1);
-		for (const auto& s : argv) args.push_back(const_cast<char*>(s.c_str()));
-		args.push_back(nullptr);
+		auto args = make_argv(argv);
 		execvp(args[0], args.data());
 		_exit(127);
 	}

@@ -389,11 +389,8 @@ bool InstallAgentFromUrl(const std::string& url, std::string& error) {
         return false;
     }
     if (pid == 0) {
-        std::vector<char*> args;
-        args.reserve(git_argv.size() + 1);
-        for (const auto& s : git_argv) args.push_back(const_cast<char*>(s.c_str()));
-        args.push_back(nullptr);
-        execvp(args[0], args.data());
+		auto args = make_argv(git_argv);
+		execvp(args[0], args.data());
         _exit(127);
     }
     int status = 0;
@@ -538,11 +535,8 @@ bool UpdateAgent(const std::string& name, std::string& error) {
         return false;
     }
     if (pid == 0) {
-        std::vector<char*> args;
-        args.reserve(git_argv.size() + 1);
-        for (const auto& s : git_argv) args.push_back(const_cast<char*>(s.c_str()));
-        args.push_back(nullptr);
-        execvp(args[0], args.data());
+		auto args = make_argv(git_argv);
+		execvp(args[0], args.data());
         _exit(127);
     }
     int status = 0;
@@ -778,11 +772,8 @@ int RunAgentStoreCli(int argc, char** argv) {
         return 1;
     }
     if (pid == 0) {
-        std::vector<char*> args;
-        args.reserve(git_argv.size() + 1);
-        for (const auto& s : git_argv) args.push_back(const_cast<char*>(s.c_str()));
-        args.push_back(nullptr);
-        execvp(args[0], args.data());
+		auto args = make_argv(git_argv);
+		execvp(args[0], args.data());
         _exit(127);
     }
     int status = 0;
@@ -1097,11 +1088,8 @@ bool InstallAgentFromRegistry(const std::string& name, std::string& error) {
         return false;
     }
     if (pid == 0) {
-        std::vector<char*> args;
-        args.reserve(git_argv.size() + 1);
-        for (const auto& s : git_argv) args.push_back(const_cast<char*>(s.c_str()));
-        args.push_back(nullptr);
-        execvp(args[0], args.data());
+		auto args = make_argv(git_argv);
+		execvp(args[0], args.data());
         _exit(127);
     }
     int status = 0;
