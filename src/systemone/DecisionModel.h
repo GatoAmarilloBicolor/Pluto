@@ -309,7 +309,7 @@ public:
         [[maybe_unused]] const std::map<std::string, std::string>& checks,
         [[maybe_unused]] double threshold = 0.5) {
         GuardResult r;
-        r.risk = "LOW";
+        r.risk = "UNKNOWN";
         r.probability = 0.0;
         return r;
     }
@@ -408,9 +408,10 @@ public:
         [[maybe_unused]] const std::map<std::string, std::string>& tags,
         [[maybe_unused]] const std::string& urgent_question = "Does this need a human within the hour?") {
         TriageResult r;
-        r.guard_risk = "LOW";
+        r.guard_risk = "UNKNOWN";
         r.urgent = false;
         r.probability = 0.0;
+        r.reasoning = "Not implemented";
         return r;
     }
 
@@ -421,9 +422,10 @@ public:
         [[maybe_unused]] const std::map<std::string, std::string>& tags,
         [[maybe_unused]] const std::string& urgent_question = "Does this need a human within the hour?") {
         FullTriageResult r;
-        r.guard_risk = "LOW";
+        r.guard_risk = "UNKNOWN";
         r.urgent = false;
         r.probability = 0.0;
+        r.reasoning = "Not implemented";
         return r;
     }
 

@@ -440,42 +440,20 @@ TriageResult LocalDecisionModel::triage(
 }
 
 FullTriageResult LocalDecisionModel::triage_full(
-    [[maybe_unused]] const std::string& text,
-    [[maybe_unused]] const std::map<std::string, std::string>& routes,
-    [[maybe_unused]] const std::map<std::string, std::string>& tags,
-    [[maybe_unused]] const std::string& urgent_question) {
+    const std::string& text,
+    const std::map<std::string, std::string>& routes,
+    const std::map<std::string, std::string>& tags,
+    const std::string& urgent_question) {
 
     FullTriageResult result;
-    result.guard_risk = "LOW";
 
-    double best_score = 0.0;
-    (void)best_score;
-    result.route = best_route(text, routes, best_score);
-
-    bool toxic = contains_keyword(text, {"hate","kill","suicide","abuse","harass",
-        "threat","violence","attack","stupid","idiot"});
-    bool pii = contains_keyword(text, {"ssn","social security","credit card","password",
-        "api key","secret","token","private key","address",
-        "phone number","email","dob","date of birth"});
-    if (toxic || pii) {
-        result.guard_risk = "HIGH";
-    } else if (contains_keyword(text, {"urgent","emergency","immediate","asap","critical",
-        "production","down","outage","breach","security",
-        "human","manager","escalate","now","right now"})) {
-        result.guard_risk = "MEDIUM";
-    }
-
-    result.urgent = contains_keyword(text, {"urgent","emergency","immediate","asap","critical",
-        "production","down","outage","breach","security",
-        "human","manager","escalate","now","right now"});
-    result.probability = result.urgent ? 0.8 : 0.3;
-
-    for (const auto& [tag, desc] : tags) {
-        if (keyword_overlap(text, tag) > 0.2 ||
-            keyword_overlap(text, desc) > 0.2) {
-            result.tags.push_back(tag);
-        }
-    }
+    // Delegate core triage logic to triage() to avoid duplication
+    TriageResult base = triage(text, routes, tags, urgent_question);
+    result.guard_risk = base.guard_risk;
+    result.route = base.route;
+    result.tags = base.tags;
+    result.urgent = base.urgent;
+    result.probability = base.probability;
 
     if (result.urgent) {
         result.recommended_actions.push_back("escalate_to_human");
@@ -534,18 +512,12 @@ PriorityDecisionResult LocalDecisionModel::decide_priority(
     const std::string& text) {
 
     PriorityDecisionResult result;
-    std::map<std::string, std::string> categories;
-    categories["critical"] = "critical emergency, production down";
-    categories["high"] = "high priority, urgent, important";
-    categories["medium"] = "medium priority, normal";
-    categories["low"] = "low priority, minor";
-
-    auto r = classify(text, categories, 0.3);
-    result.priority = r.label;
-    result.score = r.probability;
-    result.should_escalate = (r.label == "critical" || r.label == "high");
-    result.reasoning = "Classified as " + r.label + " with confidence " +
-        std::to_string(r.confidence);
+    auto r = classify_priority(text);
+    result.priority = r.priority;
+    result.score = r.score;
+    result.should_escalate = r.escalate;
+    result.reasoning = "Classified as " + r.priority + " with confidence " +
+        std::to_string(r.score);
     return result;
 }
 

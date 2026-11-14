@@ -37,6 +37,57 @@ double extract_num(const std::string& json, const std::string& key, double def =
     try { return std::stod(s); } catch (...) { return def; }
 }
 
+// Extract a map<string,string> from a JSON object value for the given key.
+// Returns empty map if key not found or value is not an object.
+std::map<std::string, std::string> extract_map(const std::string& json, const std::string& key) {
+    std::map<std::string, std::string> result;
+    std::string search = "\"" + key + "\"";
+    size_t pos = json.find(search);
+    if (pos == std::string::npos) return result;
+    pos = json.find(':', pos);
+    if (pos == std::string::npos) return result;
+    pos++;
+    while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t')) pos++;
+    if (pos >= json.size() || json[pos] != '{') return result;
+
+    size_t start = pos;
+    int depth = 0;
+    size_t i = start;
+    while (i < json.size()) {
+        if (json[i] == '{') depth++;
+        else if (json[i] == '}') {
+            depth--;
+            if (depth == 0) { i++; break; }
+        }
+        i++;
+    }
+    std::string obj = json.substr(start, i - start);
+
+    size_t p = 0;
+    while (p < obj.size()) {
+        while (p < obj.size() && (obj[p] == ' ' || obj[p] == '\t' || obj[p] == ',' || obj[p] == '{' || obj[p] == '}')) p++;
+        if (p >= obj.size()) break;
+        if (obj[p] == '"') {
+            p++;
+            size_t key_end = obj.find('"', p);
+            if (key_end == std::string::npos) break;
+            std::string k = obj.substr(p, key_end - p);
+            p = key_end + 1;
+            while (p < obj.size() && (obj[p] == ' ' || obj[p] == '\t' || obj[p] == ':')) p++;
+            if (p >= obj.size()) break;
+            if (obj[p] == '"') {
+                p++;
+                size_t val_end = obj.find('"', p);
+                if (val_end == std::string::npos) break;
+                std::string v = obj.substr(p, val_end - p);
+                result[k] = v;
+                p = val_end + 1;
+            }
+        }
+    }
+    return result;
+}
+
 // Tool function implementations
 
 std::string tf_classify(DecisionModel* model, const std::string& input) {
@@ -130,15 +181,19 @@ std::string tf_triage(DecisionModel* model, const std::string& input) {
     std::string urgent_q = extract_str(input, "urgent_question");
     if (urgent_q.empty()) urgent_q = "Does this need a human within the hour?";
 
-    std::map<std::string, std::string> routes;
-    routes["billing"] = "payments, charges, refunds";
-    routes["technical"] = "bugs, errors, crashes";
-    routes["feature"] = "new features, enhancements";
+    std::map<std::string, std::string> routes = extract_map(input, "routes");
+    if (routes.empty()) {
+        routes["billing"] = "payments, charges, refunds";
+        routes["technical"] = "bugs, errors, crashes";
+        routes["feature"] = "new features, enhancements";
+    }
 
-    std::map<std::string, std::string> tags;
-    tags["urgent"] = "needs immediate attention";
-    tags["bug"] = "software bug";
-    tags["feature"] = "feature request";
+    std::map<std::string, std::string> tags = extract_map(input, "tags");
+    if (tags.empty()) {
+        tags["urgent"] = "needs immediate attention";
+        tags["bug"] = "software bug";
+        tags["feature"] = "feature request";
+    }
 
     auto result = model->triage(text, routes, tags, urgent_q);
     std::string out = std::string("{\"guard_risk\":\"") + result.guard_risk +

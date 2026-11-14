@@ -688,7 +688,7 @@ FullTriageResult RemoteDecisionModel::triage_full(
         ",\"tags\":" + map_to_json(tags) +
         ",\"urgent_question\":\"" + json_escape(urgent_question) + "\"}";
 
-    std::string resp = post_jsonrpc("systemone_triage", params);
+    std::string resp = post_jsonrpc("systemone_triage_full", params);
     if (resp.empty()) return result;
 
     result.guard_risk = json_str_value(resp, "guard_risk");

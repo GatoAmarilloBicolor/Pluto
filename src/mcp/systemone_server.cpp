@@ -150,8 +150,8 @@ std::string classify(const std::string& text, const std::map<std::string, std::s
     if (call_kev_tool("kev_classify", args, result)) {
         return result;
     }
-    // Fallback
-    return "label: " + categories.begin()->first + "\nprobability: 0.6\nconfidence: 0.7\nabstain: false";
+    // Fallback: kev server unavailable — return empty to signal error
+    return "";
 }
 
 std::string classify_multi(const std::string& text, const std::map<std::string, std::string>& categories, double threshold) {
@@ -165,12 +165,8 @@ std::string classify_multi(const std::string& text, const std::map<std::string, 
     if (call_kev_tool("kev_classify_multi", args, result)) {
         return result;
     }
-    // Fallback
-    std::string out = "active: ";
-    for (const auto& [k, v] : categories) {
-        out += k + " ";
-    }
-    return out;
+    // Fallback: kev server unavailable — return empty to signal error
+    return "";
 }
 
 std::string verify(const std::string& source, const std::string& claim) {
@@ -183,7 +179,8 @@ std::string verify(const std::string& source, const std::string& claim) {
     if (call_kev_tool("kev_verify", args, result)) {
         return result;
     }
-    return "supported: true\nprobability: 0.8";
+    // Fallback: kev server unavailable — return empty to signal error
+    return "";
 }
 
 std::string guard(const std::string& text, const std::map<std::string, std::string>& checks, double threshold) {
@@ -197,7 +194,8 @@ std::string guard(const std::string& text, const std::map<std::string, std::stri
     if (call_kev_tool("kev_guard", args, result)) {
         return result;
     }
-    return "risk: LOW\nhits: ";
+    // Fallback: kev server unavailable — return empty to signal error
+    return "";
 }
 
 std::string select_relevant(const std::string& question, const std::vector<std::string>& items, const std::string& kind, double min_p) {
@@ -237,7 +235,8 @@ std::string same_intent(const std::string& a, const std::string& b, double thres
     if (call_kev_tool("kev_same_intent", args, result)) {
         return result;
     }
-    return "same: " + std::string(a == b ? "true" : "false") + "\nprobability: " + std::to_string(a == b ? 0.95 : 0.1);
+    // Fallback: kev server unavailable — return empty to signal error
+    return "";
 }
 
 std::string triage(const std::string& text, const std::map<std::string, std::string>& routes,
@@ -253,7 +252,8 @@ std::string triage(const std::string& text, const std::map<std::string, std::str
     if (call_kev_tool("kev_triage", args, result)) {
         return result;
     }
-    return "guard_risk: LOW\nroute: " + routes.begin()->first + "\nurgent: false";
+    // Fallback: kev server unavailable — return empty to signal error
+    return "";
 }
 
 std::string answerable(const std::string& question, const std::string& context, double threshold) {
@@ -283,7 +283,8 @@ std::string consult(const std::string& question, const std::map<std::string, std
     if (call_kev_tool("kev_consult", args, result)) {
         return result;
     }
-    return "choice: " + options.begin()->first + "\nprobability: 0.7\nabstain: false\nnotes: no notes loaded";
+    // Fallback: kev server unavailable — return empty to signal error
+    return "";
 }
 
 std::string decide_program(const Value& program, const std::string& state, bool compact) {
@@ -297,7 +298,8 @@ std::string decide_program(const Value& program, const std::string& state, bool 
     if (call_kev_tool("kev_decide_program", args, result)) {
         return result;
     }
-    return "{}";
+    // Fallback: kev server unavailable — return empty to signal error
+    return "";
 }
 
 } // namespace decision
@@ -425,6 +427,7 @@ Value handle_tool_call(const std::string& name, const Value& args) {
                 if (t->is_num()) threshold = t->as_num();
             }
             std::string result = decision::classify(text, cats, threshold);
+            if (result.empty()) return make_error_result("kev server unavailable");
             return make_tool_result(result);
         }
         else if (name == "systemone_classify_multi") {
@@ -442,12 +445,14 @@ Value handle_tool_call(const std::string& name, const Value& args) {
                 if (t->is_num()) threshold = t->as_num();
             }
             std::string result = decision::classify_multi(text, cats, threshold);
+            if (result.empty()) return make_error_result("kev server unavailable");
             return make_tool_result(result);
         }
         else if (name == "systemone_verify") {
             std::string source = args.find("source") ? args.find("source")->as_str() : "";
             std::string claim = args.find("claim") ? args.find("claim")->as_str() : "";
             std::string result = decision::verify(source, claim);
+            if (result.empty()) return make_error_result("kev server unavailable");
             return make_tool_result(result);
         }
         else if (name == "systemone_guard") {
@@ -465,6 +470,7 @@ Value handle_tool_call(const std::string& name, const Value& args) {
                 if (t->is_num()) threshold = t->as_num();
             }
             std::string result = decision::guard(text, checks, threshold);
+            if (result.empty()) return make_error_result("kev server unavailable");
             return make_tool_result(result);
         }
         else if (name == "systemone_select_relevant") {
@@ -496,6 +502,7 @@ Value handle_tool_call(const std::string& name, const Value& args) {
                 if (t->is_num()) threshold = t->as_num();
             }
             std::string result = decision::same_intent(a, b, threshold);
+            if (result.empty()) return make_error_result("kev server unavailable");
             return make_tool_result(result);
         }
         else if (name == "systemone_triage") {
@@ -521,6 +528,7 @@ Value handle_tool_call(const std::string& name, const Value& args) {
                 if (u->is_str()) urgent_q = u->as_str();
             }
             std::string result = decision::triage(text, routes, tags, urgent_q);
+            if (result.empty()) return make_error_result("kev server unavailable");
             return make_tool_result(result);
         }
         else if (name == "systemone_answerable") {
@@ -546,6 +554,7 @@ Value handle_tool_call(const std::string& name, const Value& args) {
             std::string topic = args.find("topic") ? args.find("topic")->as_str() : "";
             std::string context = args.find("context") ? args.find("context")->as_str() : "";
             std::string result = decision::consult(question, options, topic, context);
+            if (result.empty()) return make_error_result("kev server unavailable");
             return make_tool_result(result);
         }
         else if (name == "systemone_decide_program") {
@@ -556,6 +565,7 @@ Value handle_tool_call(const std::string& name, const Value& args) {
                 if (c->is_bool()) compact = c->as_bool();
             }
             std::string result = decision::decide_program(program, state, compact);
+            if (result.empty()) return make_error_result("kev server unavailable");
             return make_tool_result(result);
         }
         
