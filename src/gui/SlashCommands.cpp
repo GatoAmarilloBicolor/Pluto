@@ -3,6 +3,7 @@
 
 #include "MainWindow.h"
 #include "../util.h"
+#include "../curl_security.h"
 
 #include <Clipboard.h>
 #include <Message.h>
@@ -18,6 +19,7 @@
 #include "../routine.h"
 #include "../storage/SessionStore.h"
 #include "../wiki.h"
+#include "../curl_security.h"
 #include "../workspace.h"
 #include "../map/Graph.h"
 #include "../map/Scanner.h"
@@ -904,7 +906,7 @@ std::thread([messenger, input_arg]() {
 		}
 
 		// Apply centralized TLS security (peer + host verification + CA bundle)
-		ApplyCurlSecurity(curl, url);
+		pluto::ApplyCurlSecurity(curl, url);
 
 		curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 		curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);            // HEAD only
